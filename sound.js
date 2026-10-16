@@ -6,6 +6,8 @@
   class MergeAudio {
     constructor() {
       this.enabled = true;
+      const levelCount = root.MergeGame?.RADII?.length;
+      this.finalLevel = Number.isInteger(levelCount) && levelCount > 0 ? levelCount - 1 : 11;
       this.context = null;
       this.song = null;
       this._hasGesture = false;
@@ -81,14 +83,14 @@
 
     playMerge(event = {}) {
       if (!this.enabled || !this._hasGesture) return false;
-      // 9 + 9 creates level 10. Clearing 10 + 10 reports level 10 too,
-      // but finalMerge=true must never start the special recording.
-      if (event.level === 10 && event.finalMerge === false) return this._playSong();
+      // The bottle shifts original photo 10 to the last internal level. Clearing
+      // two final pieces reports that same level, but must not restart the song.
+      if (event.level === this.finalLevel && event.finalMerge === false) return this._playSong();
       return this._normalMerge(event.level);
     }
 
     _normalMerge(level) {
-      const safeLevel = Number.isFinite(level) ? Math.max(0, Math.min(10, level)) : 0;
+      const safeLevel = Number.isFinite(level) ? Math.max(0, Math.min(this.finalLevel, level)) : 0;
       const base = 330 + safeLevel * 27;
       let played = false;
       for (const [index, ratio] of [1, 1.25, 1.5].entries()) {
@@ -143,11 +145,11 @@
     _songFailed(epoch) {
       if (epoch !== this._songEpoch || !this._songActive) return;
       this._stopSong();
-      if (this.enabled && this._hasGesture) this._normalMerge(10);
+      if (this.enabled && this._hasGesture) this._normalMerge(this.finalLevel);
     }
 
     _playSong() {
-      if (!this.song) return this._normalMerge(10);
+      if (!this.song) return this._normalMerge(this.finalLevel);
       this._stopSong();
       const epoch = this._songEpoch;
       this._songActive = true;

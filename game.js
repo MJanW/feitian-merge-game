@@ -4,8 +4,8 @@
   const WIDTH = 400;
   const HEIGHT = 650;
   const DANGER_Y = 120;
-  const RADII = [22, 29, 38, 48, 59, 70, 82, 96, 110, 126, 144];
-  const MERGE_SCORES = [0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55];
+  const RADII = [18, 22, 29, 38, 48, 59, 70, 82, 96, 110, 126, 144];
+  const MERGE_SCORES = [0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66];
   const STEP_MS = 1000 / 120;
   const DROP_DELAY = 450;
   const FRESH_GRACE = 1800;

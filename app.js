@@ -169,7 +169,7 @@
   function drop() { if (game.drop()) callAudio('playDrop'); }
 
   function init() {
-    if (!window.Matter || !window.MergeGame || !window.GameLevels || !Array.isArray(GameLevels.levels) || GameLevels.levels.length !== 11) throw new Error('游戏文件加载失败，请刷新页面或确认文件夹完整。');
+    if (!window.Matter || !window.MergeGame || !window.GameLevels || !Array.isArray(MergeGame.RADII) || !Array.isArray(GameLevels.levels) || GameLevels.levels.length !== MergeGame.RADII.length) throw new Error('游戏文件加载失败，请刷新页面或确认文件夹完整。');
     levels = GameLevels.levels; $('brand-title').textContent = GameLevels.title; document.title = GameLevels.title;
     leaderboard = new SharedLeaderboard();
     if (typeof window.MergeAudio === 'function') audio = new MergeAudio();
