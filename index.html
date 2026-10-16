@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fff9f5">
+  <meta name="description" content="合成飞天：移动瞄准，松手投放，相同人物碰到一起合成更大的一只。">
+  <title>合成飞天</title>
+  <link rel="icon" href="assets/photo-10.png" type="image/png">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="vendor/matter.min.js"></script>
+  <script defer src="levels.js"></script>
+  <script defer src="sound.js"></script>
+  <script defer src="game.js"></script>
+  <script defer src="supabase-config.js"></script>
+  <script defer src="vendor/supabase.min.js"></script>
+  <script defer src="leaderboard.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-sound" viewBox="0 0 24 24"><path d="m11 4-6 5H2v6h3l6 5Zm4 4a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="m11 4-6 5H2v6h3l6 5Zm5 5 6 6m0-6-6 6"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-crown" viewBox="0 0 24 24"><path d="m3 6 5 4 4-6 4 6 5-4-2 13H5Z"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m12 7 1.5 3.5L17 12l-3.5 1.5L12 17l-1.5-3.5L7 12l3.5-1.5Z"/></symbol>
+  </defs></svg>
+  <main class="game-layout" aria-label="合成飞天小游戏">
+    <section class="play-column" aria-label="游戏区域" data-layout="canvas">
+      <div class="board-wrap" id="board-wrap">
+        <canvas id="game-canvas" width="400" height="650" tabindex="0" aria-label="游戏画布。左右方向键瞄准，空格投放。" aria-describedby="board-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
+        <div class="coin-chip" id="coin-chip" hidden><svg class="icon" aria-hidden="true"><use href="#i-coin"/></svg><span>复活币 × <span id="coins">0</span></span></div>
+        <div class="board-empty" id="board-empty" aria-hidden="true"><p>移动瞄准，点击投放</p><span>相同人物碰到一起，就会合成</span></div>
+        <div class="paused-overlay" id="paused-overlay" hidden><span>游戏已暂停</span></div>
+      </div>
+      <p class="board-status" id="board-status" role="status">准备好，开始合成</p>
+    </section>
+    <aside class="side-panel" aria-label="游戏信息和操作">
+      <header class="panel-head"><h1 id="brand-title">合成飞天</h1><p>相同的撞在一起，越合越大</p></header>
+      <div class="scoreboard">
+        <div class="stat"><span>分数</span><strong id="score" aria-live="polite">0</strong></div>
+        <div class="stat"><span>本机最高</span><strong id="best">0</strong></div>
+        <div class="next-box"><span>下一个</span><div class="next-portrait"><img id="next-avatar" src="assets/photo-00.png" alt="下一个人物"></div></div>
+      </div>
+      <nav class="game-actions" aria-label="游戏操作" data-role="nav" data-height-px="44" data-single-line="true">
+        <button class="secondary-button leaderboard-button" id="leaderboard-button"><svg class="icon" aria-hidden="true"><use href="#i-crown"/></svg>共享排行榜</button>
+        <button class="secondary-button" id="sound-button" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-sound"/></svg><span>音效开</span></button>
+        <button class="primary-button" id="restart-button"><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg>重开</button>
+      </nav>
+      <p class="play-tips">鼠标移动瞄准、点击投放；手机拖动后松手。<br><kbd>←</kbd> <kbd>→</kbd> 微调，<kbd>空格</kbd> 投放，<kbd>R</kbd> 重开。<br>每 <strong>2000 分</strong>获一枚复活币，只在本局有效。</p>
+    </aside>
+  </main>
+  <dialog id="leaderboard-dialog" class="leaderboard-dialog" aria-labelledby="leaderboard-title">
+    <div class="dialog-header"><div><h2 id="leaderboard-title">共享排行榜</h2><p>历史前 20 名，每位玩家只保留最高分；同分先到优先。</p><p id="nickname-rules">免登录，本浏览器自动记住玩家。换设备或清除浏览器数据会成为新玩家；改昵称不会增加名额。</p><p id="leaderboard-status" role="status">正在连接共享榜…</p></div><button class="icon-button" data-close="leaderboard-dialog" aria-label="关闭排行榜"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="leaderboard-access"><button class="secondary-button" id="leaderboard-refresh">刷新榜单</button></div>
+    <form class="nickname-form" id="nickname-form" hidden><label for="nickname-input">我的昵称</label><input id="nickname-input" name="nickname" type="text" maxlength="48" placeholder="玩家" autocomplete="nickname" enterkeyhint="done" aria-describedby="nickname-rules"><button class="secondary-button" id="nickname-save" type="submit">保存</button></form>
+    <div class="leaderboard-content"><p class="leaderboard-empty" id="leaderboard-empty">还没有成绩，先来一局吧。</p><table id="leaderboard-table" hidden><thead><tr><th scope="col">排名</th><th scope="col">昵称</th><th scope="col">分数</th></tr></thead><tbody id="leaderboard-body"></tbody></table></div>
+  </dialog>
+  <dialog id="restart-dialog" class="small-dialog" aria-labelledby="restart-title">
+    <div class="dialog-header"><h2 id="restart-title">重新开始？</h2><button class="icon-button" data-close="restart-dialog" aria-label="取消重新开始"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="dialog-body"><p>本局进度和复活币会清零，最高分保留。</p><div class="split-buttons"><button class="secondary-button" data-close="restart-dialog">继续玩</button><button class="primary-button" id="confirm-restart-button">重新开始</button></div></div>
+  </dialog>
+  <dialog id="end-dialog" class="small-dialog end-dialog" aria-label="本局结束">
+    <div class="end-content" id="revive-panel" hidden><svg class="end-symbol icon" aria-hidden="true"><use href="#i-coin"/></svg><h2>还能再救一下</h2><p class="end-label">本局得分</p><strong class="end-score" id="revive-score">0</strong><p id="revive-hint">清掉顶部人物，继续这一局</p><div class="split-buttons"><button class="secondary-button" id="give-up-button">结束本局</button><button class="primary-button" id="revive-button">使用复活币</button></div><p class="end-note" id="revive-count"></p></div>
+    <div class="end-content" id="result-panel"><h2>游戏结束</h2><p class="end-label">本局得分</p><strong class="end-score" id="end-score">0</strong><p id="end-best">本机最高 0</p><p class="end-note" id="result-note" role="status"></p><button class="secondary-button" id="submit-score-button" hidden>重试上传本局成绩</button><div class="split-buttons"><button class="secondary-button" id="end-leaderboard-button">排行榜</button><button class="primary-button" id="play-again-button">再来一局</button></div><p class="end-note">按 R 键也可重新开始</p></div>
+  </dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <noscript><div class="fatal-error">请启用 JavaScript 后再玩游戏。</div></noscript>
+</body>
+</html>
