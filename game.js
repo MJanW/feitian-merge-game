@@ -4,7 +4,7 @@
   const WIDTH = 400;
   const HEIGHT = 650;
   const DANGER_Y = 120;
-  const RADII = [18, 22, 29, 38, 48, 59, 70, 82, 96, 110, 126, 144];
+  const RADII = [18, 22, 29, 38, 48, 59, 70, 82, 86.4, 110, 113.4, 129.6];
   const MERGE_SCORES = [0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66];
   const STEP_MS = 1000 / 120;
   const DROP_DELAY = 450;
@@ -32,6 +32,7 @@
       this.balls = new Map();
       this.pendingMerges = [];
       this.particles = [];
+      this.blasts = [];
       this.floats = [];
       this.levels = [];
       this.destroyed = false;
@@ -129,6 +130,7 @@
       this.balls.clear();
       this.pendingMerges.length = 0;
       this.particles.length = 0;
+      this.blasts.length = 0;
       this.floats.length = 0;
       this.time = 0;
       this.accumulator = 0;
@@ -323,7 +325,7 @@
         this._removeBall(a);
         this._removeBall(b);
         if (!finalMerge) this._createBall(level, x, y, velocity).popAt = this.time;
-        const gained = finalMerge ? 500 : MERGE_SCORES[level];
+        const gained = finalMerge ? 300 : MERGE_SCORES[level];
         const previousMilestone = Math.floor(this.score / 2000);
         this.score += gained;
         this.coins += Math.floor(this.score / 2000) - previousMilestone;
@@ -376,6 +378,8 @@
           particle.vy += 0.06 * STEP_MS / 16.6667;
         }
         this.particles = this.particles.filter(particle => particle.life > 0);
+        for (const blast of this.blasts) blast.life -= STEP_MS;
+        this.blasts = this.blasts.filter(blast => blast.life > 0);
         for (const float of this.floats) { float.life -= STEP_MS; if (!this.reducedMotion) float.y -= STEP_MS * 0.035; }
         this.floats = this.floats.filter(float => float.life > 0);
       }
@@ -437,11 +441,16 @@
 
     _burst(x, y, color, level = 0, finalMerge = false) {
       if (this.reducedMotion) return;
-      const count = finalMerge ? 40 : 8 + level * 2;
-      const speed = 2 + level * 0.15;
+      const count = finalMerge ? 48 : 8 + level * 2;
+      // A terminal pair leaves a wide expanding ring and several speeds of sparks.
+      // These are visual only and never consume the random stream used for drops.
+      if (finalMerge) this.blasts.push({ x, y, life: 520, radius: this._radius(level) });
       for (let i = 0; i < count; i += 1) {
         const angle = i / count * Math.PI * 2;
-        this.particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: finalMerge ? 650 : 420, color });
+        const speed = finalMerge ? 3.8 + i % 3 * 1.4 : 2 + level * 0.15;
+        this.particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+          life: finalMerge ? 720 : 420, radius: finalMerge ? 2 + i % 4 : 3,
+          color: finalMerge ? [color, '#f6bb4c', '#f08b60', '#ffe5a3'][i % 4] : color });
       }
     }
 
@@ -548,11 +557,20 @@
         const center = this._spriteCenter(ball);
         this._drawBall(ball.gameLevel, center.x, center.y, this._radius(ball.gameLevel), ball.angle, false, ball);
       }
+      for (const blast of this.blasts) {
+        const progress = 1 - blast.life / 520;
+        ctx.globalAlpha = 0.65 * (1 - progress) ** 2;
+        ctx.strokeStyle = '#edaa42';
+        ctx.lineWidth = 1 + 5 * (1 - progress);
+        ctx.beginPath();
+        ctx.arc(blast.x, blast.y, 12 + blast.radius * 1.15 * (1 - (1 - progress) ** 2), 0, Math.PI * 2);
+        ctx.stroke();
+      }
       for (const particle of this.particles) {
         ctx.globalAlpha = Math.min(1, particle.life / 200);
         ctx.fillStyle = particle.color;
         ctx.beginPath();
-        ctx.arc(particle.x, particle.y, 3, 0, Math.PI * 2);
+        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
         ctx.fill();
       }
       for (const float of this.floats) {
