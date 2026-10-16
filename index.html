@@ -7,7 +7,7 @@
   <meta name="description" content="合成飞天：移动瞄准，松手投放，相同人物碰到一起合成更大的一只。">
   <title>合成飞天</title>
   <link rel="icon" href="assets/photo-10.png" type="image/png">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261016-mobile">
   <script defer src="vendor/matter.min.js"></script>
   <script defer src="levels.js?v=20261016-finale300"></script>
   <script defer src="sound.js?v=20261016-finale300"></script>
@@ -15,7 +15,7 @@
   <script defer src="supabase-config.js"></script>
   <script defer src="vendor/supabase.min.js"></script>
   <script defer src="leaderboard.js"></script>
-  <script defer src="app.js?v=20261016-finale300"></script>
+  <script defer src="app.js?v=20261016-mobile"></script>
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -48,11 +48,12 @@
         <button class="secondary-button" id="sound-button" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-sound"/></svg><span>音效开</span></button>
         <button class="primary-button" id="restart-button"><svg class="icon" aria-hidden="true"><use href="#i-reset"/></svg>重开</button>
       </nav>
-      <p class="play-tips">鼠标移动瞄准、点击投放；手机拖动后松手。<br><kbd>←</kbd> <kbd>→</kbd> 微调，<kbd>空格</kbd> 投放，<kbd>R</kbd> 重开。<br>每 <strong>2000 分</strong>获一枚复活币，只在本局有效。</p>
+      <p class="play-tips">鼠标移动瞄准、点击投放；手机拖动后松手。<br><span class="keyboard-tip"><kbd>←</kbd> <kbd>→</kbd> 微调，<kbd>空格</kbd> 投放，<kbd>R</kbd> 重开。<br></span>每 <strong>2000 分</strong>获一枚复活币，只在本局有效。</p>
     </aside>
   </main>
   <dialog id="leaderboard-dialog" class="leaderboard-dialog" aria-labelledby="leaderboard-title">
-    <div class="dialog-header"><div><h2 id="leaderboard-title">共享排行榜</h2><p>历史前 20 名，每位玩家只保留最高分；同分先到优先。</p><p id="nickname-rules">免登录，本浏览器自动记住玩家。换设备或清除浏览器数据会成为新玩家；改昵称不会增加名额。</p><p id="leaderboard-status" role="status">正在连接共享榜…</p></div><button class="icon-button" data-close="leaderboard-dialog" aria-label="关闭排行榜"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="dialog-header"><h2 id="leaderboard-title">共享排行榜</h2><button class="icon-button" data-close="leaderboard-dialog" aria-label="关闭排行榜" autofocus><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="leaderboard-info"><p>历史前 20 名，每位玩家只保留最高分；同分先到优先。</p><p id="nickname-rules">免登录，本浏览器自动记住玩家。换设备或清除浏览器数据会成为新玩家；改昵称不会增加名额。</p><p id="leaderboard-status" role="status">正在连接共享榜…</p></div>
     <div class="leaderboard-access"><button class="secondary-button" id="leaderboard-refresh">刷新榜单</button></div>
     <form class="nickname-form" id="nickname-form" hidden><label for="nickname-input">我的昵称</label><input id="nickname-input" name="nickname" type="text" maxlength="48" placeholder="玩家" autocomplete="nickname" enterkeyhint="done" aria-describedby="nickname-rules"><button class="secondary-button" id="nickname-save" type="submit">保存</button></form>
     <div class="leaderboard-content"><p class="leaderboard-empty" id="leaderboard-empty">还没有成绩，先来一局吧。</p><table id="leaderboard-table" hidden><thead><tr><th scope="col">排名</th><th scope="col">昵称</th><th scope="col">分数</th></tr></thead><tbody id="leaderboard-body"></tbody></table></div>

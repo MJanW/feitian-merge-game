@@ -33,6 +33,14 @@
     const pointer = activePointer; activePointer = null;
     if (pointer !== null && $('game-canvas').hasPointerCapture?.(pointer)) $('game-canvas').releasePointerCapture(pointer);
   }
+  function syncDialogViewport() {
+    const viewport = window.visualViewport, style = document.documentElement.style;
+    const height = viewport?.height, top = viewport?.offsetTop;
+    if (Number.isFinite(height) && height > 0) style.setProperty('--dialog-viewport-height', `${height}px`);
+    else style.removeProperty('--dialog-viewport-height');
+    if (Number.isFinite(top) && top >= 0) style.setProperty('--dialog-viewport-top', `${top}px`);
+    else style.removeProperty('--dialog-viewport-top');
+  }
   function syncPause() {
     if (!game) return;
     const paused = document.hidden || Boolean(document.querySelector('dialog[open]'));
@@ -175,7 +183,9 @@
     if (typeof window.MergeAudio === 'function') audio = new MergeAudio();
     callAudio('setEnabled', soundEnabled); updateSoundButton(); $('best').textContent = best.toLocaleString();
     game = new MergeGame({ canvas: $('game-canvas'), levels, onChange: onState, onMerge: event => { callAudio('playMerge', event); $('score').classList.remove('score-pop'); requestAnimationFrame(() => $('score').classList.add('score-pop')); }, onGameOver: endGame });
-    syncPause(); const canvas = $('game-canvas');
+    syncPause(); syncDialogViewport(); const canvas = $('game-canvas');
+    window.visualViewport?.addEventListener('resize', syncDialogViewport);
+    window.visualViewport?.addEventListener('scroll', syncDialogViewport);
     document.addEventListener('pointerdown', event => { if (event.isTrusted) callAudio('unlock'); }, { capture: true });
     document.addEventListener('keydown', event => { if (event.isTrusted) callAudio('unlock'); }, { capture: true });
     canvas.addEventListener('pointermove', event => { if (!document.querySelector('dialog[open]') && (event.pointerType === 'mouse' || event.pointerId === activePointer)) aimFromEvent(event); });
@@ -196,7 +206,9 @@
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); game.aim(game.getState().aimX + (event.key === 'ArrowLeft' ? -12 : 12)); }
       else if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) drop(); }
     });
-    document.addEventListener('visibilitychange', syncPause); window.addEventListener('blur', () => { clearPointer(); callAudio('pause'); }); window.addEventListener('resize', () => game.render());
+    document.addEventListener('visibilitychange', syncPause); window.addEventListener('blur', () => { clearPointer(); callAudio('pause'); });
+    const resizeGame = () => { clearPointer(); game?.render(); };
+    window.addEventListener('resize', resizeGame); window.addEventListener('orientationchange', resizeGame);
     document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => closeDialog(button.dataset.close)));
     document.querySelectorAll('dialog').forEach(dialog => {
       dialog.addEventListener('close', syncPause);
