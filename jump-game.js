@@ -3,10 +3,13 @@
 
   const WIDTH = 400, HEIGHT = 650, STEP_MS = 1000 / 120;
   const CHARGE_MS = 1200, DISTANCE_PER_MS = 0.3, FOOT_RADIUS = 5, PROJECTION = 0.55;
-  const COLORS = [
-    ['#b9dacf', '#79aa9a', '#e1f1e9'], ['#e6c9a3', '#c59976', '#f9e8cd'],
-    ['#c5c7e3', '#969abf', '#e7e7f4'], ['#e9b9aa', '#bf8b80', '#f9ded1'],
-  ];
+  const Platforms = root.JumpPlatforms || (typeof require === 'function' ? require('./jump-platforms.js') : null);
+  let PlatformRenderer = root.JumpPlatformRenderer;
+  if (!PlatformRenderer && typeof require === 'function') {
+    try { PlatformRenderer = require('./jump-platform-renderer.js'); }
+    catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
+  }
+  const KINDS = Object.keys(Platforms.MODELS);
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const smooth = t => t * t * (3 - 2 * t);
 
@@ -53,8 +56,8 @@
       this.elapsed = 0; this.accumulator = 0; this.lastFrame = null;
       this.currentId = 0; this.lastPoints = 0; this.lastPerfect = false;
       this.player = { x: 125, y: 0, z: 0 };
-      this.platforms = [{ id: 0, x: 125, y: 0, radius: 55, palette: 0 }];
-      this.platforms.push({ id: 1, x: 275, y: -Math.sqrt(240 * 240 - 150 * 150), radius: 54, palette: 1 });
+      this.platforms = [Platforms.createPlatform(0, 'grass', { x: 125, y: 0 })];
+      this.platforms.push(Platforms.createPlatform(1, 'parcel', { x: 275, y: -Math.sqrt(240 * 240 - 150 * 150) }));
       this._appendPlatform(); this._appendPlatform();
       this.cameraY = 465; this.cameraFrom = 465; this.cameraTo = 465; this.cameraTime = 0.4;
       this.jump = null; this.fallTime = 0; this.landingPulse = 0; this.evolutionPulse = 0;
@@ -68,15 +71,48 @@
 
     _appendPlatform() {
       const previous = this.platforms[this.platforms.length - 1], id = previous.id + 1;
-      const difficulty = Math.min(1, id / 90);
-      const x = previous.x >= WIDTH / 2 ? 100 + this._roll() * 45 : 255 + this._roll() * 45;
-      const distance = 225 + this._roll() * 45 + difficulty * 20;
-      const dx = x - previous.x;
-      // Every centre remains within full charge, even from the far edge of
-      // its predecessor. The minimum separation prevents overlapping tops.
-      const dy = -Math.sqrt(distance * distance - dx * dx);
-      this.platforms.push({ id, x, y: previous.y + dy, radius: 54 - difficulty * 16,
-        palette: id % COLORS.length });
+      const difficulty = Math.min(1, id / 120);
+      const kind = id === 2 ? 'record' : id === 3 ? 'cube' : KINDS[(KINDS.indexOf(previous.kind) + 1 + Math.min(6, Math.floor(this._roll() * 7))) % KINDS.length];
+      const model = Platforms.MODELS[kind];
+      const size = id === 2 ? 0.69 : id === 3 ? 1.1 : [0.68, 0.82, 0.96, 1.1, 1.22][(id + Math.floor(this._roll() * 5)) % 5] * (1 - difficulty * 0.055);
+      const angle = model.shape === 'circle' ? 0 : model.angle + (this._roll() - 0.5) * 0.32;
+      const depth = clamp(model.depth + (this._roll() - 0.5) * 12, 18, 60);
+      const gapGroup = (id + Math.floor(this._roll() * 3)) % 3;
+      const requestedDistance = [165, 215, 270][gapGroup] + this._roll() * 20;
+      const preferredX = 75 + this._roll() * 250;
+      const oldBounds = Platforms.bounds(previous);
+      const maximum = Math.min(290, 354 - previous.radius);
+      let best = null;
+      // Search a small deterministic fan instead of rejecting random samples
+      // indefinitely. Broad size changes persist late in a run. If a large
+      // roof leaves little room, shrink only the next prop until it fits.
+      for (let attempt = 0; attempt < 7 && !best; attempt++) {
+        const shrink = Math.pow(0.88, attempt);
+        const platform = Platforms.createPlatform(id, kind, {
+          rx: clamp(model.rx * size * shrink, 28, model.shape === 'circle' ? 63 : 65),
+          ry: clamp(model.ry * size * shrink, 27, 50), angle,
+          depth: Math.max(18, depth * Math.pow(0.9, attempt)),
+        });
+        const local = Platforms.bounds(platform), minimum = Math.max(160, previous.radius + platform.radius + 18);
+        const desired = clamp(requestedDistance, minimum, maximum);
+        const distances = [desired, ...Array.from({ length: 13 }, (_, index) => minimum + (maximum - minimum) * index / 12)];
+        for (const distance of distances) for (let direction = -12; direction <= 12; direction++) {
+          const theta = direction * Math.PI / 32;
+          const dx = Math.sin(theta) * distance, dy = -Math.cos(theta) * distance;
+          const x = previous.x + dx, y = previous.y + dy;
+          if (-dy < 110 || x + local.minX < 14 || x + local.maxX > WIDTH - 14) continue;
+          // Bodies extend down from their top. Separation is checked after
+          // projection, including depth, so a tall prop cannot cover a top.
+          const horizontallyClear = x + local.minX >= oldBounds.maxX + 8 || x + local.maxX <= oldBounds.minX - 8;
+          const verticallyClear = (y + local.maxY) * PROJECTION + platform.depth <= oldBounds.minY * PROJECTION - 8;
+          if (!horizontallyClear && !verticallyClear) continue;
+          if (Math.abs(dx) < 55 && -dy * PROJECTION < 125) continue;
+          const cost = Math.abs(distance - desired) * 1.6 + Math.abs(x - preferredX) * 0.35;
+          if (!best || cost < best.cost) best = { ...platform, x, y, cost };
+        }
+      }
+      if (!best) throw new Error('No reachable jump platform fits the board');
+      delete best.cost; this.platforms.push(best);
     }
 
     _current() { return this.platforms.find(platform => platform.id === this.currentId); }
@@ -119,7 +155,7 @@
 
     _land() {
       const next = this._next(), current = this._current();
-      const on = platform => Math.hypot(this.player.x - platform.x, this.player.y - platform.y) <= platform.radius - FOOT_RADIUS + 1e-7;
+      const on = platform => Platforms.contains(platform, this.player.x, this.player.y, FOOT_RADIUS);
       this.player.z = 0;
       if (!on(next) && !on(current)) {
         this.phase = 'falling'; this.fallTime = 0; this.combo = 0; return;
@@ -208,26 +244,10 @@
     }
 
     _platform(platform) {
-      const ctx = this.ctx, y = platform.y * PROJECTION + this.cameraY, r = platform.radius;
-      if (y < -80 || y > HEIGHT + 60) return;
-      const [top, side, inset] = COLORS[platform.palette];
-      ctx.save();
-      if (platform.id > this.currentId + 1) ctx.globalAlpha = 0.52;
-      ctx.fillStyle = '#a49c9b16'; this._ellipse(platform.x + 5, y + 32, r * 1.05, r * 0.56); ctx.fill();
-      ctx.fillStyle = side;
-      ctx.fillRect(platform.x - r, y, r * 2, 19);
-      this._ellipse(platform.x, y + 19, r, r * PROJECTION); ctx.fill();
-      ctx.fillStyle = top; this._ellipse(platform.x, y, r, r * PROJECTION); ctx.fill();
-      ctx.strokeStyle = '#ffffff90'; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.fillStyle = inset; this._ellipse(platform.x, y, r - 8, (r - 8) * PROJECTION); ctx.fill();
-      ctx.fillStyle = platform.id === this.currentId + 1 ? '#fffdf2' : '#ffffff69';
-      this._ellipse(platform.x, y, 13, 13 * PROJECTION); ctx.fill();
-      ctx.strokeStyle = side; ctx.lineWidth = 1; ctx.stroke();
-      if (platform.id === this.currentId + 1) {
-        ctx.fillStyle = '#736b67'; ctx.font = '600 11px system-ui'; ctx.textAlign = 'center';
-        ctx.fillText('下一座', platform.x, y + r * PROJECTION + 40);
-      }
-      ctx.restore();
+      const y = platform.y * PROJECTION + this.cameraY;
+      if (y < -150 || y > HEIGHT + 100) return;
+      const renderer = root.JumpPlatformRenderer || PlatformRenderer;
+      if (renderer) renderer.draw(this.ctx, platform, { cameraY: this.cameraY, projection: PROJECTION, currentId: this.currentId });
     }
 
     _sprite() {

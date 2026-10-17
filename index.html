@@ -18,7 +18,9 @@
   <script defer src="app.js?v=20261017-jump1"></script>
   <script defer src="rescue-game.js?v=20261017-obstacles2"></script>
   <script defer src="rescue-app.js?v=20261017-obstacles2"></script>
-  <script defer src="jump-game.js?v=20261017-jump1"></script>
+  <script defer src="jump-platforms.js?v=20261017-platforms1"></script>
+  <script defer src="jump-platform-renderer.js?v=20261017-platforms1"></script>
+  <script defer src="jump-game.js?v=20261017-platforms1"></script>
   <script defer src="jump-app.js?v=20261017-jump1"></script>
   <script defer src="modes.js?v=20261017-jump1"></script>
 </head>
@@ -108,7 +110,7 @@
         <p id="jump-status" class="jump-status" role="status">准备好，按住蓄力再松手</p>
       </section>
       <aside class="jump-side" aria-label="跳跃飞天信息和操作">
-        <header class="jump-head"><h1>跳跃飞天</h1><p>每一次起跳，离下一种自己更近</p></header>
+        <header class="jump-head"><h1>跳跃飞天</h1><p>大小各异，远近交错</p></header>
         <div class="jump-hud" aria-label="跳跃成绩与当前形态">
           <div class="jump-stat"><span>本局分数</span><strong id="jump-score">0</strong></div>
           <div class="jump-stat"><span>本机最高</span><strong id="jump-best">0</strong></div>
