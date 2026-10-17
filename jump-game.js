@@ -10,6 +10,13 @@
     catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
   }
   const KINDS = Object.keys(Platforms.MODELS);
+  const BONUS_WAIT_MS = 2000;
+  const BONUSES = Object.freeze({
+    manhole: Object.freeze({ points: 5, label: '井盖' }),
+    cube: Object.freeze({ points: 10, label: '魔方' }),
+    kiosk: Object.freeze({ points: 15, label: '便利店' }),
+    record: Object.freeze({ points: 30, label: '唱片' }),
+  });
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const smooth = t => t * t * (3 - 2 * t);
 
@@ -56,6 +63,7 @@
       this.score = 0; this.hops = 0; this.combo = 0; this.chargeMs = 0;
       this.elapsed = 0; this.accumulator = 0; this.lastFrame = null;
       this.currentId = 0; this.lastPoints = 0; this.lastPerfect = false;
+      this.bonusIdleMs = 0;
       this.player = { x: 125, y: 0, z: 0 };
       this.platforms = [Platforms.createPlatform(0, 'grass', { x: 125, y: 0 })];
       this.platforms.push(Platforms.createPlatform(1, 'parcel', { x: 275, y: -Math.sqrt(240 * 240 - 150 * 150) }));
@@ -73,7 +81,8 @@
     _appendPlatform() {
       const previous = this.platforms[this.platforms.length - 1], id = previous.id + 1;
       const difficulty = Math.min(1, id / 120);
-      const kind = id === 2 ? 'record' : id === 3 ? 'cube' : KINDS[(KINDS.indexOf(previous.kind) + 1 + Math.min(6, Math.floor(this._roll() * 7))) % KINDS.length];
+      const alternatives = KINDS.length - 1;
+      const kind = id === 2 ? 'record' : id === 3 ? 'cube' : KINDS[(KINDS.indexOf(previous.kind) + 1 + Math.min(alternatives - 1, Math.floor(this._roll() * alternatives))) % KINDS.length];
       const model = Platforms.MODELS[kind];
       const size = id === 2 ? 0.69 : id === 3 ? 1.1 : [0.68, 0.82, 0.96, 1.1, 1.22][(id + Math.floor(this._roll() * 5)) % 5] * (1 - difficulty * 0.055);
       const angle = model.shape === 'circle' ? 0 : model.angle + (this._roll() - 0.5) * 0.32;
@@ -128,6 +137,7 @@
     startCharge() {
       if (this.destroyed || this.isPaused || this.status === 'lost' || this.phase !== 'idle') return false;
       this.status = 'playing'; this.phase = 'charging'; this.chargeMs = 0;
+      this.bonusIdleMs = 0;
       this._notify(true); return true;
     }
 
@@ -160,10 +170,35 @@
 
     _event(type, detail = {}) { this.onEvent({ type, ...detail }); }
 
+    _evolveFrom(previousScore) {
+      const before = evolutionForScore(previousScore), after = evolutionForScore(this.score);
+      if (after.evolutions <= before.evolutions) return;
+      this.evolutionPulse = 0.85;
+      this._event('evolve', { ...after, score: this.score });
+    }
+
+    _waitForBonus(milliseconds) {
+      const platform = this._current(), bonus = BONUSES[platform.kind];
+      if (this.status !== 'playing' || this.phase !== 'idle' || this.currentId === 0 || !bonus || platform.bonusClaimed) return;
+      this.bonusIdleMs = Math.min(BONUS_WAIT_MS, this.bonusIdleMs + milliseconds);
+      if (this.bonusIdleMs < BONUS_WAIT_MS - 1e-7) return;
+      // The receipt belongs to this platform, so hopping on it again or
+      // leaving/revisiting cannot repeatedly collect its waiting reward.
+      platform.bonusClaimed = true; this.bonusIdleMs = BONUS_WAIT_MS;
+      const previousScore = this.score;
+      this.score += bonus.points;
+      this.effects.push({ x: this.player.x, y: this.player.y, age: 0, points: bonus.points, perfect: false });
+      this.effects = this.effects.slice(-6);
+      this._event('bonus', { points: bonus.points, kind: platform.kind, score: this.score });
+      this._evolveFrom(previousScore);
+      this._notify(true);
+    }
+
     _land() {
       const next = this._next(), current = this._current();
       const on = platform => Platforms.contains(platform, this.player.x, this.player.y, FOOT_RADIUS);
       this.player.z = 0;
+      this.bonusIdleMs = 0;
       if (!on(next) && !on(current)) {
         this.phase = 'falling'; this.fallTime = 0; this.combo = 0; return;
       }
@@ -173,10 +208,10 @@
         this._event('land', { points: 0, perfect: false, samePlatform: true, score: this.score });
         return;
       }
-      const before = evolutionForScore(this.score);
+      const previousScore = this.score;
       const perfect = Math.hypot(this.player.x - next.x, this.player.y - next.y) <= 13;
       this.combo = perfect ? this.combo + 1 : 0;
-      const points = perfect ? Math.min(4, this.combo) * 2 : 1;
+      const points = perfect ? Math.min(this.combo, 16) * 2 : 1;
       this.score += points; this.hops += 1; this.currentId = next.id;
       this.lastPoints = points; this.lastPerfect = perfect;
       this.effects.push({ x: this.player.x, y: this.player.y, age: 0, points, perfect });
@@ -188,11 +223,7 @@
       while (this.platforms[this.platforms.length - 1].id < this.currentId + 3) this._appendPlatform();
       this._event('land', { points, perfect, samePlatform: false, score: this.score, hops: this.hops });
       if (perfect) this._event('perfect', { points, combo: this.combo, score: this.score });
-      const after = evolutionForScore(this.score);
-      if (after.evolutions > before.evolutions) {
-        this.evolutionPulse = 0.85;
-        this._event('evolve', { ...after, score: this.score });
-      }
+      this._evolveFrom(previousScore);
     }
 
     _finish() {
@@ -227,22 +258,26 @@
         } else if (this.phase === 'falling') {
           this.fallTime += dt; this.player.z = -Math.pow(this.fallTime, 2) * 650;
           if (this.fallTime >= 0.5) this._finish();
-        }
+        } else if (this.phase === 'idle') this._waitForBonus(STEP_MS);
       }
       this._notify();
     }
 
     getState() {
-      const next = this._next();
+      const next = this._next(), current = this._current(), bonus = BONUSES[current.kind];
+      const unclaimed = Boolean(bonus && this.currentId > 0 && !current.bonusClaimed);
       return { status: this.status, phase: this.phase, isPaused: this.isPaused,
         score: this.score, hops: this.hops, combo: this.combo, charge: this.chargeMs / CHARGE_MS,
         ...evolutionForScore(this.score), lastPoints: this.lastPoints, lastPerfect: this.lastPerfect,
+        bonusPoints: bonus?.points || 0, bonusLabel: bonus?.label || '',
+        bonusAvailable: unclaimed && this.status === 'playing' && this.phase === 'idle',
+        bonusRemainingMs: unclaimed ? Math.max(0, BONUS_WAIT_MS - this.bonusIdleMs) : 0,
         nextDistance: Math.hypot(next.x - this.player.x, next.y - this.player.y) };
     }
 
     _notify(force = false) {
       const state = this.getState();
-      const signature = JSON.stringify({ ...state, charge: Math.round(state.charge * 100), nextDistance: undefined });
+      const signature = JSON.stringify({ ...state, charge: Math.round(state.charge * 100), bonusRemainingMs: Math.ceil(state.bonusRemainingMs / 100) * 100, nextDistance: undefined });
       if (force || signature !== this.stateSignature) { this.stateSignature = signature; this.onChange(state); }
     }
 

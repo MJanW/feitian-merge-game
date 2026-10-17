@@ -10,6 +10,7 @@
     kiosk: { top: '#76aba8', light: '#f1dcb0', dark: '#d3b58e', rim: '#b4d4c1' },
     drum: { top: '#f6e1af', light: '#d76852', dark: '#a4423c', rim: '#ffedc7' },
     stone: { top: '#b1bec0', light: '#8d9fa6', dark: '#6c818e', rim: '#d8dfd9' },
+    manhole: { top: '#82908d', light: '#667773', dark: '#3f514e', rim: '#c2cdc3' },
   };
   const CUBE_COLORS = ['#ef7355', '#f8cd62', '#62b0ad', '#f2ebd8', '#86b370', '#6c91c4'];
   const TAU = Math.PI * 2;
@@ -118,6 +119,15 @@
       }
       ctx.beginPath(); ctx.ellipse(0, depth - 3, rx, ry, 0, 0, Math.PI);
       ctx.strokeStyle = '#f0c17b'; ctx.lineWidth = 4; ctx.stroke();
+    } else if (p.kind === 'manhole') {
+      for (const offset of [3, depth - 3]) {
+        ctx.beginPath(); ctx.ellipse(0, offset, rx, ry, 0, 0, Math.PI);
+        ctx.strokeStyle = offset === 3 ? '#a3b4a9' : '#293e39'; ctx.lineWidth = 2; ctx.stroke();
+      }
+      for (let i = 1; i < 9; i++) {
+        const angle = Math.PI * i / 9, x = Math.cos(angle) * rx, y = Math.sin(angle) * ry;
+        line(ctx, x, y + 5, x, y + depth - 5, '#354b46', 1.5);
+      }
     } else {
       ctx.beginPath(); ctx.ellipse(0, depth - 2, rx, ry, 0, 0, Math.PI);
       ctx.strokeStyle = '#62737d'; ctx.lineWidth = 1.2; ctx.stroke();
@@ -200,6 +210,28 @@
         for (let i = 0; i < 15; i++) {
           const sx = -x * .78 + (i * 17.3) % (x * 1.56), sy = -y * .74 + (i * 29.7) % (y * 1.48);
           ellipse(ctx, sx, sy, i % 3 === 0 ? 2 : 1.1, i % 3 === 0 ? 1.6 : .8, i % 2 ? '#778d97' : '#e5e6d7');
+        }
+        break;
+      }
+      case 'manhole': {
+        ellipse(ctx, 0, 0, x * .94, y * .94, '#647972', '#c5d0c5', 1.6);
+        ellipse(ctx, 0, 0, x * .8, y * .8, '#83958b', '#425d52', 2.3);
+        ellipse(ctx, 0, 0, x * .69, y * .69, '#6b8077', '#b5c4b5', 1.4);
+        const grateRadius = x * .67;
+        for (let i = -4; i <= 4; i++) {
+          const offset = x * .14 * i, reach = Math.sqrt(grateRadius * grateRadius - offset * offset);
+          line(ctx, -reach, offset, reach, offset, '#354f45', 2.6);
+          line(ctx, -reach, offset - 1, reach, offset - 1, '#a9bca9', .8);
+          line(ctx, offset, -reach, offset, reach, '#354f45', 2.6);
+          line(ctx, offset + 1, -reach, offset + 1, reach, '#9cb29f', .8);
+        }
+        for (let i = 0; i < 8; i++) {
+          const angle = (i + .5) * TAU / 8;
+          const bx = Math.cos(angle) * x * .87, by = Math.sin(angle) * y * .87;
+          ellipse(ctx, bx, by, 2.1, 2.1, '#354e43', '#b3c1b0', .6);
+        }
+        for (const sign of [-1, 1]) {
+          ellipse(ctx, sign * x * .76, 0, x * .04, y * .12, '#2d463c', '#b7c6b6', .8);
         }
         break;
       }

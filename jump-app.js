@@ -2,7 +2,7 @@
   'use strict';
   function initJump(document, window) {
     const $ = id => document.getElementById(id);
-    // The lower-scoring rules use their own record; retain the old key intact.
+    // Keep the mobile revision's best; the original high-scoring v1 stays separate.
     const BEST_KEY = 'feitian-jump-best-v2';
     const canvas = $('jump-canvas');
     const hold = $('jump-hold');
@@ -34,6 +34,7 @@
       keyboard = null;
       releaseCapture();
       game?.cancelCharge();
+      callAudio('setCharge', null);
     }
     function syncPause() {
       if (!game) return;
@@ -53,16 +54,17 @@
       if (next.phase === 'charging') return next.charge >= 1 ? '蓄力已满，松手起跳' : '按住越久跳得越远，松手起跳';
       if (next.phase === 'jumping') return '瞄准平台中心，落稳再跳';
       if (next.phase === 'falling') return '这次差一点……';
+      if (next.bonusAvailable) return `${next.bonusLabel}：停留 ${Math.ceil(next.bonusRemainingMs / 1000)} 秒再得 +${next.bonusPoints}`;
       if (notice && Date.now() < noticeUntil) return notice;
       if (next.status === 'ready') return '按住画面或下方按钮蓄力，松手起跳';
       return next.combo > 1 ? `连续中心 ${next.combo} 次！继续挑战` : '落台得分，每 200 分进化一次';
     }
     function render(next) {
       state = next;
-      // Score only changes on a landing. Persist each new high immediately,
-      // without writing storage during charge/flight animation frames.
+      // Landings and platform rewards both save immediately, not on every frame.
       saveBest(next.score);
       const paused = blocked();
+      callAudio('setCharge', !paused && !next.isPaused && soundEnabled && next.phase === 'charging' ? next.charge : null);
       const ended = next.status === 'lost';
       text('jump-score', next.score.toLocaleString());
       text('jump-best', best.toLocaleString());
@@ -92,17 +94,22 @@
       if (active && focused && !document.hidden) $('jump-result-title').focus({ preventScroll: true });
     }
     function onEvent(event) {
-      if (event.type === 'jump') callAudio('playDrop');
+      if (event.type === 'jump') callAudio('playJump');
       else if (event.type === 'evolve') {
         notice = `进化！第 ${event.cycle} 轮 · 图 ${event.levelIndex - 1}`;
         noticeUntil = Date.now() + 2000;
-        callAudio('playMerge', { level: event.levelIndex });
+        callAudio('playEvolution', { level: event.levelIndex });
       } else if (event.type === 'perfect') {
-        notice = '正中平台！连续命中中心加分更多';
+        notice = `中心连击 ${event.combo} 次 · +${event.points}`;
         noticeUntil = Date.now() + 1200;
-        callAudio('playMerge', { level: 4 });
-      } else if (event.type === 'land' && !event.perfect && !event.samePlatform) callAudio('playMerge', { level: 1 });
-      else if (event.type === 'lose') callAudio('pause');
+        callAudio('playLanding', { ...event, perfect: true });
+      } else if (event.type === 'bonus') {
+        const label = { manhole: '井盖', cube: '魔方', kiosk: '便利店', record: '唱片' }[event.kind] || '平台';
+        notice = `${label}奖励 +${event.points}！`;
+        noticeUntil = Date.now() + 1800;
+        callAudio('playBonus', event);
+      } else if (event.type === 'land' && !event.perfect) callAudio('playLanding', event);
+      else if (event.type === 'lose') callAudio('playLose');
     }
     function ensureGame() {
       if (game) return true;
@@ -110,7 +117,7 @@
         if (typeof window.JumpGame !== 'function') throw new Error('三周目文件未加载，请刷新后重试');
         const saved = Number(read(BEST_KEY, '0'));
         best = Number.isSafeInteger(saved) && saved >= 0 ? saved : 0;
-        try { if (typeof window.MergeAudio === 'function') audio = new window.MergeAudio(); } catch { audio = null; }
+        try { if (typeof window.JumpAudio === 'function') audio = new window.JumpAudio(); } catch { audio = null; }
         callAudio('setEnabled', soundEnabled);
         game = new window.JumpGame({ canvas, levels: window.GameLevels.levels, onChange: render, onEvent, onComplete: completed });
         return true;
@@ -122,7 +129,7 @@
     function restart(ask = true) {
       if (!active || !ensureGame()) return;
       if (ask && state?.status === 'playing') {
-        clearInput(); game.pause(true);
+        clearInput(); callAudio('pause'); game.pause(true);
         if (!window.confirm('重新开始会清空本局进度，本机最高分会保留。确定吗？')) { syncPause(); return; }
       }
       clearInput(); callAudio('reset'); manualPaused = false; notice = '';

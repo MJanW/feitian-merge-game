@@ -10,6 +10,7 @@
     kiosk: Object.freeze({ shape: 'rect', rx: 47, ry: 40, angle: Math.PI / 4, depth: 56 }),
     drum: Object.freeze({ shape: 'circle', rx: 46, ry: 46, angle: 0, depth: 42 }),
     stone: Object.freeze({ shape: 'hex', rx: 54, ry: 47, angle: Math.PI / 12, depth: 33 }),
+    manhole: Object.freeze({ shape: 'circle', rx: 48, ry: 48, angle: 0, depth: 16 }),
   });
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
 
