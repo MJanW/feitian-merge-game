@@ -2,7 +2,8 @@
   'use strict';
   function initJump(document, window) {
     const $ = id => document.getElementById(id);
-    const BEST_KEY = 'feitian-jump-best-v1';
+    // The lower-scoring rules use their own record; retain the old key intact.
+    const BEST_KEY = 'feitian-jump-best-v2';
     const canvas = $('jump-canvas');
     const hold = $('jump-hold');
     let game = null, audio = null, state = null;
@@ -67,12 +68,6 @@
       text('jump-best', best.toLocaleString());
       text('jump-stage', `图 ${next.photoNumber}`);
       text('jump-cycle', `第 ${next.cycle} 轮`);
-      text('jump-next', `还差 ${next.pointsToNext} 分进化`);
-      prop('jump-progress', 'value', 200 - next.pointsToNext);
-      attr('jump-progress', 'aria-valuetext', `${200 - next.pointsToNext} / 200 分`);
-      const percent = Math.round(next.charge * 100);
-      prop('jump-charge', 'value', percent);
-      text('jump-charge-label', next.phase === 'charging' ? `蓄力 ${percent}%` : '按住蓄力，松手跳');
       const level = window.GameLevels?.levels?.[next.levelIndex];
       if (level?.image) attr('jump-photo', 'src', level.image);
       attr('jump-photo', 'alt', `当前形态：图 ${next.photoNumber}`);
@@ -87,7 +82,7 @@
       prop('jump-result', 'hidden', !ended);
       if (ended) {
         text('jump-result-title', '这次跳了多远？');
-        text('jump-result-detail', `${next.score.toLocaleString()} 分 · ${next.hops} 次落台 · 第 ${next.cycle} 轮 · 图 ${next.photoNumber}` + (savedWarning ? ' · 本机记录保存失败' : ` · 本机最高 ${best.toLocaleString()}`));
+        text('jump-result-detail', `${next.score.toLocaleString()} 分 · ${next.hops} 次落台 · 第 ${next.cycle} 轮 · 图 ${next.photoNumber}` + (savedWarning ? ' · 本机记录保存失败' : ` · 新版最高 ${best.toLocaleString()}`));
       }
     }
     function completed(next) {

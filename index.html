@@ -7,7 +7,7 @@
   <meta name="description" content="一周目合成飞天，二周目带队飞天，三周目跳跃飞天：蓄力跳上新平台，每 200 分进化，12 种形态无限循环。">
   <title>合成飞天</title>
   <link rel="icon" href="assets/photo-10.png" type="image/png">
-  <link rel="stylesheet" href="styles.css?v=20261017-platforms2">
+  <link rel="stylesheet" href="styles.css?v=20261017-mobilejump1">
   <script defer src="vendor/matter.min.js"></script>
   <script defer src="levels.js?v=20261017-size10"></script>
   <script defer src="sound.js?v=20261016-finale300"></script>
@@ -20,8 +20,8 @@
   <script defer src="rescue-app.js?v=20261017-obstacles2"></script>
   <script defer src="jump-platforms.js?v=20261017-platforms1"></script>
   <script defer src="jump-platform-renderer.js?v=20261017-platforms1"></script>
-  <script defer src="jump-game.js?v=20261017-platforms2"></script>
-  <script defer src="jump-app.js?v=20261017-jump1"></script>
+  <script defer src="jump-game.js?v=20261017-mobilejump1"></script>
+  <script defer src="jump-app.js?v=20261017-mobilejump1"></script>
   <script defer src="modes.js?v=20261017-jump1"></script>
 </head>
 <body>
@@ -113,15 +113,13 @@
         <header class="jump-head"><h1>跳跃飞天</h1><p>大小各异，远近交错</p></header>
         <div class="jump-hud" aria-label="跳跃成绩与当前形态">
           <div class="jump-stat"><span>本局分数</span><strong id="jump-score">0</strong></div>
-          <div class="jump-stat"><span>本机最高</span><strong id="jump-best">0</strong></div>
+          <div class="jump-stat"><span>新版最高</span><strong id="jump-best">0</strong></div>
           <div class="jump-form"><img id="jump-photo" src="assets/photo-minus-one.png" alt="当前形态：图 -1，大水瓶"><div><strong id="jump-stage">图 -1</strong><span id="jump-cycle">第 1 轮</span></div></div>
         </div>
-        <div class="jump-evolution"><span id="jump-next">还差 200 分进化</span><progress id="jump-progress" max="200" value="0" aria-label="距离下次进化的分数">0 / 200</progress></div>
         <div class="jump-tools">
-          <div class="jump-charge-meter"><span id="jump-charge-label">蓄力越久，跳得越远</span><progress id="jump-charge" max="100" value="0" aria-label="跳跃蓄力">0 / 100</progress></div>
           <div class="jump-controls" role="group" aria-label="跳跃飞天操作"><button id="jump-hold" class="jump-primary" type="button" aria-label="按住蓄力，松开跳跃">按住蓄力</button><button id="jump-pause" type="button" aria-pressed="false">暂停</button><button id="jump-restart" type="button">重开</button><button id="jump-sound" type="button" aria-pressed="true">音效开</button></div>
         </div>
-        <p class="jump-tips">落稳 +10 · 中心连跳最高 +40<br>图 -1 → 10，12 种形态循环进化。<span class="keyboard-tip"><br>按住空格蓄力 · 松开起跳 · P 暂停</span></p>
+        <p class="jump-tips">落稳 +1 · 连续中心 +2 / +4 / +6 / +8<br>每 200 分进化，图 -1 → 10 无限循环。<span class="keyboard-tip"><br>按住空格蓄力 · 松开起跳 · P 暂停</span></p>
       </aside>
     </div>
   </section>

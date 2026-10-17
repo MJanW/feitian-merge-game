@@ -211,18 +211,7 @@ dialog{padding:0;width:min(480px,calc(100% - 24px - var(--safe-left) - var(--saf
 .jump-form>div{display:flex;flex-direction:column;gap:5px;min-width:0}
 .jump-form strong{font-size:18px;line-height:1.4;color:var(--jump-accent)}
 .jump-form span{font-size:11px;line-height:1.4;color:var(--jump-muted);overflow-wrap:anywhere}
-.jump-evolution{display:flex;flex-direction:column;gap:7px;padding:6px 0 15px;border-bottom:1px solid var(--jump-line)}
-.jump-evolution>span{font-size:11px;line-height:1.4;color:var(--jump-muted)}
-.jump-evolution progress,.jump-charge-meter progress{display:block;width:100%;height:6px;appearance:none;-webkit-appearance:none;border:0;border-radius:6px;overflow:hidden;background:var(--jump-soft);accent-color:var(--jump-accent)}
-.jump-evolution progress::-webkit-progress-bar,.jump-charge-meter progress::-webkit-progress-bar{background:var(--jump-soft);border-radius:6px}
-.jump-evolution progress::-webkit-progress-value{background:var(--jump-accent);border-radius:6px}
-.jump-evolution progress::-moz-progress-bar{background:var(--jump-accent);border-radius:6px}
 .jump-tools{margin-top:18px}
-.jump-charge-meter{display:flex;align-items:center;gap:9px;margin-bottom:9px}
-.jump-charge-meter span{flex:none;font-size:10px;line-height:1.4;color:var(--jump-muted)}
-.jump-charge-meter progress{height:7px;accent-color:var(--accent)}
-.jump-charge-meter progress::-webkit-progress-value{background:var(--accent);border-radius:6px}
-.jump-charge-meter progress::-moz-progress-bar{background:var(--accent);border-radius:6px}
 .jump-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .jump-controls button{min-width:44px;min-height:44px;padding:9px 6px;border:1px solid var(--jump-line);border-radius:10px;background:var(--surface);color:var(--jump-accent);font-size:12px;font-weight:600;white-space:nowrap}
 .jump-controls button:hover,.jump-controls button[aria-pressed="true"]{background:var(--jump-soft)}
@@ -252,17 +241,11 @@ dialog{padding:0;width:min(480px,calc(100% - 24px - var(--safe-left) - var(--saf
   .jump-stat{padding:4px 8px}.jump-stat>span{font-size:10px}.jump-stat strong{font-size:20px;margin-top:1px}
   .jump-form{grid-column:auto;gap:3px;padding:3px;border:1px solid var(--jump-line);border-radius:12px;background:var(--surface)}
   .jump-form img{width:36px;height:44px}.jump-form>div{gap:2px}.jump-form strong{font-size:10px;white-space:nowrap}.jump-form span{font-size:9px}
-  .jump-evolution{order:2;flex-direction:row;align-items:center;gap:10px;width:100%;padding:0 2px;border:0}
-  .jump-evolution>span{flex:none;font-size:10px;line-height:1.6}
-  .jump-evolution progress{height:5px}
   .jump-play{order:3;width:100%}
-  /* 224px reserves the heading, compact HUD, evolution and charge meters,
-     44px controls, status and spacing. Longer help stays in the intro. */
   .jump-board{width:min(100%,max(144px,calc((var(--panel-height) - var(--safe-bottom) - 224px)*.6153846154 + 8px)));border-width:4px;border-radius:17px}
   #jump-canvas{border-radius:13px}
   .jump-status{min-height:16px;margin-top:5px;font-size:10px;line-height:1.6}
   .jump-tools{order:4;width:100%;margin:0}
-  .jump-charge-meter{gap:8px;margin-bottom:5px}.jump-charge-meter span{display:none}.jump-charge-meter progress{height:5px}
   .jump-controls{grid-template-columns:2.4fr repeat(3,minmax(0,1fr));gap:4px}
   .jump-controls button{padding:8px 3px;font-size:11px}
   .jump-controls #jump-hold{grid-column:auto}
@@ -284,10 +267,25 @@ dialog{padding:0;width:min(480px,calc(100% - 24px - var(--safe-left) - var(--saf
   .jump-stat{padding:6px 8px}.jump-stat>span{font-size:10px}.jump-stat strong{font-size:22px;margin-top:3px}
   .jump-form{grid-column:auto;gap:3px;padding:3px;border:1px solid var(--jump-line);border-radius:12px;background:var(--surface)}
   .jump-form img{width:36px;height:44px}.jump-form>div{gap:2px}.jump-form strong{font-size:10px;white-space:nowrap}.jump-form span{font-size:9px}
-  .jump-evolution{flex-direction:row;align-items:center;gap:10px;padding:0;border:0;margin-top:7px}.jump-evolution>span{flex:none;font-size:10px;line-height:1.6}.jump-evolution progress{height:5px}
-  .jump-tools{margin-top:9px}.jump-charge-meter{gap:8px;margin-bottom:5px}.jump-charge-meter span{display:inline;font-size:10px;line-height:1.6}
+  .jump-tools{margin-top:9px}
   .jump-controls{grid-template-columns:2.4fr repeat(3,minmax(0,1fr));gap:4px}.jump-controls button{padding:8px 3px;font-size:11px}.jump-controls #jump-hold{grid-column:auto}
   .jump-tips{display:block;margin-top:8px;font-size:10px;line-height:1.6;text-align:left}
 }
 @media(max-width:359px){.mode-tabs{gap:4px}.mode-tabs button{padding-inline:2px;font-size:10px}.jump-head{align-items:center}.jump-head h1{font-size:21px}.jump-head p{max-width:130px}}
+
+/* Portrait phones use a full-width field. The engine measures this rectangle
+   and changes the visible world height while keeping every model proportional. */
+@media(max-width:779px) and (orientation:portrait){
+  .jump-layout{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(0,1fr) 44px;gap:6px;width:100%;height:var(--panel-height);min-height:0;padding:6px calc(10px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(10px + var(--safe-left))}
+  .jump-head{display:none}
+  .jump-hud{order:0;height:52px;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 90px;gap:5px}
+  .jump-stat{padding:4px 8px;overflow:hidden}.jump-stat>span{font-size:10px;line-height:14px}.jump-stat strong{font-size:22px;line-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .jump-form{height:52px;gap:5px;padding:3px;overflow:hidden}.jump-form img{width:38px;height:44px;flex-shrink:0}.jump-form>div{overflow:hidden}.jump-form strong{font-size:11px}.jump-form span{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .jump-play{order:1;position:relative;display:block;width:100%;height:100%;min-height:0}
+  .jump-board{width:100%;height:100%;border-width:2px;border-radius:18px;box-shadow:0 3px 0 -1px #d7e5e9,0 6px 18px #285f820b}
+  #jump-canvas{width:100%;height:100%;min-height:0;aspect-ratio:auto;border-radius:16px}
+  .jump-status{position:absolute;left:8px;right:8px;bottom:9px;z-index:1;width:auto;min-height:0;max-height:28px;margin:0;padding:0 4px;overflow:hidden;border-radius:5px;background:#fff9f5c9;font-size:10px;line-height:14px;pointer-events:none}
+  .jump-tools{order:2;height:44px;margin:0}.jump-controls{height:44px}.jump-controls button{height:44px;min-height:44px}
+  .jump-intro strong{font-size:16px}.jump-intro span{font-size:11px}
+}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}

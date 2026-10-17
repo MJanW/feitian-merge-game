@@ -30,6 +30,7 @@
       this.onEvent = options.onEvent || (() => {});
       this.onComplete = options.onComplete || (() => {});
       this.reducedMotion = Boolean(root.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+      this.visibleHeight = HEIGHT; this.cssWidth = WIDTH; this.cssHeight = HEIGHT;
       this.images = new Map(); this.destroyed = false;
       if (typeof root.Image === 'function') for (const level of this.levels) {
         if (!level?.image || this.images.has(level.image)) continue;
@@ -59,7 +60,7 @@
       this.platforms = [Platforms.createPlatform(0, 'grass', { x: 125, y: 0 })];
       this.platforms.push(Platforms.createPlatform(1, 'parcel', { x: 275, y: -Math.sqrt(240 * 240 - 150 * 150) }));
       this._appendPlatform(); this._appendPlatform();
-      this.cameraY = 465; this.cameraFrom = 465; this.cameraTo = 465; this.cameraTime = 0.4;
+      this.cameraY = this._cameraAnchor(); this.cameraFrom = this.cameraY; this.cameraTo = this.cameraY; this.cameraTime = 0.4;
       this.jump = null; this.fallTime = 0; this.landingPulse = 0; this.evolutionPulse = 0;
       this.effects = []; this.completed = false; this._notify(true); this.render();
     }
@@ -118,6 +119,12 @@
     _current() { return this.platforms.find(platform => platform.id === this.currentId); }
     _next() { return this.platforms.find(platform => platform.id === this.currentId + 1); }
 
+    _cameraAnchor() {
+      // Keep the default composition while leaving room above the player for
+      // a full jump arc on shorter, wider phone boards.
+      return Math.max(this.visibleHeight * 465 / HEIGHT, Math.min(245, this.visibleHeight - 80));
+    }
+
     startCharge() {
       if (this.destroyed || this.isPaused || this.status === 'lost' || this.phase !== 'idle') return false;
       this.status = 'playing'; this.phase = 'charging'; this.chargeMs = 0;
@@ -169,12 +176,12 @@
       const before = evolutionForScore(this.score);
       const perfect = Math.hypot(this.player.x - next.x, this.player.y - next.y) <= 13;
       this.combo = perfect ? this.combo + 1 : 0;
-      const points = perfect ? 10 + Math.min(3, this.combo) * 10 : 10;
+      const points = perfect ? Math.min(4, this.combo) * 2 : 1;
       this.score += points; this.hops += 1; this.currentId = next.id;
       this.lastPoints = points; this.lastPerfect = perfect;
       this.effects.push({ x: this.player.x, y: this.player.y, age: 0, points, perfect });
       this.effects = this.effects.slice(-6);
-      this.cameraFrom = this.cameraY; this.cameraTo = 465 - next.y * PROJECTION; this.cameraTime = 0;
+      this.cameraFrom = this.cameraY; this.cameraTo = this._cameraAnchor() - next.y * PROJECTION; this.cameraTime = 0;
       // Keep two old platforms and three ahead; score, not an ever-growing
       // visited set, remembers the journey. Collision only uses current/next.
       this.platforms = this.platforms.filter(platform => platform.id >= this.currentId - 2);
@@ -245,7 +252,7 @@
 
     _platform(platform) {
       const y = platform.y * PROJECTION + this.cameraY;
-      if (y < -150 || y > HEIGHT + 100) return;
+      if (y < -150 || y > this.visibleHeight + 100) return;
       const renderer = root.JumpPlatformRenderer || PlatformRenderer;
       if (renderer) renderer.draw(this.ctx, platform, { cameraY: this.cameraY, projection: PROJECTION, currentId: this.currentId });
     }
@@ -257,7 +264,7 @@
       ctx.save(); ctx.globalAlpha = alpha;
       ctx.fillStyle = '#65566628';
       const shadow = clamp(1 - this.player.z / 220, 0.35, 1);
-      this._ellipse(this.player.x, screenY + 2, 15 * shadow, 6 * shadow); ctx.fill();
+      this._ellipse(this.player.x, screenY + 1.5, 11.25 * shadow, 4.5 * shadow); ctx.fill();
       ctx.translate(this.player.x, screenY - this.player.z);
       if (!this.reducedMotion) {
         const squeeze = this.phase === 'charging' ? state.charge * 0.22 : this.landingPulse > 0 ? Math.sin(this.landingPulse / 0.32 * Math.PI) * 0.18 : 0;
@@ -268,35 +275,45 @@
         const f = info.frame;
         const valid = Array.isArray(f) && f.length === 4 && f.every(Number.isFinite) && f[0] >= 0 && f[1] >= 0 && f[2] > 0 && f[3] > 0 && f[0] + f[2] <= image.naturalWidth && f[1] + f[3] <= image.naturalHeight;
         const source = valid ? f : [0, 0, image.naturalWidth, image.naturalHeight];
-        const scale = Math.min(72 / source[2], 82 / source[3]);
+        const scale = Math.min(54 / source[2], 61.5 / source[3]);
         const w = source[2] * scale, h = source[3] * scale;
-        ctx.shadowColor = '#63535e30'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+        ctx.shadowColor = '#63535e30'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1.5;
         ctx.drawImage(image, ...source, -w / 2, -h, w, h);
       } else {
-        ctx.fillStyle = info.color || '#a9d8e6'; ctx.beginPath(); ctx.arc(0, -24, 22, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#4c525b'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'center'; ctx.fillText(String(state.photoNumber), 0, -19);
+        ctx.fillStyle = info.color || '#a9d8e6'; ctx.beginPath(); ctx.arc(0, -18, 16.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#4c525b'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(String(state.photoNumber), 0, -14.25);
       }
       ctx.restore();
     }
 
     render() {
       if (!this.ctx || this.destroyed) return;
-      const ctx = this.ctx, cssWidth = this.canvas.getBoundingClientRect?.().width || WIDTH;
+      const ctx = this.ctx, rect = this.canvas.getBoundingClientRect?.();
+      if (Number.isFinite(rect?.width) && rect.width > 0 && (rect.height === undefined || Number.isFinite(rect.height) && rect.height > 0)) {
+        const cssHeight = Number.isFinite(rect.height) && rect.height > 0 ? rect.height : rect.width * HEIGHT / WIDTH;
+        const oldAnchor = this._cameraAnchor();
+        this.cssWidth = rect.width; this.cssHeight = cssHeight;
+        this.visibleHeight = cssHeight / rect.width * WIDTH;
+        const shift = this._cameraAnchor() - oldAnchor;
+        // Preserve camera interpolation and the entire world simulation when
+        // orientation/browser chrome changes the board's available height.
+        this.cameraY += shift; this.cameraFrom += shift; this.cameraTo += shift;
+      }
       const dpr = Math.min(root.devicePixelRatio || 1, 3);
-      const width = Math.round(cssWidth * dpr), height = Math.round(cssWidth * HEIGHT / WIDTH * dpr);
+      const width = Math.max(1, Math.round(this.cssWidth * dpr)), height = Math.max(1, Math.round(this.cssHeight * dpr));
       if (this.canvas.width !== width || this.canvas.height !== height) { this.canvas.width = width; this.canvas.height = height; }
-      ctx.setTransform(width / WIDTH, 0, 0, height / HEIGHT, 0, 0);
-      ctx.clearRect(0, 0, WIDTH, HEIGHT);
-      const sky = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+      ctx.setTransform(width / WIDTH, 0, 0, width / WIDTH, 0, 0);
+      ctx.clearRect(0, 0, WIDTH, this.visibleHeight + 1);
+      const sky = ctx.createLinearGradient(0, 0, 0, this.visibleHeight);
       sky.addColorStop(0, '#f1e9e3'); sky.addColorStop(0.55, '#fbf4e8'); sky.addColorStop(1, '#e9eee7');
-      ctx.fillStyle = sky; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, WIDTH, this.visibleHeight + 1);
       ctx.fillStyle = '#ffffff70';
       for (const [x, y, r] of [[38, 120, 48], [360, 220, 66], [60, 360, 40], [320, 565, 65]]) {
-        this._ellipse(x, y, r, r * 0.28); ctx.fill();
+        this._ellipse(x, y * this.visibleHeight / HEIGHT, r, r * 0.28); ctx.fill();
       }
       ctx.strokeStyle = '#d5cfc566'; ctx.lineWidth = 1;
       for (let i = 0; i < 12; i++) {
-        const x = 25 + (i * 113) % 355, y = 85 + (i * 83) % 475;
+        const x = 25 + (i * 113) % 355, y = (85 + (i * 83) % 475) * this.visibleHeight / HEIGHT;
         ctx.beginPath(); ctx.moveTo(x - 3, y); ctx.lineTo(x + 3, y); ctx.moveTo(x, y - 3); ctx.lineTo(x, y + 3); ctx.stroke();
       }
       const current = this._current(), next = this._next();
@@ -314,28 +331,18 @@
         this._ellipse(this.player.x, this.player.y * PROJECTION + this.cameraY, r, r * PROJECTION); ctx.stroke();
       }
       this._sprite();
-      if (this.phase === 'charging') {
-        const y = this.player.y * PROJECTION + this.cameraY + 52;
-        ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.strokeStyle = '#c8c0b7';
-        ctx.beginPath(); ctx.moveTo(this.player.x - 30, y); ctx.lineTo(this.player.x + 30, y); ctx.stroke();
-        ctx.strokeStyle = this.chargeMs > 1050 ? '#b9634e' : '#8b9f83';
-        ctx.beginPath(); ctx.moveTo(this.player.x - 30, y); ctx.lineTo(this.player.x - 30 + this.chargeMs / CHARGE_MS * 60, y); ctx.stroke();
-        ctx.lineCap = 'butt';
-      }
       for (const effect of this.effects) {
         ctx.save(); ctx.globalAlpha = 1 - effect.age / 0.9;
         ctx.fillStyle = effect.perfect ? '#9d6c3d' : '#6b8072'; ctx.font = 'bold 23px system-ui'; ctx.textAlign = 'center';
-        ctx.fillText(`+${effect.points}`, effect.x, effect.y * PROJECTION + this.cameraY - 85 - (this.reducedMotion ? 0 : effect.age * 35));
+        ctx.fillText(`+${effect.points}`, effect.x, effect.y * PROJECTION + this.cameraY - 66 - (this.reducedMotion ? 0 : effect.age * 35));
         ctx.restore();
       }
       if (this.evolutionPulse > 0) {
         ctx.save(); ctx.globalAlpha = Math.min(1, this.evolutionPulse * 4);
         ctx.fillStyle = '#94714f'; ctx.font = 'bold 17px system-ui'; ctx.textAlign = 'center';
         const state = this.getState();
-        ctx.fillText(state.levelIndex === 0 ? `第 ${state.cycle} 轮 · 再次出发` : `进化！图 ${state.photoNumber}`, WIDTH / 2, 100); ctx.restore();
+        ctx.fillText(state.levelIndex === 0 ? `第 ${state.cycle} 轮 · 再次出发` : `进化！图 ${state.photoNumber}`, WIDTH / 2, Math.min(100, this.visibleHeight * .16)); ctx.restore();
       }
-      ctx.fillStyle = '#8b8076'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
-      ctx.fillText(this.phase === 'charging' ? '松手起跳 · 蓄得越久跳得越远' : '按住蓄力，松手跳向下一座', WIDTH / 2, HEIGHT - 33);
     }
 
     destroy() {
