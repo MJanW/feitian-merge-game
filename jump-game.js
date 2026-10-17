@@ -1,0 +1,329 @@
+(function (root) {
+  'use strict';
+
+  const WIDTH = 400, HEIGHT = 650, STEP_MS = 1000 / 120;
+  const CHARGE_MS = 1200, DISTANCE_PER_MS = 0.3, FOOT_RADIUS = 5, PROJECTION = 0.55;
+  const COLORS = [
+    ['#b9dacf', '#79aa9a', '#e1f1e9'], ['#e6c9a3', '#c59976', '#f9e8cd'],
+    ['#c5c7e3', '#969abf', '#e7e7f4'], ['#e9b9aa', '#bf8b80', '#f9ded1'],
+  ];
+  const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+  const smooth = t => t * t * (3 - 2 * t);
+
+  function evolutionForScore(value) {
+    const score = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+    const evolutions = Math.floor(score / 200), levelIndex = evolutions % 12, remainder = score % 200;
+    return { levelIndex, photoNumber: levelIndex - 1, cycle: Math.floor(evolutions / 12) + 1,
+      evolutions, fractionToNext: remainder / 200, pointsToNext: 200 - remainder };
+  }
+
+  class JumpGame {
+    constructor(options = {}) {
+      this.canvas = options.canvas || null;
+      this.ctx = this.canvas?.getContext('2d') || null;
+      this.levels = Array.isArray(options.levels) ? options.levels : [];
+      this.random = typeof options.random === 'function' ? options.random : Math.random;
+      this.onChange = options.onChange || (() => {});
+      this.onEvent = options.onEvent || (() => {});
+      this.onComplete = options.onComplete || (() => {});
+      this.reducedMotion = Boolean(root.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+      this.images = new Map(); this.destroyed = false;
+      if (typeof root.Image === 'function') for (const level of this.levels) {
+        if (!level?.image || this.images.has(level.image)) continue;
+        const image = new root.Image(); this.images.set(level.image, image);
+        image.onload = () => { if (!this.destroyed) this.render(); };
+        image.src = level.image;
+      }
+      this.reset();
+      if (this.ctx && typeof root.requestAnimationFrame === 'function') {
+        const frame = now => {
+          if (this.destroyed) return;
+          const delta = this.lastFrame === null ? 0 : clamp(now - this.lastFrame, 0, 50);
+          this.lastFrame = now; this.step(delta); if (!this.isPaused) this.render();
+          this.raf = root.requestAnimationFrame(frame);
+        };
+        this.raf = root.requestAnimationFrame(frame);
+      }
+    }
+
+    reset() {
+      if (this.destroyed) return;
+      this.status = 'ready'; this.phase = 'idle'; this.isPaused = false;
+      this.score = 0; this.hops = 0; this.combo = 0; this.chargeMs = 0;
+      this.elapsed = 0; this.accumulator = 0; this.lastFrame = null;
+      this.currentId = 0; this.lastPoints = 0; this.lastPerfect = false;
+      this.player = { x: 125, y: 0, z: 0 };
+      this.platforms = [{ id: 0, x: 125, y: 0, radius: 55, palette: 0 }];
+      this.platforms.push({ id: 1, x: 275, y: -Math.sqrt(240 * 240 - 150 * 150), radius: 54, palette: 1 });
+      this._appendPlatform(); this._appendPlatform();
+      this.cameraY = 465; this.cameraFrom = 465; this.cameraTo = 465; this.cameraTime = 0.4;
+      this.jump = null; this.fallTime = 0; this.landingPulse = 0; this.evolutionPulse = 0;
+      this.effects = []; this.completed = false; this._notify(true); this.render();
+    }
+
+    _roll() {
+      const value = this.random();
+      return Number.isFinite(value) ? clamp(value, 0, 1) : 0.5;
+    }
+
+    _appendPlatform() {
+      const previous = this.platforms[this.platforms.length - 1], id = previous.id + 1;
+      const difficulty = Math.min(1, id / 90);
+      const x = previous.x >= WIDTH / 2 ? 100 + this._roll() * 45 : 255 + this._roll() * 45;
+      const distance = 225 + this._roll() * 45 + difficulty * 20;
+      const dx = x - previous.x;
+      // Every centre remains within full charge, even from the far edge of
+      // its predecessor. The minimum separation prevents overlapping tops.
+      const dy = -Math.sqrt(distance * distance - dx * dx);
+      this.platforms.push({ id, x, y: previous.y + dy, radius: 54 - difficulty * 16,
+        palette: id % COLORS.length });
+    }
+
+    _current() { return this.platforms.find(platform => platform.id === this.currentId); }
+    _next() { return this.platforms.find(platform => platform.id === this.currentId + 1); }
+
+    startCharge() {
+      if (this.destroyed || this.isPaused || this.status === 'lost' || this.phase !== 'idle') return false;
+      this.status = 'playing'; this.phase = 'charging'; this.chargeMs = 0;
+      this._notify(true); return true;
+    }
+
+    releaseCharge() {
+      if (this.destroyed || this.isPaused || this.phase !== 'charging') return false;
+      const next = this._next(), dx = next.x - this.player.x, dy = next.y - this.player.y;
+      const distanceToTarget = Math.hypot(dx, dy), distance = this.chargeMs * DISTANCE_PER_MS;
+      this.jump = { fromX: this.player.x, fromY: this.player.y,
+        toX: this.player.x + dx / distanceToTarget * distance,
+        toY: this.player.y + dy / distanceToTarget * distance,
+        time: 0, duration: 0.38 + distance / 1000,
+        height: this.reducedMotion ? 70 : 72 + distance * 0.2,
+        direction: dx < 0 ? -1 : 1 };
+      this.phase = 'jumping'; this.chargeMs = 0;
+      this._event('jump', { distance, duration: this.jump.duration });
+      this._notify(true); return true;
+    }
+
+    cancelCharge() {
+      if (this.destroyed || this.phase !== 'charging') return false;
+      this.phase = 'idle'; this.chargeMs = 0; this._notify(true); return true;
+    }
+
+    pause(paused = true) {
+      if (this.destroyed) return;
+      this.isPaused = Boolean(paused); this.lastFrame = null;
+      if (this.isPaused && this.phase === 'charging') { this.phase = 'idle'; this.chargeMs = 0; }
+      this._notify(true);
+    }
+
+    _event(type, detail = {}) { this.onEvent({ type, ...detail }); }
+
+    _land() {
+      const next = this._next(), current = this._current();
+      const on = platform => Math.hypot(this.player.x - platform.x, this.player.y - platform.y) <= platform.radius - FOOT_RADIUS + 1e-7;
+      this.player.z = 0;
+      if (!on(next) && !on(current)) {
+        this.phase = 'falling'; this.fallTime = 0; this.combo = 0; return;
+      }
+      this.phase = 'idle'; this.landingPulse = 0.32;
+      if (!on(next)) {
+        this.combo = 0; this.lastPoints = 0; this.lastPerfect = false;
+        this._event('land', { points: 0, perfect: false, samePlatform: true, score: this.score });
+        return;
+      }
+      const before = evolutionForScore(this.score);
+      const perfect = Math.hypot(this.player.x - next.x, this.player.y - next.y) <= 13;
+      this.combo = perfect ? this.combo + 1 : 0;
+      const points = perfect ? 10 + Math.min(3, this.combo) * 10 : 10;
+      this.score += points; this.hops += 1; this.currentId = next.id;
+      this.lastPoints = points; this.lastPerfect = perfect;
+      this.effects.push({ x: this.player.x, y: this.player.y, age: 0, points, perfect });
+      this.effects = this.effects.slice(-6);
+      this.cameraFrom = this.cameraY; this.cameraTo = 465 - next.y * PROJECTION; this.cameraTime = 0;
+      // Keep two old platforms and three ahead; score, not an ever-growing
+      // visited set, remembers the journey. Collision only uses current/next.
+      this.platforms = this.platforms.filter(platform => platform.id >= this.currentId - 2);
+      while (this.platforms[this.platforms.length - 1].id < this.currentId + 3) this._appendPlatform();
+      this._event('land', { points, perfect, samePlatform: false, score: this.score, hops: this.hops });
+      if (perfect) this._event('perfect', { points, combo: this.combo, score: this.score });
+      const after = evolutionForScore(this.score);
+      if (after.evolutions > before.evolutions) {
+        this.evolutionPulse = 0.85;
+        this._event('evolve', { ...after, score: this.score });
+      }
+    }
+
+    _finish() {
+      if (this.completed) return;
+      this.completed = true; this.status = 'lost'; this.phase = 'falling';
+      this._notify(true); this._event('lose', { score: this.score, hops: this.hops });
+      this.onComplete(this.getState());
+    }
+
+    step(milliseconds = STEP_MS) {
+      if (this.destroyed || this.isPaused || !Number.isFinite(milliseconds) || milliseconds <= 0) return;
+      this.accumulator += milliseconds;
+      while (this.accumulator + 1e-7 >= STEP_MS) {
+        this.accumulator = Math.max(0, this.accumulator - STEP_MS);
+        const dt = STEP_MS / 1000;
+        if (this.status === 'playing') this.elapsed += dt;
+        this.landingPulse = Math.max(0, this.landingPulse - dt);
+        this.evolutionPulse = Math.max(0, this.evolutionPulse - dt);
+        for (const effect of this.effects) effect.age += dt;
+        this.effects = this.effects.filter(effect => effect.age < 0.9);
+        this.cameraTime = Math.min(0.4, this.cameraTime + dt);
+        this.cameraY = this.cameraFrom + (this.cameraTo - this.cameraFrom) * smooth(this.cameraTime / 0.4);
+        if (this.status === 'lost') continue;
+        if (this.phase === 'charging') this.chargeMs = Math.min(CHARGE_MS, this.chargeMs + STEP_MS);
+        else if (this.phase === 'jumping') {
+          this.jump.time += dt;
+          const progress = Math.min(1, this.jump.time / this.jump.duration);
+          this.player.x = this.jump.fromX + (this.jump.toX - this.jump.fromX) * progress;
+          this.player.y = this.jump.fromY + (this.jump.toY - this.jump.fromY) * progress;
+          this.player.z = Math.sin(progress * Math.PI) * this.jump.height;
+          if (progress >= 1) this._land();
+        } else if (this.phase === 'falling') {
+          this.fallTime += dt; this.player.z = -Math.pow(this.fallTime, 2) * 650;
+          if (this.fallTime >= 0.5) this._finish();
+        }
+      }
+      this._notify();
+    }
+
+    getState() {
+      const next = this._next();
+      return { status: this.status, phase: this.phase, isPaused: this.isPaused,
+        score: this.score, hops: this.hops, combo: this.combo, charge: this.chargeMs / CHARGE_MS,
+        ...evolutionForScore(this.score), lastPoints: this.lastPoints, lastPerfect: this.lastPerfect,
+        nextDistance: Math.hypot(next.x - this.player.x, next.y - this.player.y) };
+    }
+
+    _notify(force = false) {
+      const state = this.getState();
+      const signature = JSON.stringify({ ...state, charge: Math.round(state.charge * 100), nextDistance: undefined });
+      if (force || signature !== this.stateSignature) { this.stateSignature = signature; this.onChange(state); }
+    }
+
+    _ellipse(x, y, rx, ry) {
+      this.ctx.beginPath(); this.ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    }
+
+    _platform(platform) {
+      const ctx = this.ctx, y = platform.y * PROJECTION + this.cameraY, r = platform.radius;
+      if (y < -80 || y > HEIGHT + 60) return;
+      const [top, side, inset] = COLORS[platform.palette];
+      ctx.save();
+      if (platform.id > this.currentId + 1) ctx.globalAlpha = 0.52;
+      ctx.fillStyle = '#a49c9b16'; this._ellipse(platform.x + 5, y + 32, r * 1.05, r * 0.56); ctx.fill();
+      ctx.fillStyle = side;
+      ctx.fillRect(platform.x - r, y, r * 2, 19);
+      this._ellipse(platform.x, y + 19, r, r * PROJECTION); ctx.fill();
+      ctx.fillStyle = top; this._ellipse(platform.x, y, r, r * PROJECTION); ctx.fill();
+      ctx.strokeStyle = '#ffffff90'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = inset; this._ellipse(platform.x, y, r - 8, (r - 8) * PROJECTION); ctx.fill();
+      ctx.fillStyle = platform.id === this.currentId + 1 ? '#fffdf2' : '#ffffff69';
+      this._ellipse(platform.x, y, 13, 13 * PROJECTION); ctx.fill();
+      ctx.strokeStyle = side; ctx.lineWidth = 1; ctx.stroke();
+      if (platform.id === this.currentId + 1) {
+        ctx.fillStyle = '#736b67'; ctx.font = '600 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('下一座', platform.x, y + r * PROJECTION + 40);
+      }
+      ctx.restore();
+    }
+
+    _sprite() {
+      const ctx = this.ctx, state = this.getState(), info = this.levels[state.levelIndex] || {};
+      const image = this.images.get(info.image), screenY = this.player.y * PROJECTION + this.cameraY;
+      const falling = this.phase === 'falling', alpha = falling ? clamp(1 - this.fallTime / 0.5, 0, 1) : 1;
+      ctx.save(); ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#65566628';
+      const shadow = clamp(1 - this.player.z / 220, 0.35, 1);
+      this._ellipse(this.player.x, screenY + 2, 15 * shadow, 6 * shadow); ctx.fill();
+      ctx.translate(this.player.x, screenY - this.player.z);
+      if (!this.reducedMotion) {
+        const squeeze = this.phase === 'charging' ? state.charge * 0.22 : this.landingPulse > 0 ? Math.sin(this.landingPulse / 0.32 * Math.PI) * 0.18 : 0;
+        ctx.scale(1 + squeeze * 0.7, 1 - squeeze);
+        if (this.phase === 'jumping') ctx.rotate(Math.sin(this.jump.time / this.jump.duration * Math.PI * 2) * 0.13 * this.jump.direction);
+      }
+      if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
+        const f = info.frame;
+        const valid = Array.isArray(f) && f.length === 4 && f.every(Number.isFinite) && f[0] >= 0 && f[1] >= 0 && f[2] > 0 && f[3] > 0 && f[0] + f[2] <= image.naturalWidth && f[1] + f[3] <= image.naturalHeight;
+        const source = valid ? f : [0, 0, image.naturalWidth, image.naturalHeight];
+        const scale = Math.min(72 / source[2], 82 / source[3]);
+        const w = source[2] * scale, h = source[3] * scale;
+        ctx.shadowColor = '#63535e30'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+        ctx.drawImage(image, ...source, -w / 2, -h, w, h);
+      } else {
+        ctx.fillStyle = info.color || '#a9d8e6'; ctx.beginPath(); ctx.arc(0, -24, 22, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#4c525b'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'center'; ctx.fillText(String(state.photoNumber), 0, -19);
+      }
+      ctx.restore();
+    }
+
+    render() {
+      if (!this.ctx || this.destroyed) return;
+      const ctx = this.ctx, cssWidth = this.canvas.getBoundingClientRect?.().width || WIDTH;
+      const dpr = Math.min(root.devicePixelRatio || 1, 3);
+      const width = Math.round(cssWidth * dpr), height = Math.round(cssWidth * HEIGHT / WIDTH * dpr);
+      if (this.canvas.width !== width || this.canvas.height !== height) { this.canvas.width = width; this.canvas.height = height; }
+      ctx.setTransform(width / WIDTH, 0, 0, height / HEIGHT, 0, 0);
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      const sky = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+      sky.addColorStop(0, '#f1e9e3'); sky.addColorStop(0.55, '#fbf4e8'); sky.addColorStop(1, '#e9eee7');
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = '#ffffff70';
+      for (const [x, y, r] of [[38, 120, 48], [360, 220, 66], [60, 360, 40], [320, 565, 65]]) {
+        this._ellipse(x, y, r, r * 0.28); ctx.fill();
+      }
+      ctx.strokeStyle = '#d5cfc566'; ctx.lineWidth = 1;
+      for (let i = 0; i < 12; i++) {
+        const x = 25 + (i * 113) % 355, y = 85 + (i * 83) % 475;
+        ctx.beginPath(); ctx.moveTo(x - 3, y); ctx.lineTo(x + 3, y); ctx.moveTo(x, y - 3); ctx.lineTo(x, y + 3); ctx.stroke();
+      }
+      const current = this._current(), next = this._next();
+      ctx.strokeStyle = '#9f94874d'; ctx.lineWidth = 2; ctx.setLineDash([3, 8]);
+      ctx.beginPath(); ctx.moveTo(current.x, current.y * PROJECTION + this.cameraY);
+      ctx.lineTo(next.x, next.y * PROJECTION + this.cameraY); ctx.stroke(); ctx.setLineDash([]);
+      for (const platform of [...this.platforms].sort((a, b) => a.y - b.y)) this._platform(platform);
+      if (!this.reducedMotion && this.landingPulse > 0) {
+        ctx.strokeStyle = '#b18a6177'; ctx.lineWidth = 2;
+        const r = 18 + (0.32 - this.landingPulse) * 110;
+        this._ellipse(this.player.x, this.player.y * PROJECTION + this.cameraY, r, r * PROJECTION); ctx.stroke();
+      }
+      this._sprite();
+      if (this.phase === 'charging') {
+        const y = this.player.y * PROJECTION + this.cameraY + 52;
+        ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.strokeStyle = '#c8c0b7';
+        ctx.beginPath(); ctx.moveTo(this.player.x - 30, y); ctx.lineTo(this.player.x + 30, y); ctx.stroke();
+        ctx.strokeStyle = this.chargeMs > 1050 ? '#b9634e' : '#8b9f83';
+        ctx.beginPath(); ctx.moveTo(this.player.x - 30, y); ctx.lineTo(this.player.x - 30 + this.chargeMs / CHARGE_MS * 60, y); ctx.stroke();
+        ctx.lineCap = 'butt';
+      }
+      for (const effect of this.effects) {
+        ctx.save(); ctx.globalAlpha = 1 - effect.age / 0.9;
+        ctx.fillStyle = effect.perfect ? '#9d6c3d' : '#6b8072'; ctx.font = 'bold 23px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(`+${effect.points}`, effect.x, effect.y * PROJECTION + this.cameraY - 85 - (this.reducedMotion ? 0 : effect.age * 35));
+        ctx.restore();
+      }
+      if (this.evolutionPulse > 0) {
+        ctx.save(); ctx.globalAlpha = Math.min(1, this.evolutionPulse * 4);
+        ctx.fillStyle = '#94714f'; ctx.font = 'bold 17px system-ui'; ctx.textAlign = 'center';
+        const state = this.getState();
+        ctx.fillText(state.levelIndex === 0 ? `第 ${state.cycle} 轮 · 再次出发` : `进化！图 ${state.photoNumber}`, WIDTH / 2, 100); ctx.restore();
+      }
+      ctx.fillStyle = '#8b8076'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText(this.phase === 'charging' ? '松手起跳 · 蓄得越久跳得越远' : '按住蓄力，松手跳向下一座', WIDTH / 2, HEIGHT - 33);
+    }
+
+    destroy() {
+      this.destroyed = true;
+      if (this.raf && typeof root.cancelAnimationFrame === 'function') root.cancelAnimationFrame(this.raf);
+      for (const image of this.images.values()) image.onload = null;
+      this.images.clear(); this.effects.length = 0;
+    }
+  }
+  JumpGame.WIDTH = WIDTH; JumpGame.HEIGHT = HEIGHT;
+  JumpGame.CHARGE_MS = CHARGE_MS; JumpGame.DISTANCE_PER_MS = DISTANCE_PER_MS;
+  JumpGame.evolutionForScore = evolutionForScore;
+  root.JumpGame = JumpGame;
+  if (typeof module !== 'undefined' && module.exports) module.exports = JumpGame;
+})(typeof window !== 'undefined' ? window : globalThis);

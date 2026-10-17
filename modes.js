@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function initModes(document, window) {
-    const names = ['merge', 'rescue'];
+    const names = ['merge', 'rescue', 'jump'];
     let current = 'merge';
     const api = {
       get current() { return current; },
@@ -27,7 +27,9 @@
       tab.addEventListener('keydown', event => {
         if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault();
-        api.select(event.key === 'Home' ? names[0] : event.key === 'End' ? names[1] : names[(names.indexOf(name) + 1) % names.length], true);
+        const direction = event.key === 'ArrowLeft' ? -1 : 1;
+        const nextIndex = (names.indexOf(name) + direction + names.length) % names.length;
+        api.select(event.key === 'Home' ? names[0] : event.key === 'End' ? names[names.length - 1] : names[nextIndex], true);
       });
     }
     api.select('merge');

@@ -27,7 +27,7 @@
   let leaderboard, refreshPromise = null, profilePromise = null;
   let cloudRevision = 0;
   const cloud = { rows: [], player: null, ready: false, loading: false, error: '' };
-  const mergeActive = () => window.GameModes?.current !== 'rescue';
+  const mergeActive = () => !window.GameModes || window.GameModes.current === 'merge';
 
   function queueKey(record) { return OUTBOX_PREFIX + encodeURIComponent(record.project) + ':' + record.id; }
   function savePending(record) {
