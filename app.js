@@ -14,8 +14,10 @@
   const storedBest = Number(storage.get(BEST_KEY, '0'));
   let best = validScore(storedBest) ? storedBest : 0;
   let soundEnabled = storage.get('photo-merge-sound', 'on') !== 'off';
+  window.GameSoundEnabled = soundEnabled;
   let game, audio, levels, lastState, toastTimer;
   let activePointer = null;
+  let windowFocused = true;
   let roundId = makeRoundId();
   let roundRecorded = false;
   let submission = null;
@@ -25,6 +27,7 @@
   let leaderboard, refreshPromise = null, profilePromise = null;
   let cloudRevision = 0;
   const cloud = { rows: [], player: null, ready: false, loading: false, error: '' };
+  const mergeActive = () => window.GameModes?.current !== 'rescue';
 
   function queueKey(record) { return OUTBOX_PREFIX + encodeURIComponent(record.project) + ':' + record.id; }
   function savePending(record) {
@@ -90,7 +93,7 @@
   }
   function syncPause() {
     if (!game) return;
-    const paused = document.hidden || Boolean(document.querySelector('dialog[open]'));
+    const paused = !mergeActive() || !windowFocused || document.hidden || Boolean(document.querySelector('dialog[open]'));
     game.pause(paused);
     if (paused) { clearPointer(); callAudio('pause'); }
     $('paused-overlay').hidden = !paused || game.getState().isOver;
@@ -267,16 +270,17 @@
     syncPause(); syncDialogViewport(); const canvas = $('game-canvas');
     window.visualViewport?.addEventListener('resize', syncDialogViewport);
     window.visualViewport?.addEventListener('scroll', syncDialogViewport);
-    document.addEventListener('pointerdown', event => { if (event.isTrusted) callAudio('unlock'); }, { capture: true });
-    document.addEventListener('keydown', event => { if (event.isTrusted) callAudio('unlock'); }, { capture: true });
-    canvas.addEventListener('pointermove', event => { if (!document.querySelector('dialog[open]') && (event.pointerType === 'mouse' || event.pointerId === activePointer)) aimFromEvent(event); });
+    document.addEventListener('pointerdown', event => { if (mergeActive() && event.isTrusted) callAudio('unlock'); }, { capture: true });
+    document.addEventListener('keydown', event => { if (mergeActive() && event.isTrusted) callAudio('unlock'); }, { capture: true });
+    canvas.addEventListener('pointermove', event => { if (mergeActive() && !document.querySelector('dialog[open]') && (event.pointerType === 'mouse' || event.pointerId === activePointer)) aimFromEvent(event); });
     canvas.addEventListener('pointerdown', event => {
-      if (event.button !== 0 || activePointer !== null || document.querySelector('dialog[open]')) return;
+      if (!mergeActive() || event.button !== 0 || activePointer !== null || document.querySelector('dialog[open]')) return;
       event.preventDefault(); activePointer = event.pointerId; canvas.setPointerCapture(event.pointerId); canvas.focus({ preventScroll: true }); aimFromEvent(event);
     });
-    canvas.addEventListener('pointerup', event => { if (activePointer !== event.pointerId) return; clearPointer(); aimFromEvent(event); if (!document.querySelector('dialog[open]')) drop(); });
+    canvas.addEventListener('pointerup', event => { if (activePointer !== event.pointerId) return; clearPointer(); if (!mergeActive()) return; aimFromEvent(event); if (!document.querySelector('dialog[open]')) drop(); });
     canvas.addEventListener('pointercancel', clearPointer); canvas.addEventListener('lostpointercapture', () => { activePointer = null; });
     document.addEventListener('keydown', event => {
+      if (!mergeActive()) return;
       if (/INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable || event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key.toLowerCase() === 'r' && !event.repeat) {
         if ($('end-dialog').open && !$('leaderboard-dialog').open) { event.preventDefault(); finishRound(); newGame(); }
@@ -287,7 +291,11 @@
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); game.aim(game.getState().aimX + (event.key === 'ArrowLeft' ? -12 : 12)); }
       else if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) drop(); }
     });
-    document.addEventListener('visibilitychange', () => { syncPause(); if (!document.hidden) flushPending(); }); window.addEventListener('blur', () => { clearPointer(); callAudio('pause'); });
+    document.addEventListener('visibilitychange', () => { syncPause(); if (!document.hidden) flushPending(); });
+    window.addEventListener('blur', () => { windowFocused = false; syncPause(); });
+    window.addEventListener('focus', () => { windowFocused = true; syncPause(); });
+    window.addEventListener('feitian-modechange', () => { clearPointer(); callAudio('pause'); soundEnabled = window.GameSoundEnabled; callAudio('setEnabled', soundEnabled); updateSoundButton(); syncPause(); });
+    window.addEventListener('feitian-soundchange', () => { soundEnabled = window.GameSoundEnabled; callAudio('setEnabled', soundEnabled); updateSoundButton(); });
     window.addEventListener('online', () => { refreshLeaderboard(); flushPending(); });
     window.addEventListener('storage', event => { if (event.key?.startsWith(OUTBOX_PREFIX)) { readPending(); updatePendingUI(); } });
     const resizeGame = () => { clearPointer(); game?.render(); };
@@ -302,7 +310,7 @@
     $('restart-button').addEventListener('click', askRestart); $('confirm-restart-button').addEventListener('click', newGame); $('play-again-button').addEventListener('click', newGame);
     $('give-up-button').addEventListener('click', finishRound);
     $('revive-button').addEventListener('click', () => { if (game.revive()) { closeDialog('end-dialog'); toast('顶部已清空，继续合成'); } });
-    $('sound-button').addEventListener('click', () => { soundEnabled = !soundEnabled; storage.set('photo-merge-sound', soundEnabled ? 'on' : 'off'); callAudio('setEnabled', soundEnabled); updateSoundButton(); });
+    $('sound-button').addEventListener('click', () => { soundEnabled = !soundEnabled; window.GameSoundEnabled = soundEnabled; storage.set('photo-merge-sound', soundEnabled ? 'on' : 'off'); callAudio('setEnabled', soundEnabled); updateSoundButton(); if (typeof window.Event === 'function') window.dispatchEvent(new window.Event('feitian-soundchange')); });
     $('leaderboard-refresh').addEventListener('click', () => { refreshLeaderboard(); flushPending(); });
     $('retry-pending-button').addEventListener('click', () => { refreshLeaderboard(); flushPending(); });
     $('submit-score-button').addEventListener('click', flushPending);

@@ -4,18 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#fff9f5">
-  <meta name="description" content="合成飞天：移动瞄准，松手投放，相同人物碰到一起合成更大的一只。">
+  <meta name="description" content="一周目合成飞天，二周目带队飞天：合成朋友，或拖动水瓶把大家带到出口。">
   <title>合成飞天</title>
   <link rel="icon" href="assets/photo-10.png" type="image/png">
-  <link rel="stylesheet" href="styles.css?v=20261017-score-retry">
+  <link rel="stylesheet" href="styles.css?v=20261017-rescue1">
   <script defer src="vendor/matter.min.js"></script>
   <script defer src="levels.js?v=20261017-size10"></script>
   <script defer src="sound.js?v=20261016-finale300"></script>
-  <script defer src="game.js?v=20261017-size10"></script>
+  <script defer src="game.js?v=20261017-rescue1"></script>
   <script defer src="supabase-config.js"></script>
   <script defer src="vendor/supabase.min.js"></script>
   <script defer src="leaderboard.js?v=20261017-score-retry"></script>
-  <script defer src="app.js?v=20261017-score-retry"></script>
+  <script defer src="app.js?v=20261017-rescue1"></script>
+  <script defer src="rescue-game.js?v=20261017-rescue1"></script>
+  <script defer src="rescue-app.js?v=20261017-rescue1"></script>
+  <script defer src="modes.js?v=20261017-rescue1"></script>
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -26,6 +29,13 @@
     <symbol id="i-crown" viewBox="0 0 24 24"><path d="m3 6 5 4 4-6 4 6 5-4-2 13H5Z"/></symbol>
     <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m12 7 1.5 3.5L17 12l-3.5 1.5L12 17l-1.5-3.5L7 12l3.5-1.5Z"/></symbol>
   </defs></svg>
+  <div class="mode-bar">
+    <div class="mode-tabs" role="tablist" aria-label="选择玩法" data-role="nav" data-height-px="44" data-single-line="true">
+      <button id="mode-merge" type="button" role="tab" aria-selected="true" aria-controls="merge-panel" tabindex="0">一周目·合成飞天</button>
+      <button id="mode-rescue" type="button" role="tab" aria-selected="false" aria-controls="rescue-panel" tabindex="-1">二周目·带队飞天</button>
+    </div>
+  </div>
+  <section id="merge-panel" role="tabpanel" aria-labelledby="mode-merge">
   <main class="game-layout" aria-label="合成飞天小游戏">
     <section class="play-column" aria-label="游戏区域" data-layout="canvas">
       <div class="board-wrap" id="board-wrap">
@@ -51,6 +61,36 @@
       <p class="play-tips">鼠标移动瞄准、点击投放；手机拖动后松手。<br><span class="keyboard-tip"><kbd>←</kbd> <kbd>→</kbd> 微调，<kbd>空格</kbd> 投放，<kbd>R</kbd> 重开。<br></span>每 <strong>2000 分</strong>获一枚复活币，只在本局有效。</p>
     </aside>
   </main>
+  </section>
+  <section id="rescue-panel" role="tabpanel" aria-labelledby="mode-rescue" hidden>
+    <div class="rescue-layout">
+      <section class="rescue-play" aria-label="带队飞天游戏区域" data-layout="canvas">
+        <div class="rescue-board">
+          <canvas id="rescue-canvas" width="400" height="650" tabindex="0" aria-label="拖动水瓶带领朋友，避开障碍并抵达出口。" aria-describedby="rescue-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
+          <div id="rescue-intro" class="rescue-intro"><strong>水瓶领队，出发！</strong><span>拖动水瓶接上朋友<br>慢一点转弯，别把大家甩掉</span></div>
+          <div id="rescue-paused" class="rescue-paused" hidden><strong>队伍歇一会儿</strong><span>点“继续”一起出发</span></div>
+          <div id="rescue-result" class="rescue-result" role="group" aria-labelledby="rescue-result-title" aria-describedby="rescue-result-detail" hidden>
+            <div class="rescue-result-card"><h2 id="rescue-result-title" tabindex="-1">全员到齐！</h2><p id="rescue-result-detail">大家一起抵达了出口。</p><div class="rescue-result-actions"><button id="rescue-retry" class="secondary-button" type="button">再玩一次</button><button id="rescue-next" class="rescue-primary" type="button">下一关</button></div></div>
+          </div>
+        </div>
+        <p id="rescue-status" class="rescue-status" role="status">准备好，带朋友一起出发</p>
+      </section>
+      <aside class="rescue-side" aria-label="带队飞天信息和操作">
+        <header class="rescue-head"><h1>带队飞天</h1><p>拖动水瓶 · 把朋友带到出口</p></header>
+        <div class="rescue-hud" aria-label="本关进度">
+          <div class="rescue-stat"><span>关卡</span><strong id="rescue-stage">1/3</strong></div>
+          <div class="rescue-stat"><span>已救出</span><strong id="rescue-count">0/3</strong></div>
+          <div class="rescue-stat"><span>剩余秒数</span><strong id="rescue-time">90</strong></div>
+        </div>
+        <div class="rescue-scores"><span>本局得分 <strong id="rescue-score">0</strong></span><span>本关本机最高 <strong id="rescue-best">0</strong></span></div>
+        <div class="rescue-tools">
+          <div class="rescue-stages" role="group" aria-label="选择关卡"><button type="button" data-rescue-stage="0" aria-pressed="true">第1关</button><button type="button" data-rescue-stage="1" aria-pressed="false">第2关</button><button type="button" data-rescue-stage="2" aria-pressed="false">第3关</button></div>
+          <div class="rescue-controls" role="group" aria-label="带队飞天操作"><button id="rescue-pause" type="button" aria-pressed="false">暂停</button><button id="rescue-restart" type="button">重开</button><button id="rescue-sound" type="button" aria-pressed="true">音效开</button></div>
+        </div>
+        <p class="rescue-tips">碰到朋友就能接上队伍，掉队了可以回头接。<br>把朋友送进出口，达到本关人数即可过关。<span class="keyboard-tip"><br>方向键 / WASD 移动 · P 暂停</span></p>
+      </aside>
+    </div>
+  </section>
   <dialog id="leaderboard-dialog" class="leaderboard-dialog" aria-labelledby="leaderboard-title">
     <div class="dialog-header"><h2 id="leaderboard-title">共享排行榜</h2><button class="icon-button" data-close="leaderboard-dialog" aria-label="关闭排行榜" autofocus><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
     <div class="leaderboard-info"><p>历史前 20 名，每位玩家只保留最高分；同分先到优先。</p><p id="nickname-rules">免登录，本浏览器自动记住玩家。换设备或清除浏览器数据会成为新玩家；改昵称不会增加名额。</p><p id="leaderboard-status" role="status">正在连接共享榜…</p><p id="pending-score-status" role="status" hidden></p></div>

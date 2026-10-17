@@ -68,7 +68,7 @@
           const delta = this._lastFrame === null ? 0 : Math.min(50, now - this._lastFrame);
           this._lastFrame = now;
           this.step(delta);
-          this.render();
+          if (!this.isPaused) this.render();
           this._raf = root.requestAnimationFrame(frame);
         };
         this._raf = root.requestAnimationFrame(frame);
