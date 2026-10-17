@@ -303,7 +303,11 @@
       ctx.strokeStyle = '#9f94874d'; ctx.lineWidth = 2; ctx.setLineDash([3, 8]);
       ctx.beginPath(); ctx.moveTo(current.x, current.y * PROJECTION + this.cameraY);
       ctx.lineTo(next.x, next.y * PROJECTION + this.cameraY); ctx.stroke(); ctx.setLineDash([]);
-      for (const platform of [...this.platforms].sort((a, b) => a.y - b.y)) this._platform(platform);
+      // Keep the opening instructions clear; reveal distant scenery on the
+      // first charge, when the introduction disappears.
+      for (const platform of [...this.platforms].sort((a, b) => a.y - b.y)) {
+        if (this.status !== 'ready' || platform.id <= 2) this._platform(platform);
+      }
       if (!this.reducedMotion && this.landingPulse > 0) {
         ctx.strokeStyle = '#b18a6177'; ctx.lineWidth = 2;
         const r = 18 + (0.32 - this.landingPulse) * 110;
