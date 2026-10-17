@@ -9,7 +9,7 @@
     let game = null, audio = null, state = null, board = null;
     let roundId = makeRoundId(), roundRecorded = false;
     let active = false, focused = true, manualPaused = false;
-    let pointer = null, keyboard = null;
+    let pointer = null, keyboard = null, renderRevision = 0, clearingInput = false;
     let best = 0, savedWarning = false, notice = '', noticeUntil = 0;
     let soundEnabled = typeof window.GameSoundEnabled === 'boolean' ? window.GameSoundEnabled : read('photo-merge-sound', 'on') !== 'off';
     window.GameSoundEnabled = soundEnabled;
@@ -33,15 +33,62 @@
       attr('jump-sound', 'aria-pressed', String(soundEnabled));
     }
     function blocked() { return !active || !focused || document.hidden || manualPaused || Boolean(document.querySelector('dialog[open]')); }
+    function heldInput() { return pointer || keyboard; }
+    function ownsInput(input) { return pointer === input || keyboard === input; }
     function releaseCapture() {
       const held = pointer; pointer = null;
       try { if (held?.target.hasPointerCapture?.(held.id)) held.target.releasePointerCapture(held.id); } catch { /* The browser may already have released it. */ }
     }
     function clearInput() {
-      keyboard = null;
-      releaseCapture();
-      game?.cancelCharge();
-      callAudio('setCharge', null);
+      if (clearingInput) return;
+      const buffered = heldInput()?.buffered;
+      clearingInput = true;
+      try {
+        keyboard = null;
+        releaseCapture();
+        game?.cancelCharge();
+        callAudio('setCharge', null);
+      } finally { clearingInput = false; }
+      if (buffered && game) render(game.getState());
+    }
+    function canPress(next = game?.getState()) {
+      return Boolean(game && !clearingInput && !blocked() && next && !next.isPaused && next.status !== 'lost' &&
+        (next.phase === 'idle' || next.phase === 'jumping' && next.canBufferCharge));
+    }
+    function beginHeldCharge(input) {
+      if (!ownsInput(input) || !input.ready || input.starting) return false;
+      const next = game.getState();
+      if (!canPress(next)) { clearInput(); return false; }
+      if (next.phase === 'jumping') {
+        input.buffered = true;
+        render(next);
+        return true;
+      }
+      // startCharge synchronously calls onChange. Clear the buffer first so
+      // that nested render cannot start this same hold a second time.
+      input.buffered = false; input.starting = true;
+      let started = false;
+      try { started = game.startCharge() === true; } catch { /* Roll back a rejected input handshake. */ }
+      input.starting = false;
+      const current = game.getState();
+      if (started && ownsInput(input) && !blocked() && !current.isPaused && current.phase === 'charging') {
+        input.charging = true;
+        return true;
+      }
+      if (ownsInput(input)) clearInput();
+      else if (!heldInput()) { game.cancelCharge(); callAudio('setCharge', null); }
+      return false;
+    }
+    function syncHeldInput(next) {
+      const input = heldInput();
+      if (!input || !input.ready || input.starting) return;
+      if (blocked() || next.isPaused || next.status === 'lost' || next.phase === 'teetering' || next.phase === 'falling') {
+        clearInput(); return;
+      }
+      if (input.buffered) {
+        if (next.phase === 'idle') beginHeldCharge(input);
+        else if (next.phase !== 'jumping' || !next.canBufferCharge) clearInput();
+      } else if (input.charging && next.phase !== 'charging') clearInput();
     }
     function syncPause() {
       if (!game) return;
@@ -57,9 +104,10 @@
     }
     function statusText(next) {
       if (next.status === 'lost') return '没有落稳，再试一次！';
-      if (blocked()) return '已暂停，继续后重新按住蓄力';
+      if (blocked() || next.isPaused) return '已暂停，继续后重新按住蓄力';
       if (next.phase === 'charging') return next.charge >= 1 ? '蓄力已满，松手起跳' : '按住越久跳得越远，松手起跳';
-      if (next.phase === 'jumping') return '瞄准平台中心，落稳再跳';
+      if (next.phase === 'jumping') return heldInput()?.buffered ? '继续按住，落地后开始蓄力' : next.canBufferCharge ? '快落地了，可以按住接下一跳' : '瞄准平台中心，落稳再跳';
+      if (next.phase === 'teetering') return '没站稳，要掉下去了…';
       if (next.phase === 'falling') return '这次差一点……';
       if (next.bonusAvailable) return `${next.bonusLabel}：停留 ${Math.ceil(next.bonusRemainingMs / 1000)} 秒再得 +${next.bonusPoints}`;
       if (notice && Date.now() < noticeUntil) return notice;
@@ -67,10 +115,15 @@
       return next.combo > 1 ? `连续中心 ${next.combo} 次！继续挑战` : '落台得分，每 200 分进化一次';
     }
     function render(next) {
+      const revision = ++renderRevision;
       state = next;
+      syncHeldInput(next);
+      // Consuming a buffered hold can synchronously render the charging state.
+      // Do not overwrite it with this older landing snapshot.
+      if (revision !== renderRevision) return;
       // Landings and platform rewards both save immediately, not on every frame.
       saveBest(next.score);
-      const paused = blocked();
+      const paused = blocked() || next.isPaused;
       callAudio('setCharge', !paused && !next.isPaused && soundEnabled && next.phase === 'charging' ? next.charge : null);
       const ended = next.status === 'lost';
       text('jump-score', next.score.toLocaleString());
@@ -84,8 +137,8 @@
       text('jump-pause', manualPaused || !focused ? '继续' : '暂停');
       attr('jump-pause', 'aria-pressed', String(manualPaused || !focused));
       prop('jump-pause', 'disabled', ended);
-      prop('jump-hold', 'disabled', paused || ended || next.phase === 'jumping' || next.phase === 'falling');
-      text('jump-hold', ended ? '本局结束' : paused ? '已暂停' : next.phase === 'charging' ? '松手起跳' : next.phase === 'jumping' || next.phase === 'falling' ? '跳跃中…' : '按住蓄力 · 松手起跳');
+      prop('jump-hold', 'disabled', paused || ended || next.phase === 'jumping' && !next.canBufferCharge || next.phase === 'teetering' || next.phase === 'falling');
+      text('jump-hold', ended ? '本局结束' : paused ? '已暂停' : next.phase === 'charging' ? '松手起跳' : next.phase === 'teetering' ? '没站稳…' : next.phase === 'jumping' && next.canBufferCharge ? '按住接下一跳' : next.phase === 'jumping' || next.phase === 'falling' ? '跳跃中…' : '按住蓄力 · 松手起跳');
       prop('jump-intro', 'hidden', next.status !== 'ready' || paused || next.phase === 'charging');
       prop('jump-paused', 'hidden', !active || !paused || ended);
       prop('jump-result', 'hidden', !ended);
@@ -155,24 +208,38 @@
       roundId = makeRoundId(); roundRecorded = false;
       game.reset(); syncPause(); canvas.focus({ preventScroll: true });
     }
-    function canCharge() { return active && game && !blocked() && state.status !== 'lost' && state.phase === 'idle'; }
+    function finishHeldInput(input, cancel) {
+      const mayJump = input.charging && !input.starting && game?.getState().phase === 'charging';
+      const buffered = input.buffered;
+      if (pointer === input) releaseCapture();
+      if (keyboard === input) keyboard = null;
+      input.buffered = false; input.charging = false;
+      // Releasing native capture can synchronously dispatch DOM events. A new
+      // owner, if one was installed there, must not be released by this event.
+      if (heldInput()) return;
+      if (cancel || blocked() || !mayJump) { game?.cancelCharge(); callAudio('setCharge', null); }
+      else game?.releaseCharge();
+      if (buffered && game) render(game.getState());
+    }
     function finishPointer(event, cancel) {
       if (!pointer || pointer.id !== event.pointerId) return;
       event.preventDefault();
-      releaseCapture();
-      if (cancel || blocked()) game?.cancelCharge(); else game?.releaseCharge();
+      finishHeldInput(pointer, cancel);
     }
     function unlock(event) { if (active && event.isTrusted) callAudio('unlock'); }
     document.addEventListener('pointerdown', unlock, { capture: true });
     document.addEventListener('keydown', unlock, { capture: true });
     for (const target of [canvas, hold]) {
       target.addEventListener('pointerdown', event => {
-        if (event.button !== 0 || pointer !== null || keyboard !== null || !canCharge()) return;
+        if (event.button !== 0 || pointer !== null || keyboard !== null || !canPress()) return;
         event.preventDefault();
-        pointer = { id: event.pointerId, target };
+        const input = pointer = { id: event.pointerId, target, ready: false, buffered: false, charging: false, starting: false };
         try { target.setPointerCapture(event.pointerId); } catch { /* Global pointerup still releases a jump. */ }
-        target.focus({ preventScroll: true });
-        game.startCharge();
+        if (!ownsInput(input)) return;
+        try { target.focus({ preventScroll: true }); } catch { /* Input still works if an embedded browser refuses focus. */ }
+        if (!ownsInput(input)) return;
+        input.ready = true;
+        beginHeldCharge(input);
       });
       target.addEventListener('pointerup', event => finishPointer(event, false));
       target.addEventListener('pointercancel', event => finishPointer(event, true));
@@ -196,8 +263,9 @@
       const key = chargeKey(event);
       if (key) {
         event.preventDefault();
-        if (event.repeat || keyboard !== null || pointer !== null || !canCharge()) return;
-        keyboard = key; game.startCharge(); return;
+        if (event.repeat || keyboard !== null || pointer !== null || !canPress()) return;
+        keyboard = { key, ready: true, buffered: false, charging: false, starting: false };
+        beginHeldCharge(keyboard); return;
       }
       if (event.target?.tagName === 'BUTTON') return;
       if (event.key === 'Escape' || event.key?.toLowerCase() === 'p') {
@@ -209,9 +277,9 @@
     });
     document.addEventListener('keyup', event => {
       const key = event.key === 'Enter' ? 'Enter' : chargeKey(event);
-      if (!keyboard || key !== keyboard) return;
-      event.preventDefault(); keyboard = null;
-      if (blocked() || !allowedKeyboardTarget(event.target)) game?.cancelCharge(); else game?.releaseCharge();
+      if (!keyboard || key !== keyboard.key) return;
+      event.preventDefault();
+      finishHeldInput(keyboard, !allowedKeyboardTarget(event.target));
     });
     document.addEventListener('focusin', event => { if ((keyboard || pointer) && !allowedKeyboardTarget(event.target)) clearInput(); });
     $('jump-pause').addEventListener('click', () => {

@@ -2,7 +2,7 @@
   'use strict';
 
   const WIDTH = 400, HEIGHT = 650, STEP_MS = 1000 / 120;
-  const CHARGE_MS = 1200, DISTANCE_PER_MS = 0.3, FOOT_RADIUS = 5, PROJECTION = 0.55;
+  const CHARGE_MS = 1200, DISTANCE_PER_MS = 0.23, FOOT_RADIUS = 10, PROJECTION = 0.55;
   const Platforms = root.JumpPlatforms || (typeof require === 'function' ? require('./jump-platforms.js') : null);
   let PlatformRenderer = root.JumpPlatformRenderer;
   if (!PlatformRenderer && typeof require === 'function') {
@@ -11,7 +11,8 @@
   }
   const KINDS = Object.keys(Platforms.MODELS);
   const BONUS_WAIT_MS = 2000;
-  const FALL_SECONDS = 0.54, DRIFT_SECONDS = 0.075;
+  const FALL_SECONDS = 0.54, DRIFT_SECONDS = 0.025;
+  const EDGE_HOLD_SECONDS = 0.12, EDGE_TIP_SECONDS = 0.3;
   const BONUSES = Object.freeze({
     manhole: Object.freeze({ points: 5, label: '井盖' }),
     cube: Object.freeze({ points: 10, label: '魔方' }),
@@ -20,6 +21,7 @@
   });
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const smooth = t => t * t * (3 - 2 * t);
+  const projectedDistance = (x, y) => Math.hypot(x, y * PROJECTION);
 
   function evolutionForScore(value) {
     const score = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
@@ -61,7 +63,7 @@
     reset() {
       if (this.destroyed) return;
       this.status = 'ready'; this.phase = 'idle'; this.isPaused = false;
-      this.score = 0; this.hops = 0; this.combo = 0; this.chargeMs = 0;
+      this.score = 0; this.hops = 0; this.combo = 0; this.chargeMs = 0; this.chargeRemainderStart = 0;
       this.elapsed = 0; this.accumulator = 0; this.lastFrame = null;
       this.currentId = 0; this.lastPoints = 0; this.lastPerfect = false;
       this.bonusIdleMs = 0;
@@ -70,7 +72,7 @@
       this.platforms.push(Platforms.createPlatform(1, 'parcel', { x: 275, y: -Math.sqrt(240 * 240 - 150 * 150) }));
       this._appendPlatform(); this._appendPlatform();
       this.cameraY = this._cameraAnchor(); this.cameraFrom = this.cameraY; this.cameraTo = this.cameraY; this.cameraTime = 0.4;
-      this.jump = null; this.fall = null; this.fallTime = 0;
+      this.jump = null; this.fall = null; this.teeter = null; this.fallTime = 0;
       this.squeeze = 0; this.squeezeVelocity = 0;
       this.landingPulse = 0; this.evolutionPulse = 0;
       this.effects = []; this.completed = false; this._notify(true); this.render();
@@ -94,6 +96,8 @@
       const requestedDistance = [165, 215, 270][gapGroup] + this._roll() * 20;
       const preferredX = 75 + this._roll() * 250;
       const oldBounds = Platforms.bounds(previous);
+      const previousOutline = Platforms.outline(previous);
+      const reachable = CHARGE_MS * DISTANCE_PER_MS - 2;
       const maximum = Math.min(290, 354 - previous.radius);
       let best = null;
       // Search a small deterministic fan instead of rejecting random samples
@@ -114,6 +118,10 @@
           const dx = Math.sin(theta) * distance, dy = -Math.cos(theta) * distance;
           const x = previous.x + dx, y = previous.y + dy;
           if (-dy < 110 || x + local.minX < 14 || x + local.maxX > WIDTH - 14) continue;
+          // Screen distance, not unprojected world distance, determines charge.
+          // Every stable foot centre lies inside this convex top. Checking its
+          // complete outline plus a margin also bounds circular sampling error.
+          if (previousOutline.some(vertex => projectedDistance(dx - vertex.x, dy - vertex.y) > reachable)) continue;
           // Bodies extend down from their top. Separation is checked after
           // projection, including depth, so a tall prop cannot cover a top.
           const horizontallyClear = x + local.minX >= oldBounds.maxX + 8 || x + local.maxX <= oldBounds.minX - 8;
@@ -140,6 +148,7 @@
     startCharge() {
       if (this.destroyed || this.isPaused || this.status === 'lost' || this.phase !== 'idle') return false;
       this.status = 'playing'; this.phase = 'charging'; this.chargeMs = 0;
+      this.chargeRemainderStart = this.accumulator;
       this.bonusIdleMs = 0;
       this._notify(true); return true;
     }
@@ -147,13 +156,15 @@
     releaseCharge() {
       if (this.destroyed || this.isPaused || this.phase !== 'charging') return false;
       const next = this._next(), dx = next.x - this.player.x, dy = next.y - this.player.y;
-      const distanceToTarget = Math.hypot(dx, dy), distance = this.chargeMs * DISTANCE_PER_MS;
+      const distanceToTarget = projectedDistance(dx, dy), distance = this._heldCharge() * DISTANCE_PER_MS;
       this.jump = { fromX: this.player.x, fromY: this.player.y,
         toX: this.player.x + dx / distanceToTarget * distance,
         toY: this.player.y + dy / distanceToTarget * distance,
-        time: 0, duration: 0.38 + distance / 1000,
-        height: this.reducedMotion ? 70 : 72 + distance * 0.2,
+        time: 0, duration: 0.3 + distance / 1000,
+        height: this.reducedMotion ? 54 : 56 + distance * 0.18,
         direction: dx < 0 ? -1 : 1 };
+      this.jump.stableLanding = this._landingAt(this.jump.toX, this.jump.toY).ratio >= 0.5;
+      this.teeter = null;
       this.phase = 'jumping'; this.chargeMs = 0;
       this._event('jump', { distance, duration: this.jump.duration });
       this._notify(true); return true;
@@ -162,6 +173,12 @@
     cancelCharge() {
       if (this.destroyed || this.phase !== 'charging') return false;
       this.phase = 'idle'; this.chargeMs = 0; this._notify(true); return true;
+    }
+
+    _heldCharge() {
+      // Include time since the final fixed physics tick, excluding the idle
+      // remainder from before press-down. Fast releases should not lose a frame.
+      return clamp(this.chargeMs + this.accumulator - this.chargeRemainderStart, 0, CHARGE_MS);
     }
 
     pause(paused = true) {
@@ -197,25 +214,60 @@
       this._notify(true);
     }
 
-    _land() {
+    _landingAt(x, y) {
       const next = this._next(), current = this._current();
-      const on = platform => Platforms.contains(platform, this.player.x, this.player.y, FOOT_RADIUS);
+      const ahead = Platforms.support(next, x, y, FOOT_RADIUS);
+      const behind = Platforms.support(current, x, y, FOOT_RADIUS);
+      return ahead.ratio >= behind.ratio ? { ...ahead, platform: next } : { ...behind, platform: current };
+    }
+
+    _startFall(edge = false) {
+      const flight = this.jump;
+      this.fall = { x: this.player.x, y: this.player.y, z: this.player.z,
+        vx: edge ? this.teeter.normal.x * 55 : flight ? (flight.toX - flight.fromX) / flight.duration : 0,
+        vy: edge ? this.teeter.normal.y * 55 : flight ? (flight.toY - flight.fromY) / flight.duration : 0,
+        speed: edge ? 150 : flight ? 4 * flight.height / flight.duration : 400,
+        gravity: edge ? 1200 : flight ? 8 * flight.height / (flight.duration * flight.duration) : 1600,
+        edge, angle: edge ? this.teeter.angle : 0,
+        normal: edge ? this.teeter.normal : null };
+      this.phase = 'falling'; this.fallTime = 0; this.combo = 0;
+    }
+
+    _stepTeeter(dt) {
+      const edge = this.teeter;
+      edge.time = Math.min(EDGE_HOLD_SECONDS + EDGE_TIP_SECONDS, edge.time + dt);
+      const progress = clamp((edge.time - EDGE_HOLD_SECONDS) / EDGE_TIP_SECONDS, 0, 1);
+      // Keep the foot still briefly, then rotate the entire character around
+      // its contact edge. The final outward slide releases that support.
+      edge.angle = this.reducedMotion ? 0 : 1.25 * progress * progress;
+      const dx = edge.x - edge.point.x, dy = edge.y - edge.point.y;
+      const radial = dx * edge.normal.x + dy * edge.normal.y;
+      const shift = radial * (Math.cos(edge.angle) - 1) + 13 * progress ** 3;
+      this.player.x = edge.x + edge.normal.x * shift;
+      this.player.y = edge.y + edge.normal.y * shift;
+      this.player.z = edge.angle ? -radial * Math.sin(edge.angle) : 0;
+      if (edge.time >= EDGE_HOLD_SECONDS + EDGE_TIP_SECONDS) this._startFall(true);
+    }
+
+    _land() {
+      const next = this._next(), support = this._landingAt(this.player.x, this.player.y);
       this.player.z = 0;
       this.bonusIdleMs = 0;
-      if (!on(next) && !on(current)) {
-        const flight = this.jump;
-        this.fall = { x: this.player.x, y: this.player.y,
-          vx: flight ? (flight.toX - flight.fromX) / flight.duration : 0,
-          vy: flight ? (flight.toY - flight.fromY) / flight.duration : 0,
-          speed: flight ? 4 * flight.height / flight.duration : 400,
-          gravity: flight ? 8 * flight.height / (flight.duration * flight.duration) : 1600 };
-        this.phase = 'falling'; this.fallTime = 0; this.combo = 0; return;
+      if (support.ratio < 0.5) {
+        this.combo = 0; this.lastPoints = 0; this.lastPerfect = false; this.landingPulse = 0;
+        if (support.ratio > 1e-7) {
+          this.phase = 'teetering';
+          this.teeter = { x: this.player.x, y: this.player.y, time: 0, angle: 0,
+            point: support.point, normal: support.normal, platformId: support.platform.id };
+          if (!this.reducedMotion) this.squeezeVelocity += 1.5;
+        } else this._startFall();
+        return;
       }
       this.phase = 'idle'; this.landingPulse = 0.32;
       // An impact adds velocity to the same spring used for charging/takeoff;
       // the pose itself never snaps to a different scale at a phase boundary.
-      if (!this.reducedMotion) this.squeezeVelocity += 2.8;
-      if (!on(next)) {
+      if (!this.reducedMotion) this.squeezeVelocity += 3.4;
+      if (support.platform.id !== next.id) {
         this.combo = 0; this.lastPoints = 0; this.lastPerfect = false;
         this._event('land', { points: 0, perfect: false, samePlatform: true, score: this.score });
         return;
@@ -247,12 +299,13 @@
 
     _stepPose(dt) {
       if (this.reducedMotion) { this.squeeze = 0; this.squeezeVelocity = 0; return; }
-      let target = this.phase === 'charging' ? this.chargeMs / CHARGE_MS * 0.22 : 0;
+      const charge = clamp(this.chargeMs - this.chargeRemainderStart, 0, CHARGE_MS);
+      let target = this.phase === 'charging' ? 0.04 * (1 - Math.exp(-charge / 55)) + charge / CHARGE_MS * 0.24 : 0;
       if (this.phase === 'jumping') {
         const lift = clamp(this.jump.time / this.jump.duration / 0.32, 0, 1);
-        target = -0.11 * Math.sin(lift * Math.PI);
+        target = -0.15 * Math.sin(lift * Math.PI);
       }
-      this.squeezeVelocity += ((target - this.squeeze) * 200 - this.squeezeVelocity * 14) * dt;
+      this.squeezeVelocity += ((target - this.squeeze) * 260 - this.squeezeVelocity * 16) * dt;
       this.squeeze = clamp(this.squeeze + this.squeezeVelocity * dt, -0.2, 0.3);
     }
 
@@ -270,7 +323,7 @@
         this.cameraTime = Math.min(0.4, this.cameraTime + dt);
         this.cameraY = this.cameraFrom + (this.cameraTo - this.cameraFrom) * smooth(this.cameraTime / 0.4);
         if (this.status === 'lost') continue;
-        if (this.phase === 'charging') this.chargeMs = Math.min(CHARGE_MS, this.chargeMs + STEP_MS);
+        if (this.phase === 'charging') this.chargeMs = Math.min(CHARGE_MS + this.chargeRemainderStart, this.chargeMs + STEP_MS);
         else if (this.phase === 'jumping') {
           this.jump.time += dt;
           const progress = Math.min(1, this.jump.time / this.jump.duration);
@@ -281,12 +334,14 @@
           // from rest below the platform plane.
           this.player.z = 4 * this.jump.height * progress * (1 - progress);
           if (progress >= 1) this._land();
+        } else if (this.phase === 'teetering') {
+          this._stepTeeter(dt);
         } else if (this.phase === 'falling') {
           this.fallTime = Math.min(FALL_SECONDS, this.fallTime + dt);
           const t = this.fallTime, drift = DRIFT_SECONDS * (1 - Math.exp(-t / DRIFT_SECONDS));
           this.player.x = this.fall.x + this.fall.vx * drift;
           this.player.y = this.fall.y + this.fall.vy * drift;
-          this.player.z = -this.fall.speed * t - this.fall.gravity * t * t / 2;
+          this.player.z = this.fall.z - this.fall.speed * t - this.fall.gravity * t * t / 2;
           if (this.fallTime >= FALL_SECONDS) this._finish();
         } else if (this.phase === 'idle') this._waitForBonus(STEP_MS);
         this._stepPose(dt);
@@ -298,12 +353,14 @@
       const next = this._next(), current = this._current(), bonus = BONUSES[current.kind];
       const unclaimed = Boolean(bonus && this.currentId > 0 && !current.bonusClaimed);
       return { status: this.status, phase: this.phase, isPaused: this.isPaused,
-        score: this.score, hops: this.hops, combo: this.combo, charge: this.chargeMs / CHARGE_MS,
+        score: this.score, hops: this.hops, combo: this.combo, charge: this.phase === 'charging' ? this._heldCharge() / CHARGE_MS : 0,
         ...evolutionForScore(this.score), lastPoints: this.lastPoints, lastPerfect: this.lastPerfect,
         bonusPoints: bonus?.points || 0, bonusLabel: bonus?.label || '',
         bonusAvailable: unclaimed && this.status === 'playing' && this.phase === 'idle',
         bonusRemainingMs: unclaimed ? Math.max(0, BONUS_WAIT_MS - this.bonusIdleMs) : 0,
-        nextDistance: Math.hypot(next.x - this.player.x, next.y - this.player.y) };
+        canBufferCharge: this.status === 'playing' && this.phase === 'jumping' && !this.isPaused &&
+          Boolean(this.jump?.stableLanding) && this.jump.duration - this.jump.time <= 0.12 + 1e-7,
+        nextDistance: projectedDistance(next.x - this.player.x, next.y - this.player.y) };
     }
 
     _notify(force = false) {
@@ -330,6 +387,7 @@
         const progress = this.jump.time / this.jump.duration;
         angle = this.jump.direction * Math.PI * 2 * smooth(clamp((progress - 0.08) / 0.82, 0, 1));
       } else if (this.phase === 'falling' && this.fallTime > 0) {
+        if (this.fall?.edge) return; // The inherited edge rotation is around the foot.
         angle = (this.jump?.direction || 1) * 0.7 * smooth(clamp(this.fallTime / 0.42, 0, 1));
       } else return;
       // Rotate around the visible sprite's centre rather than its feet, so the
@@ -345,28 +403,46 @@
       const falling = this.phase === 'falling';
       const alpha = falling ? 1 - smooth(clamp((this.fallTime - 0.24) / (FALL_SECONDS - 0.24), 0, 1)) : 1;
       ctx.save(); ctx.globalAlpha = alpha;
-      if (!falling) {
+      if (!falling && this.phase !== 'teetering') {
         ctx.fillStyle = '#65566628';
         const shadow = clamp(1 - this.player.z / 220, 0.35, 1);
         this._ellipse(this.player.x, screenY + 1.2, 9 * shadow, 3.6 * shadow); ctx.fill();
       }
       ctx.translate(this.player.x, screenY - this.player.z);
-      if (!this.reducedMotion) ctx.scale(1 + this.squeeze * 0.7, 1 - this.squeeze);
+      if (!this.reducedMotion && (this.phase === 'teetering' || falling && this.fall?.edge)) {
+        const edge = this.phase === 'teetering' ? this.teeter : this.fall;
+        const angle = edge.angle + (falling ? .4 * smooth(clamp(this.fallTime / .42, 0, 1)) : 0);
+        // Project a forward/backward or sideways fall in the actual outward
+        // direction. A near-vertical jump should not inexplicably topple left.
+        const { x: nx, y: ny } = edge.normal, c = Math.cos(angle), s = Math.sin(angle);
+        ctx.transform(ny * ny + nx * nx * c, PROJECTION * nx * ny * (c - 1) + nx * s,
+          -nx * s, c - ny * PROJECTION * s, 0, 0);
+      }
       if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
         const f = info.frame;
         const valid = Array.isArray(f) && f.length === 4 && f.every(Number.isFinite) && f[0] >= 0 && f[1] >= 0 && f[2] > 0 && f[3] > 0 && f[0] + f[2] <= image.naturalWidth && f[1] + f[3] <= image.naturalHeight;
         const source = valid ? f : [0, 0, image.naturalWidth, image.naturalHeight];
         const scale = Math.min(43.2 / source[2], 49.2 / source[3]);
         const w = source[2] * scale, h = source[3] * scale;
-        this._flipSprite(-h / 2);
+        this._flipSprite(-h * (this.reducedMotion ? 1 : 1 - this.squeeze) / 2);
+        this._foot();
+        if (!this.reducedMotion) ctx.scale(1 + this.squeeze * 0.7, 1 - this.squeeze);
         ctx.shadowColor = '#63535e30'; ctx.shadowBlur = 2.4; ctx.shadowOffsetY = 1.2;
         ctx.drawImage(image, ...source, -w / 2, -h, w, h);
       } else {
-        this._flipSprite(-14.4);
+        this._flipSprite(-14.4 * (this.reducedMotion ? 1 : 1 - this.squeeze));
+        this._foot();
+        if (!this.reducedMotion) ctx.scale(1 + this.squeeze * 0.7, 1 - this.squeeze);
         ctx.fillStyle = info.color || '#a9d8e6'; ctx.beginPath(); ctx.arc(0, -14.4, 13.2, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#4c525b'; ctx.font = 'bold 8.8px system-ui'; ctx.textAlign = 'center'; ctx.fillText(String(state.photoNumber), 0, -11.4);
       }
       ctx.restore();
+    }
+
+    _foot() {
+      const ctx = this.ctx;
+      ctx.fillStyle = '#fff7e8'; ctx.strokeStyle = '#7c6f62'; ctx.lineWidth = 1.2;
+      this._ellipse(0, 0, FOOT_RADIUS, FOOT_RADIUS * PROJECTION); ctx.fill(); ctx.stroke();
     }
 
     render() {
@@ -409,7 +485,7 @@
       for (const platform of [...this.platforms].sort((a, b) => a.y - b.y)) {
         // Once below the top plane, foreground props occlude the falling
         // character. Drawing it over every prop made it pass through solid tops.
-        if (!spriteDrawn && this.phase === 'falling' && platform.y >= this.player.y) {
+        if (!spriteDrawn && (this.phase === 'falling' || this.phase === 'teetering' && this.player.z < 0) && platform.y >= this.player.y) {
           this._sprite(); spriteDrawn = true;
         }
         if (this.status !== 'ready' || platform.id <= 2) this._platform(platform);
@@ -443,6 +519,7 @@
   }
   JumpGame.WIDTH = WIDTH; JumpGame.HEIGHT = HEIGHT;
   JumpGame.CHARGE_MS = CHARGE_MS; JumpGame.DISTANCE_PER_MS = DISTANCE_PER_MS;
+  JumpGame.FOOT_RADIUS = FOOT_RADIUS;
   JumpGame.evolutionForScore = evolutionForScore;
   root.JumpGame = JumpGame;
   if (typeof module !== 'undefined' && module.exports) module.exports = JumpGame;

@@ -55,6 +55,112 @@
     return true;
   }
 
+  const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+  function fraction(area, radius) {
+    const value = clamp(area / (Math.PI * radius * radius), 0, 1);
+    // Snap only numerical noise, especially the exact 50% straight-edge case.
+    for (const boundary of [0, .5, 1]) if (Math.abs(value - boundary) < 1e-12) return boundary;
+    return value;
+  }
+
+  function circleSegment(angle) {
+    // The series avoids cancellation at an almost tangent intersection.
+    if (angle < .001) {
+      const squared = angle * angle;
+      return angle * squared * (2 / 3 + squared * (-2 / 15 + squared * (4 / 315 - squared * 2 / 2835)));
+    }
+    return angle - Math.sin(angle) * Math.cos(angle);
+  }
+
+  function circleOverlap(radius, otherRadius, distance) {
+    if (distance >= radius + otherRadius) return 0;
+    if (distance <= Math.abs(radius - otherRadius)) return Math.PI * Math.min(radius, otherRadius) ** 2;
+    // Half-angle factors retain precision near both internal and external
+    // tangency, including platforms much larger than the player's round foot.
+    const angle = 2 * Math.asin(Math.sqrt(clamp((otherRadius - distance + radius) * (otherRadius + distance - radius) / (4 * distance * radius), 0, 1)));
+    const otherAngle = 2 * Math.asin(Math.sqrt(clamp((radius - distance + otherRadius) * (radius + distance - otherRadius) / (4 * distance * otherRadius), 0, 1)));
+    return radius * radius * circleSegment(angle) + otherRadius * otherRadius * circleSegment(otherAngle);
+  }
+
+  function circlePolygonOverlap(vertices, x, y, radius) {
+    let area = 0;
+    const squaredRadius = radius * radius;
+    for (let index = 0; index < vertices.length; index++) {
+      const a = { x: vertices[index].x - x, y: vertices[index].y - y };
+      const b = { x: vertices[(index + 1) % vertices.length].x - x, y: vertices[(index + 1) % vertices.length].y - y };
+      const dx = b.x - a.x, dy = b.y - a.y, lengthSquared = dx * dx + dy * dy;
+      const nearestT = -(a.x * dx + a.y * dy) / lengthSquared;
+      const nearestX = a.x + nearestT * dx, nearestY = a.y + nearestT * dy;
+      const halfSquared = (squaredRadius - nearestX * nearestX - nearestY * nearestY) / lengthSquared;
+      const cuts = [0, 1];
+      if (halfSquared > 0) {
+        const half = Math.sqrt(halfSquared);
+        for (const t of [nearestT - half, nearestT + half]) if (t > 0 && t < 1) cuts.push(t);
+      }
+      cuts.sort((left, right) => left - right);
+      for (let part = 1; part < cuts.length; part++) {
+        const from = cuts[part - 1], to = cuts[part];
+        const ax = a.x + from * dx, ay = a.y + from * dy;
+        const bx = a.x + to * dx, by = a.y + to * dy;
+        const mx = (ax + bx) / 2, my = (ay + by) / 2;
+        const cross = ax * by - ay * bx;
+        // Each directed sub-edge contributes either a triangle within the foot
+        // or the corresponding circular sector. The signed sum is exact.
+        area += halfSquared > 0 && mx * mx + my * my < squaredRadius ? cross / 2 :
+          squaredRadius * Math.atan2(cross, ax * bx + ay * by) / 2;
+      }
+    }
+    return Math.abs(area);
+  }
+
+  function polygonEdge(vertices, x, y) {
+    let nearest = null, inside = true;
+    for (let index = 0; index < vertices.length; index++) {
+      const a = vertices[index], b = vertices[(index + 1) % vertices.length];
+      const dx = b.x - a.x, dy = b.y - a.y, lengthSquared = dx * dx + dy * dy;
+      const length = Math.sqrt(lengthSquared);
+      const side = dx * (y - a.y) - dy * (x - a.x);
+      if (side < 0) inside = false;
+      const t = clamp(((x - a.x) * dx + (y - a.y) * dy) / lengthSquared, 0, 1);
+      const point = { x: a.x + t * dx, y: a.y + t * dy };
+      const distanceSquared = (x - point.x) ** 2 + (y - point.y) ** 2;
+      const normal = { x: dy / length, y: -dx / length };
+      if (!nearest || distanceSquared < nearest.distanceSquared - 1e-12) nearest = { point, normal, distanceSquared };
+      else if (Math.abs(distanceSquared - nearest.distanceSquared) <= 1e-12 &&
+        Math.hypot(point.x - nearest.point.x, point.y - nearest.point.y) < 1e-8) {
+        // At an exact vertex the outward bisector is stable under edge order.
+        const nx = nearest.normal.x + normal.x, ny = nearest.normal.y + normal.y, size = Math.hypot(nx, ny);
+        if (size > 0) nearest.normal = { x: nx / size, y: ny / size };
+      }
+    }
+    if (nearest.distanceSquared > 1e-20) {
+      const sign = inside ? -1 : 1, distance = Math.sqrt(nearest.distanceSquared);
+      nearest.normal = { x: sign * (x - nearest.point.x) / distance, y: sign * (y - nearest.point.y) / distance };
+    }
+    return nearest;
+  }
+
+  // The player's footprint is a world-space circle, independent of sprite size
+  // or transparent pixels. point is the nearest rim point; normal faces out.
+  function support(platform, worldX, worldY, footRadius = 10) {
+    const valid = [worldX, worldY, footRadius].every(Number.isFinite) && footRadius >= 0;
+    const x = valid ? worldX - platform.x : 0, y = valid ? worldY - platform.y : 0;
+    let point, normal, area = 0;
+    if (platform.shape === 'circle') {
+      const distance = Math.hypot(x, y);
+      normal = distance > 0 ? { x: x / distance, y: y / distance } : { x: 1, y: 0 };
+      point = { x: normal.x * platform.rx, y: normal.y * platform.rx };
+      if (valid && footRadius > 0) area = circleOverlap(footRadius, platform.rx, distance);
+    } else {
+      const vertices = outline(platform), edge = polygonEdge(vertices, x, y);
+      point = edge.point; normal = edge.normal;
+      if (valid && footRadius > 0) area = circlePolygonOverlap(vertices, x, y, footRadius);
+    }
+    // A zero-radius foot degenerates to the existing point-in-platform test.
+    const ratio = !valid ? 0 : footRadius === 0 ? Number(contains(platform, worldX, worldY, 0)) : fraction(area, footRadius);
+    return { ratio, point: { x: point.x + platform.x, y: point.y + platform.y }, normal };
+  }
+
   function bounds(platform) {
     if (platform.shape === 'circle') return { minX: platform.x - platform.rx, maxX: platform.x + platform.rx,
       minY: platform.y - platform.ry, maxY: platform.y + platform.ry, width: platform.rx * 2, height: platform.ry * 2 };
@@ -63,7 +169,7 @@
     return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
   }
 
-  const api = Object.freeze({ MODELS, createPlatform, outline, contains, bounds });
+  const api = Object.freeze({ MODELS, createPlatform, outline, contains, support, bounds });
   root.JumpPlatforms = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
