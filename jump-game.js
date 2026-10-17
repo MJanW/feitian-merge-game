@@ -257,6 +257,17 @@
       if (renderer) renderer.draw(this.ctx, platform, { cameraY: this.cameraY, projection: PROJECTION, currentId: this.currentId });
     }
 
+    _flipSprite(centerY) {
+      if (this.reducedMotion || this.phase !== 'jumping') return;
+      const progress = this.jump.time / this.jump.duration;
+      const turn = smooth(clamp((progress - 0.08) / 0.82, 0, 1));
+      // Rotate around the visible sprite's centre rather than its feet, so the
+      // somersault follows the same jump arc without swinging in a wide orbit.
+      this.ctx.translate(0, centerY);
+      this.ctx.rotate(this.jump.direction * Math.PI * 2 * turn);
+      this.ctx.translate(0, -centerY);
+    }
+
     _sprite() {
       const ctx = this.ctx, state = this.getState(), info = this.levels[state.levelIndex] || {};
       const image = this.images.get(info.image), screenY = this.player.y * PROJECTION + this.cameraY;
@@ -267,9 +278,8 @@
       this._ellipse(this.player.x, screenY + 1.5, 11.25 * shadow, 4.5 * shadow); ctx.fill();
       ctx.translate(this.player.x, screenY - this.player.z);
       if (!this.reducedMotion) {
-        const squeeze = this.phase === 'charging' ? state.charge * 0.22 : this.landingPulse > 0 ? Math.sin(this.landingPulse / 0.32 * Math.PI) * 0.18 : 0;
+        const squeeze = this.phase === 'charging' ? state.charge * 0.22 : this.phase === 'idle' && this.landingPulse > 0 ? Math.sin(this.landingPulse / 0.32 * Math.PI) * 0.18 : 0;
         ctx.scale(1 + squeeze * 0.7, 1 - squeeze);
-        if (this.phase === 'jumping') ctx.rotate(Math.sin(this.jump.time / this.jump.duration * Math.PI * 2) * 0.13 * this.jump.direction);
       }
       if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
         const f = info.frame;
@@ -277,9 +287,11 @@
         const source = valid ? f : [0, 0, image.naturalWidth, image.naturalHeight];
         const scale = Math.min(54 / source[2], 61.5 / source[3]);
         const w = source[2] * scale, h = source[3] * scale;
+        this._flipSprite(-h / 2);
         ctx.shadowColor = '#63535e30'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1.5;
         ctx.drawImage(image, ...source, -w / 2, -h, w, h);
       } else {
+        this._flipSprite(-18);
         ctx.fillStyle = info.color || '#a9d8e6'; ctx.beginPath(); ctx.arc(0, -18, 16.5, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#4c525b'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(String(state.photoNumber), 0, -14.25);
       }
