@@ -4,7 +4,7 @@
   const WIDTH = 400;
   const HEIGHT = 650;
   const DANGER_Y = 120;
-  const RADII = [18, 28.6, 29, 38, 48, 50.15, 70, 82, 77.76, 110, 113.4, 129.6];
+  const RADII = [20.7, 28.6, 34.8, 41.8, 52.8, 52.6575, 70, 82, 77.76, 110, 113.4, 129.6];
   const MERGE_SCORES = [0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66];
   const STEP_MS = 1000 / 120;
   const DROP_DELAY = 450;
