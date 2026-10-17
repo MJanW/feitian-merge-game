@@ -6,7 +6,8 @@
     const BEST_KEY = 'feitian-jump-best-v2';
     const canvas = $('jump-canvas');
     const hold = $('jump-hold');
-    let game = null, audio = null, state = null;
+    let game = null, audio = null, state = null, board = null;
+    let roundId = makeRoundId(), roundRecorded = false;
     let active = false, focused = true, manualPaused = false;
     let pointer = null, keyboard = null;
     let best = 0, savedWarning = false, notice = '', noticeUntil = 0;
@@ -15,6 +16,12 @@
 
     function read(key, fallback) { try { return window.localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
     function write(key, value) { try { window.localStorage.setItem(key, String(value)); return true; } catch { return false; } }
+    function makeRoundId() { return window.crypto?.randomUUID?.() || Date.now().toString(36) + '-' + Math.random().toString(36).slice(2); }
+    function ensureBoard() {
+      if (board) return board;
+      try { if (typeof window.JumpLeaderboard === 'function') board = new window.JumpLeaderboard(); } catch { /* Online ranking must not block play. */ }
+      return board;
+    }
     function prop(id, key, value) { const element = $(id); if (element[key] !== value) element[key] = value; }
     function text(id, value) { prop(id, 'textContent', value); }
     function attr(id, key, value) { const element = $(id); if (element.getAttribute(key) !== value) element.setAttribute(key, value); }
@@ -84,13 +91,24 @@
       prop('jump-result', 'hidden', !ended);
       if (ended) {
         text('jump-result-title', '这次跳了多远？');
-        text('jump-result-detail', `${next.score.toLocaleString()} 分 · ${next.hops} 次落台 · 第 ${next.cycle} 轮 · 图 ${next.photoNumber}` + (savedWarning ? ' · 本机记录保存失败' : ` · 新版最高 ${best.toLocaleString()}`));
+        text('jump-result-detail', `${next.score.toLocaleString()} 分 · ${next.hops} 次落台 · 第 ${next.cycle} 轮 · 图 ${next.photoNumber}` + (savedWarning ? ' · 本机记录保存失败' : ` · 本机最高 ${best.toLocaleString()}`));
       }
     }
     function completed(next) {
       clearInput();
       if (savedWarning && next.score === best) savedWarning = !write(BEST_KEY, best);
       render(next);
+      if (!roundRecorded) {
+        roundRecorded = true;
+        try {
+          const ranking = ensureBoard();
+          if (!ranking) throw new Error('ranking unavailable');
+          const submittedRound = roundId;
+          Promise.resolve(ranking.record(next.score, submittedRound)).catch(() => {
+            if (roundId === submittedRound) text('jump-submit-status', '上传尚未确认，请打开排行榜重试。');
+          });
+        } catch { text('jump-submit-status', '共享榜暂未连接，请刷新后在排行榜补传本机最高分。'); }
+      }
       if (active && focused && !document.hidden) $('jump-result-title').focus({ preventScroll: true });
     }
     function onEvent(event) {
@@ -120,6 +138,7 @@
         try { if (typeof window.JumpAudio === 'function') audio = new window.JumpAudio(); } catch { audio = null; }
         callAudio('setEnabled', soundEnabled);
         game = new window.JumpGame({ canvas, levels: window.GameLevels.levels, onChange: render, onEvent, onComplete: completed });
+        ensureBoard();
         return true;
       } catch (error) {
         text('jump-status', error.message || '三周目启动失败，请刷新后重试');
@@ -133,6 +152,7 @@
         if (!window.confirm('重新开始会清空本局进度，本机最高分会保留。确定吗？')) { syncPause(); return; }
       }
       clearInput(); callAudio('reset'); manualPaused = false; notice = '';
+      roundId = makeRoundId(); roundRecorded = false;
       game.reset(); syncPause(); canvas.focus({ preventScroll: true });
     }
     function canCharge() { return active && game && !blocked() && state.status !== 'lost' && state.phase === 'idle'; }
@@ -211,6 +231,7 @@
       if (typeof window.GameSoundEnabled === 'boolean') soundEnabled = window.GameSoundEnabled;
       callAudio('setEnabled', soundEnabled); soundUI();
     });
+    window.addEventListener('feitian-jump-boardchange', syncPause);
     window.addEventListener('feitian-modechange', event => {
       active = event.detail?.mode === 'jump';
       clearInput();

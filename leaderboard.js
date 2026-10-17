@@ -14,16 +14,48 @@
     if (!player || typeof player.id !== 'string' || !player.id || typeof player.name !== 'string' || !isScore(player.bestScore) || !isRank(player.rank)) throw new Error('玩家状态响应有误，请刷新排行榜。');
     return { id: player.id, name: player.name, bestScore: player.bestScore, rank: player.rank };
   }
+  const rpcNames = {
+    merge: { list: 'feitian_leaderboard', submit: 'feitian_submit_score', profile: 'feitian_update_profile' },
+    jump: { list: 'feitian_jump_leaderboard', submit: 'feitian_jump_submit_score', profile: 'feitian_jump_update_profile' },
+  };
+  const transports = [];
+  const newTransport = () => ({ client: null, sessionPromise: null, anonymousAttempted: false, hadSession: false, playerId: null, sessionOperation: null });
   class SharedLeaderboard {
     constructor(options = {}) {
+      this.mode = options.mode === undefined ? 'merge' : options.mode;
+      if (!Object.prototype.hasOwnProperty.call(rpcNames, this.mode)) throw new Error('未知的排行榜模式。');
       this.online = /^https?:$/.test(global.location?.protocol || '');
       this.config = global.SUPABASE_CONFIG || {};
       this.configured = Boolean(this.config.url && this.config.publishableKey && this.config.authMode === 'anonymous');
-      this.client = null; this.sessionPromise = null; this.anonymousAttempted = false; this.hadSession = false; this.playerId = null;
       this.timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ? options.timeoutMs : 15000;
       this.fetchTimeoutMs = Number.isFinite(options.fetchTimeoutMs) && options.fetchTimeoutMs > 0 ? options.fetchTimeoutMs : 10000;
-      this.sessionOperation = null;
+      this._transport = null;
+      this._unloadedTransport = newTransport();
     }
+    sharedTransport() {
+      if (this._transport) return this._transport;
+      const factory = global.supabase?.createClient;
+      // A delayed SDK load must remain recoverable without pooling a failed
+      // initialization or constructing a second GoTrue client for another mode.
+      if (typeof factory !== 'function') return this._unloadedTransport;
+      const key = [this.config.url, this.config.publishableKey, this.config.authMode, factory, global.fetch, this.timeoutMs, this.fetchTimeoutMs];
+      let entry = transports.find(candidate => candidate.key.every((value, index) => value === key[index]));
+      if (!entry) { entry = { key, state: newTransport() }; transports.push(entry); }
+      this._transport = entry.state;
+      return this._transport;
+    }
+    get client() { return this.sharedTransport().client; }
+    set client(value) { this.sharedTransport().client = value; }
+    get sessionPromise() { return this.sharedTransport().sessionPromise; }
+    set sessionPromise(value) { this.sharedTransport().sessionPromise = value; }
+    get anonymousAttempted() { return this.sharedTransport().anonymousAttempted; }
+    set anonymousAttempted(value) { this.sharedTransport().anonymousAttempted = value; }
+    get hadSession() { return this.sharedTransport().hadSession; }
+    set hadSession(value) { this.sharedTransport().hadSession = value; }
+    get playerId() { return this.sharedTransport().playerId; }
+    set playerId(value) { this.sharedTransport().playerId = value; }
+    get sessionOperation() { return this.sharedTransport().sessionOperation; }
+    set sessionOperation(value) { this.sharedTransport().sessionOperation = value; }
     getPlayerId() { return this.playerId; }
     async bounded(work, milliseconds, parentSignals = []) {
       const controller = typeof global.AbortController === 'function' ? new global.AbortController() : null;
@@ -134,17 +166,17 @@
       }, this.timeoutMs);
     }
     async list() {
-      const data = await this.request('feitian_leaderboard');
+      const data = await this.request(rpcNames[this.mode].list);
       return { rows: readRows(data.rows), player: readPlayer(data.player) };
     }
     async submitScore(score, roundId, nickname, expectedPlayerId) {
-      const data = await this.request('feitian_submit_score', { p_score: score, p_round_id: roundId, p_nickname: nickname }, expectedPlayerId);
+      const data = await this.request(rpcNames[this.mode].submit, { p_score: score, p_round_id: roundId, p_nickname: nickname }, expectedPlayerId);
       if (typeof data.updated !== 'boolean' || !isRank(data.rank) || !isScore(data.bestScore)) throw new Error('成绩响应格式有误，请重试确认。');
       if (!data.player) throw new Error('玩家状态响应有误，请刷新排行榜。');
       return { updated: data.updated, rank: data.rank, bestScore: data.bestScore, rows: readRows(data.rows), player: readPlayer(data.player) };
     }
     async updateProfile(nickname, expectedPlayerId) {
-      const data = await this.request('feitian_update_profile', { p_nickname: nickname }, expectedPlayerId);
+      const data = await this.request(rpcNames[this.mode].profile, { p_nickname: nickname }, expectedPlayerId);
       if (!data.player) throw new Error('玩家状态响应有误，请刷新排行榜。');
       return { rows: readRows(data.rows), player: readPlayer(data.player) };
     }
