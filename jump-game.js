@@ -310,7 +310,7 @@
       ctx.save(); ctx.globalAlpha = alpha;
       ctx.fillStyle = '#65566628';
       const shadow = clamp(1 - this.player.z / 220, 0.35, 1);
-      this._ellipse(this.player.x, screenY + 1.5, 11.25 * shadow, 4.5 * shadow); ctx.fill();
+      this._ellipse(this.player.x, screenY + 1.2, 9 * shadow, 3.6 * shadow); ctx.fill();
       ctx.translate(this.player.x, screenY - this.player.z);
       if (!this.reducedMotion) {
         const squeeze = this.phase === 'charging' ? state.charge * 0.22 : this.phase === 'idle' && this.landingPulse > 0 ? Math.sin(this.landingPulse / 0.32 * Math.PI) * 0.18 : 0;
@@ -320,15 +320,15 @@
         const f = info.frame;
         const valid = Array.isArray(f) && f.length === 4 && f.every(Number.isFinite) && f[0] >= 0 && f[1] >= 0 && f[2] > 0 && f[3] > 0 && f[0] + f[2] <= image.naturalWidth && f[1] + f[3] <= image.naturalHeight;
         const source = valid ? f : [0, 0, image.naturalWidth, image.naturalHeight];
-        const scale = Math.min(54 / source[2], 61.5 / source[3]);
+        const scale = Math.min(43.2 / source[2], 49.2 / source[3]);
         const w = source[2] * scale, h = source[3] * scale;
         this._flipSprite(-h / 2);
-        ctx.shadowColor = '#63535e30'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1.5;
+        ctx.shadowColor = '#63535e30'; ctx.shadowBlur = 2.4; ctx.shadowOffsetY = 1.2;
         ctx.drawImage(image, ...source, -w / 2, -h, w, h);
       } else {
-        this._flipSprite(-18);
-        ctx.fillStyle = info.color || '#a9d8e6'; ctx.beginPath(); ctx.arc(0, -18, 16.5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#4c525b'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText(String(state.photoNumber), 0, -14.25);
+        this._flipSprite(-14.4);
+        ctx.fillStyle = info.color || '#a9d8e6'; ctx.beginPath(); ctx.arc(0, -14.4, 13.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#4c525b'; ctx.font = 'bold 8.8px system-ui'; ctx.textAlign = 'center'; ctx.fillText(String(state.photoNumber), 0, -11.4);
       }
       ctx.restore();
     }
