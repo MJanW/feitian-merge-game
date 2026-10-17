@@ -423,19 +423,19 @@
         const f = info.frame;
         const valid = Array.isArray(f) && f.length === 4 && f.every(Number.isFinite) && f[0] >= 0 && f[1] >= 0 && f[2] > 0 && f[3] > 0 && f[0] + f[2] <= image.naturalWidth && f[1] + f[3] <= image.naturalHeight;
         const source = valid ? f : [0, 0, image.naturalWidth, image.naturalHeight];
-        const scale = Math.min(43.2 / source[2], 49.2 / source[3]);
+        const scale = Math.min(34.56 / source[2], 39.36 / source[3]);
         const w = source[2] * scale, h = source[3] * scale;
         this._flipSprite(-h * (this.reducedMotion ? 1 : 1 - this.squeeze) / 2);
         this._foot();
         if (!this.reducedMotion) ctx.scale(1 + this.squeeze * 0.7, 1 - this.squeeze);
-        ctx.shadowColor = '#63535e30'; ctx.shadowBlur = 2.4; ctx.shadowOffsetY = 1.2;
+        ctx.shadowColor = '#63535e30'; ctx.shadowBlur = 1.92; ctx.shadowOffsetY = 0.96;
         ctx.drawImage(image, ...source, -w / 2, -h, w, h);
       } else {
-        this._flipSprite(-14.4 * (this.reducedMotion ? 1 : 1 - this.squeeze));
+        this._flipSprite(-11.52 * (this.reducedMotion ? 1 : 1 - this.squeeze));
         this._foot();
         if (!this.reducedMotion) ctx.scale(1 + this.squeeze * 0.7, 1 - this.squeeze);
-        ctx.fillStyle = info.color || '#a9d8e6'; ctx.beginPath(); ctx.arc(0, -14.4, 13.2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#4c525b'; ctx.font = 'bold 8.8px system-ui'; ctx.textAlign = 'center'; ctx.fillText(String(state.photoNumber), 0, -11.4);
+        ctx.fillStyle = info.color || '#a9d8e6'; ctx.beginPath(); ctx.arc(0, -11.52, 10.56, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#4c525b'; ctx.font = 'bold 7.04px system-ui'; ctx.textAlign = 'center'; ctx.fillText(String(state.photoNumber), 0, -9.12);
       }
       ctx.restore();
     }
