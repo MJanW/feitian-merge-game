@@ -230,7 +230,7 @@ dialog{padding:0;width:min(480px,calc(100% - 24px - var(--safe-left) - var(--saf
 .jump-controls #jump-hold:hover,.jump-primary:hover{background:var(--jump-hover)}
 .jump-controls #jump-hold:active{background:var(--jump-hover);box-shadow:inset 0 2px 6px #143c5b40}
 .jump-tips{margin-top:16px;color:var(--jump-muted);font-size:11px;line-height:1.8}
-.jump-intro{position:absolute;left:10px;right:10px;top:23%;text-align:center;pointer-events:none;color:var(--jump-accent)}
+.jump-intro{position:absolute;left:10px;right:10px;top:4%;text-align:center;pointer-events:none;color:var(--jump-accent)}
 .jump-intro strong{display:block;font-size:19px;line-height:1.4}
 .jump-intro span{display:block;margin-top:10px;font-size:12px;line-height:1.7;color:var(--jump-muted)}
 .jump-paused{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:12px;background:#eff7f8ed;text-align:center;pointer-events:none;color:var(--jump-accent)}
