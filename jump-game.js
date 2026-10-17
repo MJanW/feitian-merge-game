@@ -2,7 +2,7 @@
   'use strict';
 
   const WIDTH = 400, HEIGHT = 650, STEP_MS = 1000 / 120;
-  const CHARGE_MS = 1800, DISTANCE_PER_MS = 276 / CHARGE_MS, FOOT_RADIUS = 10, PROJECTION = 0.55;
+  const CHARGE_MS = 1500, DISTANCE_PER_MS = 276 / CHARGE_MS, FOOT_RADIUS = 10, PROJECTION = 0.55;
   const Platforms = root.JumpPlatforms || (typeof require === 'function' ? require('./jump-platforms.js') : null);
   let PlatformRenderer = root.JumpPlatformRenderer;
   if (!PlatformRenderer && typeof require === 'function') {
