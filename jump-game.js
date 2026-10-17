@@ -75,6 +75,7 @@
       this.cameraY = this._cameraAnchor(); this.cameraFrom = this.cameraY; this.cameraTo = this.cameraY; this.cameraTime = 0.4;
       this.jump = null; this.fall = null; this.teeter = null; this.fallTime = 0;
       this.squeeze = 0; this.squeezeVelocity = 0;
+      this.chargePoseStart = 0; this.chargePoseVelocity = 0; this.chargePoseDuration = 60;
       this.landingPulse = 0; this.evolutionPulse = 0;
       this.effects = []; this.completed = false; this._notify(true); this.render();
     }
@@ -150,6 +151,9 @@
       if (this.destroyed || this.isPaused || this.status === 'lost' || this.phase !== 'idle') return false;
       this.status = 'playing'; this.phase = 'charging'; this.chargeMs = 0;
       this.chargeRemainderStart = this.accumulator;
+      this.chargePoseStart = this.squeeze;
+      this.chargePoseVelocity = this.squeeze || this.squeezeVelocity ? this.squeezeVelocity - 500 / CHARGE_MS : 0;
+      this.chargePoseDuration = clamp(Math.abs(this.squeeze) * 480, 60, 240);
       this.bonusIdleMs = 0;
       this._notify(true); return true;
     }
@@ -298,16 +302,36 @@
       this.onComplete(this.getState());
     }
 
+    _chargePose(heldMs) {
+      if (this.reducedMotion) { this.squeeze = 0; this.squeezeVelocity = 0; return; }
+      const held = clamp(heldMs, 0, CHARGE_MS), t = clamp(held / this.chargePoseDuration, 0, 1), remaining = 1 - t;
+      const duration = this.chargePoseDuration / 1000;
+      // Charging follows the actual held fraction directly. A short Hermite
+      // residual carries an existing landing rebound into the new press and
+      // reaches zero position and velocity in 60 ms. A deep cancelled charge
+      // gets up to 240 ms to recover without an abrupt pop when pressed again.
+      const residual = this.chargePoseStart * remaining * remaining * (1 + 2 * t) +
+        this.chargePoseVelocity * duration * t * remaining * remaining;
+      const pose = held / CHARGE_MS * 0.5 + residual;
+      this.squeeze = clamp(pose, -0.2, 0.5);
+      this.squeezeVelocity = pose !== this.squeeze ? 0 : (held < CHARGE_MS ? 500 / CHARGE_MS : 0) +
+        this.chargePoseStart * 6 * t * (t - 1) / duration +
+        this.chargePoseVelocity * (1 - 4 * t + 3 * t * t);
+    }
+
     _stepPose(dt) {
       if (this.reducedMotion) { this.squeeze = 0; this.squeezeVelocity = 0; return; }
-      const charge = clamp(this.chargeMs - this.chargeRemainderStart, 0, CHARGE_MS);
-      let target = this.phase === 'charging' ? 0.04 * (1 - Math.exp(-charge / 55)) + charge / CHARGE_MS * 0.24 : 0;
+      if (this.phase === 'charging') {
+        // The accumulator still contains future ticks inside this loop.
+        this._chargePose(this.chargeMs - this.chargeRemainderStart); return;
+      }
+      let target = 0;
       if (this.phase === 'jumping') {
         const lift = clamp(this.jump.time / this.jump.duration / 0.32, 0, 1);
         target = -0.15 * Math.sin(lift * Math.PI);
       }
       this.squeezeVelocity += ((target - this.squeeze) * 260 - this.squeezeVelocity * 16) * dt;
-      this.squeeze = clamp(this.squeeze + this.squeezeVelocity * dt, -0.2, 0.3);
+      this.squeeze = clamp(this.squeeze + this.squeezeVelocity * dt, -0.2, 0.5);
     }
 
     step(milliseconds = STEP_MS) {
@@ -347,6 +371,9 @@
         } else if (this.phase === 'idle') this._waitForBonus(STEP_MS);
         this._stepPose(dt);
       }
+      // Include the last partial tick so visual feedback matches the same
+      // precise press duration used by releaseCharge, without mutating render.
+      if (this.phase === 'charging') this._chargePose(this._heldCharge());
       this._notify();
     }
 
