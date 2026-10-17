@@ -11,6 +11,7 @@
   }
   const KINDS = Object.keys(Platforms.MODELS);
   const BONUS_WAIT_MS = 2000;
+  const FALL_SECONDS = 0.54, DRIFT_SECONDS = 0.075;
   const BONUSES = Object.freeze({
     manhole: Object.freeze({ points: 5, label: '井盖' }),
     cube: Object.freeze({ points: 10, label: '魔方' }),
@@ -69,7 +70,9 @@
       this.platforms.push(Platforms.createPlatform(1, 'parcel', { x: 275, y: -Math.sqrt(240 * 240 - 150 * 150) }));
       this._appendPlatform(); this._appendPlatform();
       this.cameraY = this._cameraAnchor(); this.cameraFrom = this.cameraY; this.cameraTo = this.cameraY; this.cameraTime = 0.4;
-      this.jump = null; this.fallTime = 0; this.landingPulse = 0; this.evolutionPulse = 0;
+      this.jump = null; this.fall = null; this.fallTime = 0;
+      this.squeeze = 0; this.squeezeVelocity = 0;
+      this.landingPulse = 0; this.evolutionPulse = 0;
       this.effects = []; this.completed = false; this._notify(true); this.render();
     }
 
@@ -200,9 +203,18 @@
       this.player.z = 0;
       this.bonusIdleMs = 0;
       if (!on(next) && !on(current)) {
+        const flight = this.jump;
+        this.fall = { x: this.player.x, y: this.player.y,
+          vx: flight ? (flight.toX - flight.fromX) / flight.duration : 0,
+          vy: flight ? (flight.toY - flight.fromY) / flight.duration : 0,
+          speed: flight ? 4 * flight.height / flight.duration : 400,
+          gravity: flight ? 8 * flight.height / (flight.duration * flight.duration) : 1600 };
         this.phase = 'falling'; this.fallTime = 0; this.combo = 0; return;
       }
       this.phase = 'idle'; this.landingPulse = 0.32;
+      // An impact adds velocity to the same spring used for charging/takeoff;
+      // the pose itself never snaps to a different scale at a phase boundary.
+      if (!this.reducedMotion) this.squeezeVelocity += 2.8;
       if (!on(next)) {
         this.combo = 0; this.lastPoints = 0; this.lastPerfect = false;
         this._event('land', { points: 0, perfect: false, samePlatform: true, score: this.score });
@@ -233,6 +245,17 @@
       this.onComplete(this.getState());
     }
 
+    _stepPose(dt) {
+      if (this.reducedMotion) { this.squeeze = 0; this.squeezeVelocity = 0; return; }
+      let target = this.phase === 'charging' ? this.chargeMs / CHARGE_MS * 0.22 : 0;
+      if (this.phase === 'jumping') {
+        const lift = clamp(this.jump.time / this.jump.duration / 0.32, 0, 1);
+        target = -0.11 * Math.sin(lift * Math.PI);
+      }
+      this.squeezeVelocity += ((target - this.squeeze) * 200 - this.squeezeVelocity * 14) * dt;
+      this.squeeze = clamp(this.squeeze + this.squeezeVelocity * dt, -0.2, 0.3);
+    }
+
     step(milliseconds = STEP_MS) {
       if (this.destroyed || this.isPaused || !Number.isFinite(milliseconds) || milliseconds <= 0) return;
       this.accumulator += milliseconds;
@@ -253,12 +276,20 @@
           const progress = Math.min(1, this.jump.time / this.jump.duration);
           this.player.x = this.jump.fromX + (this.jump.toX - this.jump.fromX) * progress;
           this.player.y = this.jump.fromY + (this.jump.toY - this.jump.fromY) * progress;
-          this.player.z = Math.sin(progress * Math.PI) * this.jump.height;
+          // The same arc has an explicit downward velocity at touchdown. A
+          // missed platform continues this trajectory instead of restarting
+          // from rest below the platform plane.
+          this.player.z = 4 * this.jump.height * progress * (1 - progress);
           if (progress >= 1) this._land();
         } else if (this.phase === 'falling') {
-          this.fallTime += dt; this.player.z = -Math.pow(this.fallTime, 2) * 650;
-          if (this.fallTime >= 0.5) this._finish();
+          this.fallTime = Math.min(FALL_SECONDS, this.fallTime + dt);
+          const t = this.fallTime, drift = DRIFT_SECONDS * (1 - Math.exp(-t / DRIFT_SECONDS));
+          this.player.x = this.fall.x + this.fall.vx * drift;
+          this.player.y = this.fall.y + this.fall.vy * drift;
+          this.player.z = -this.fall.speed * t - this.fall.gravity * t * t / 2;
+          if (this.fallTime >= FALL_SECONDS) this._finish();
         } else if (this.phase === 'idle') this._waitForBonus(STEP_MS);
+        this._stepPose(dt);
       }
       this._notify();
     }
@@ -293,29 +324,34 @@
     }
 
     _flipSprite(centerY) {
-      if (this.reducedMotion || this.phase !== 'jumping') return;
-      const progress = this.jump.time / this.jump.duration;
-      const turn = smooth(clamp((progress - 0.08) / 0.82, 0, 1));
+      if (this.reducedMotion) return;
+      let angle;
+      if (this.phase === 'jumping') {
+        const progress = this.jump.time / this.jump.duration;
+        angle = this.jump.direction * Math.PI * 2 * smooth(clamp((progress - 0.08) / 0.82, 0, 1));
+      } else if (this.phase === 'falling' && this.fallTime > 0) {
+        angle = (this.jump?.direction || 1) * 0.7 * smooth(clamp(this.fallTime / 0.42, 0, 1));
+      } else return;
       // Rotate around the visible sprite's centre rather than its feet, so the
       // somersault follows the same jump arc without swinging in a wide orbit.
       this.ctx.translate(0, centerY);
-      this.ctx.rotate(this.jump.direction * Math.PI * 2 * turn);
+      this.ctx.rotate(angle);
       this.ctx.translate(0, -centerY);
     }
 
     _sprite() {
       const ctx = this.ctx, state = this.getState(), info = this.levels[state.levelIndex] || {};
       const image = this.images.get(info.image), screenY = this.player.y * PROJECTION + this.cameraY;
-      const falling = this.phase === 'falling', alpha = falling ? clamp(1 - this.fallTime / 0.5, 0, 1) : 1;
+      const falling = this.phase === 'falling';
+      const alpha = falling ? 1 - smooth(clamp((this.fallTime - 0.24) / (FALL_SECONDS - 0.24), 0, 1)) : 1;
       ctx.save(); ctx.globalAlpha = alpha;
-      ctx.fillStyle = '#65566628';
-      const shadow = clamp(1 - this.player.z / 220, 0.35, 1);
-      this._ellipse(this.player.x, screenY + 1.2, 9 * shadow, 3.6 * shadow); ctx.fill();
-      ctx.translate(this.player.x, screenY - this.player.z);
-      if (!this.reducedMotion) {
-        const squeeze = this.phase === 'charging' ? state.charge * 0.22 : this.phase === 'idle' && this.landingPulse > 0 ? Math.sin(this.landingPulse / 0.32 * Math.PI) * 0.18 : 0;
-        ctx.scale(1 + squeeze * 0.7, 1 - squeeze);
+      if (!falling) {
+        ctx.fillStyle = '#65566628';
+        const shadow = clamp(1 - this.player.z / 220, 0.35, 1);
+        this._ellipse(this.player.x, screenY + 1.2, 9 * shadow, 3.6 * shadow); ctx.fill();
       }
+      ctx.translate(this.player.x, screenY - this.player.z);
+      if (!this.reducedMotion) ctx.scale(1 + this.squeeze * 0.7, 1 - this.squeeze);
       if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
         const f = info.frame;
         const valid = Array.isArray(f) && f.length === 4 && f.every(Number.isFinite) && f[0] >= 0 && f[1] >= 0 && f[2] > 0 && f[3] > 0 && f[0] + f[2] <= image.naturalWidth && f[1] + f[3] <= image.naturalHeight;
@@ -369,7 +405,13 @@
       ctx.lineTo(next.x, next.y * PROJECTION + this.cameraY); ctx.stroke(); ctx.setLineDash([]);
       // Keep the opening instructions clear; reveal distant scenery on the
       // first charge, when the introduction disappears.
+      let spriteDrawn = false;
       for (const platform of [...this.platforms].sort((a, b) => a.y - b.y)) {
+        // Once below the top plane, foreground props occlude the falling
+        // character. Drawing it over every prop made it pass through solid tops.
+        if (!spriteDrawn && this.phase === 'falling' && platform.y >= this.player.y) {
+          this._sprite(); spriteDrawn = true;
+        }
         if (this.status !== 'ready' || platform.id <= 2) this._platform(platform);
       }
       if (!this.reducedMotion && this.landingPulse > 0) {
@@ -377,7 +419,7 @@
         const r = 18 + (0.32 - this.landingPulse) * 110;
         this._ellipse(this.player.x, this.player.y * PROJECTION + this.cameraY, r, r * PROJECTION); ctx.stroke();
       }
-      this._sprite();
+      if (!spriteDrawn) this._sprite();
       for (const effect of this.effects) {
         ctx.save(); ctx.globalAlpha = 1 - effect.age / 0.9;
         ctx.fillStyle = effect.perfect ? '#9d6c3d' : '#6b8072'; ctx.font = 'bold 23px system-ui'; ctx.textAlign = 'center';

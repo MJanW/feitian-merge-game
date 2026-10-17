@@ -216,7 +216,8 @@
     document.addEventListener('focusin', event => { if ((keyboard || pointer) && !allowedKeyboardTarget(event.target)) clearInput(); });
     $('jump-pause').addEventListener('click', () => {
       if (!active || !game || state.status === 'lost') return;
-      focused = true; manualPaused = !manualPaused; syncPause();
+      const resume = manualPaused || !focused;
+      focused = true; manualPaused = !resume; syncPause();
       if (!manualPaused) canvas.focus({ preventScroll: true });
     });
     $('jump-restart').addEventListener('click', () => restart());
