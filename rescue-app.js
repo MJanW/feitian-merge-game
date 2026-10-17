@@ -2,7 +2,7 @@
   'use strict';
   function initRescue(document, window) {
     const $ = id => document.getElementById(id);
-    const BEST_PREFIX = 'feitian-rescue-best-v2:';
+    const BEST_PREFIX = 'feitian-rescue-best-v3:';
     const keys = new Set();
     const directional = { ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0], ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1] };
     const canvas = $('rescue-canvas');

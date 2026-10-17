@@ -16,8 +16,8 @@
   <script defer src="vendor/supabase.min.js"></script>
   <script defer src="leaderboard.js?v=20261017-score-retry"></script>
   <script defer src="app.js?v=20261017-rescue1"></script>
-  <script defer src="rescue-game.js?v=20261017-obstacles1"></script>
-  <script defer src="rescue-app.js?v=20261017-obstacles1"></script>
+  <script defer src="rescue-game.js?v=20261017-obstacles2"></script>
+  <script defer src="rescue-app.js?v=20261017-obstacles2"></script>
   <script defer src="modes.js?v=20261017-rescue1"></script>
 </head>
 <body>
@@ -67,7 +67,7 @@
       <section class="rescue-play" aria-label="带队飞天游戏区域" data-layout="canvas">
         <div class="rescue-board">
           <canvas id="rescue-canvas" width="400" height="650" tabindex="0" aria-label="拖动水瓶带领朋友，避开障碍并抵达出口。" aria-describedby="rescue-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
-          <div id="rescue-intro" class="rescue-intro"><strong>家具迷阵，出发！</strong><span>拖动水瓶接上朋友<br>绕开家具，蓝玩偶能护队 6 秒</span></div>
+          <div id="rescue-intro" class="rescue-intro"><strong>限时突围，出发！</strong><span>穿过家具迷阵，躲开巡逻鹅<br>蓝玩偶能护队 6 秒</span></div>
           <div id="rescue-paused" class="rescue-paused" hidden><strong>队伍歇一会儿</strong><span>点“继续”一起出发</span></div>
           <div id="rescue-result" class="rescue-result" role="group" aria-labelledby="rescue-result-title" aria-describedby="rescue-result-detail" hidden>
             <div class="rescue-result-card"><h2 id="rescue-result-title" tabindex="-1">全员到齐！</h2><p id="rescue-result-detail">大家一起抵达了出口。</p><div class="rescue-result-actions"><button id="rescue-retry" class="secondary-button" type="button">再玩一次</button><button id="rescue-next" class="rescue-primary" type="button">下一关</button></div></div>
@@ -76,13 +76,13 @@
         <p id="rescue-status" class="rescue-status" role="status">准备好，带朋友一起出发</p>
       </section>
       <aside class="rescue-side" aria-label="带队飞天信息和操作">
-        <header class="rescue-head"><h1>带队飞天</h1><p>绕过家具 · 躲开长鹅 · 护送朋友</p></header>
+        <header class="rescue-head"><h1>带队飞天</h1><p>密集家具 · 多鹅巡逻 · 限时救援</p></header>
         <div class="rescue-hud" aria-label="本关进度">
           <div class="rescue-stat"><span>关卡</span><strong id="rescue-stage">1/3</strong></div>
           <div class="rescue-stat"><span>已救出</span><strong id="rescue-count">0/3</strong></div>
-          <div class="rescue-stat"><span>剩余秒数</span><strong id="rescue-time">90</strong></div>
+          <div class="rescue-stat"><span>剩余秒数</span><strong id="rescue-time">45</strong></div>
         </div>
-        <div class="rescue-scores"><span>本局得分 <strong id="rescue-score">0</strong></span><span>障碍版本机最高 <strong id="rescue-best">0</strong></span></div>
+        <div class="rescue-scores"><span>本局得分 <strong id="rescue-score">0</strong></span><span>挑战版本机最高 <strong id="rescue-best">0</strong></span></div>
         <div class="rescue-tools">
           <div class="rescue-stages" role="group" aria-label="选择关卡"><button type="button" data-rescue-stage="0" aria-pressed="true">第1关</button><button type="button" data-rescue-stage="1" aria-pressed="false">第2关</button><button type="button" data-rescue-stage="2" aria-pressed="false">第3关</button></div>
           <div class="rescue-controls" role="group" aria-label="带队飞天操作"><button id="rescue-pause" type="button" aria-pressed="false">暂停</button><button id="rescue-restart" type="button">重开</button><button id="rescue-sound" type="button" aria-pressed="true">音效开</button></div>

@@ -15,14 +15,27 @@
     'plush-blue': { image: 'assets/rescue/plush-blue.png', frame: { x: 73, y: 40, width: 1357, height: 949 }, label: '护盾' },
   };
   const STAGES = [
-    { name: '绕开家具', goal: 3, seconds: 90, hint: '绕开家具，蓝玩偶提供短暂抗撞保护', people: [[85, 535], [300, 515], [150, 420], [70, 230], [285, 285]],
-      walls: [{ x: 38, y: 300, width: 124, height: 68, asset: 'sofa-dark' }, { x: 244, y: 394, width: 104, height: 66, asset: 'table' }, { x: 226, y: 166, width: 128, height: 74, asset: 'sofa-gray' }], rotators: [], geese: [], item: [200, 510] },
-    { name: '家具窄通道', goal: 4, seconds: 100, hint: '先集合，再排队穿过两张沙发之间', people: [[70, 550], [315, 545], [135, 470], [290, 465], [55, 185], [305, 205]],
-      walls: [{ x: 16, y: 350, width: 138, height: 68, asset: 'sofa-dark' }, { x: 232, y: 350, width: 152, height: 76, asset: 'sofa-gray' }, { x: 85, y: 213, width: 128, height: 72, asset: 'table' }], rotators: [], geese: [], item: [192, 475] },
-    { name: '大鹅来巡逻', goal: 5, seconds: 110, hint: '留意巡逻鹅；护盾不能防队伍拉散', people: [[65, 560], [180, 535], [325, 555], [190, 420], [55, 350], [335, 320], [275, 110]],
-      walls: [{ x: 12, y: 440, width: 122, height: 66, asset: 'sofa-dark' }, { x: 267, y: 424, width: 121, height: 72, asset: 'sofa-gray' }, { x: 18, y: 142, width: 110, height: 64, asset: 'table' }],
-      rotators: [{ x: 200, y: 300, length: 156, thickness: 19, angle: 0.35, speed: 0.72 }],
-      geese: [{ from: [198, 145], to: [330, 145], speed: 105, halfSpine: 24, radius: 12 }], item: [205, 390] },
+    { name: '家具绕行赛', goal: 3, seconds: 45, hint: '右门进、左门出，还要躲开巡逻鹅', people: [[75, 555], [315, 550], [70, 305], [330, 305], [210, 180]],
+      walls: [
+        { x: 0, y: 420, width: 112.5, height: 30, asset: 'sofa-dark' }, { x: 112.5, y: 420, width: 112.5, height: 30, asset: 'table' }, { x: 300, y: 420, width: 100, height: 30, asset: 'sofa-gray' },
+        { x: 0, y: 250, width: 100, height: 30, asset: 'table' }, { x: 175, y: 250, width: 112.5, height: 30, asset: 'sofa-gray' }, { x: 287.5, y: 250, width: 112.5, height: 30, asset: 'sofa-dark' },
+      ], rotators: [], geese: [{ from: [75, 350], to: [325, 350], speed: 100, halfSpine: 24, radius: 12 }], item: [262, 395] },
+    { name: '三门接力', goal: 4, seconds: 50, hint: '左、右、中，收好队伍再过下一道门', people: [[70, 570], [330, 565], [205, 435], [345, 435], [55, 318], [320, 205]],
+      walls: [
+        { x: 0, y: 500, width: 100, height: 30, asset: 'sofa-gray' }, { x: 175, y: 500, width: 112.5, height: 30, asset: 'table' }, { x: 287.5, y: 500, width: 112.5, height: 30, asset: 'sofa-dark' },
+        { x: 0, y: 385, width: 112.5, height: 30, asset: 'sofa-dark' }, { x: 112.5, y: 385, width: 112.5, height: 30, asset: 'sofa-gray' }, { x: 300, y: 385, width: 100, height: 30, asset: 'table' },
+        { x: 0, y: 270, width: 80, height: 30, asset: 'table' }, { x: 80, y: 270, width: 80, height: 30, asset: 'sofa-dark' }, { x: 240, y: 270, width: 80, height: 30, asset: 'sofa-gray' }, { x: 320, y: 270, width: 80, height: 30, asset: 'table' },
+      ], rotators: [], geese: [{ from: [75, 457.5], to: [325, 457.5], speed: 105, halfSpine: 24, radius: 12 }, { from: [75, 342.5], to: [325, 342.5], speed: 95, halfSpine: 24, radius: 12 }], item: [137, 480] },
+    { name: '四门大逃脱', goal: 5, seconds: 60, hint: '四道家具门、三只鹅，别让队伍拉散', people: [[65, 575], [345, 565], [80, 433], [330, 435], [190, 318], [65, 203], [315, 115]],
+      walls: [
+        { x: 0, y: 500, width: 95, height: 30, asset: 'sofa-dark' }, { x: 95, y: 500, width: 95, height: 30, asset: 'table' }, { x: 300, y: 500, width: 100, height: 30, asset: 'sofa-gray' },
+        { x: 0, y: 385, width: 100, height: 30, asset: 'table' }, { x: 175, y: 385, width: 112.5, height: 30, asset: 'sofa-gray' }, { x: 287.5, y: 385, width: 112.5, height: 30, asset: 'sofa-dark' },
+        { x: 0, y: 270, width: 75, height: 30, asset: 'sofa-gray' }, { x: 75, y: 270, width: 75, height: 30, asset: 'table' }, { x: 150, y: 270, width: 75, height: 30, asset: 'sofa-dark' }, { x: 300, y: 270, width: 100, height: 30, asset: 'table' },
+        { x: 0, y: 155, width: 70, height: 30, asset: 'sofa-dark' }, { x: 70, y: 155, width: 70, height: 30, asset: 'table' }, { x: 220, y: 155, width: 90, height: 30, asset: 'sofa-gray' }, { x: 310, y: 155, width: 90, height: 30, asset: 'sofa-dark' },
+      ], rotators: [{ x: 245, y: 575, length: 56, thickness: 10, angle: 0.6, speed: 1.1 }],
+      // Eighty-five pixel corridors leave 30.5 pixels either side of each
+      // swept goose body: enough for the 30 pixel leader without squeezing.
+      geese: [{ from: [75, 457.5], to: [325, 457.5], speed: 105, halfSpine: 24, radius: 12 }, { from: [75, 342.5], to: [325, 342.5], speed: 112, halfSpine: 24, radius: 12 }, { from: [75, 227.5], to: [325, 227.5], speed: 98, halfSpine: 24, radius: 12 }], item: [245, 480] },
   ];
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const length = (x, y) => Math.hypot(x, y);
