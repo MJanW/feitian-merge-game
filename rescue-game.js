@@ -5,11 +5,24 @@
   const LEADER_RADIUS = 15, PERSON_RADIUS = 12, SPEED = 145, FOLLOW_SPEED = 225;
   const GAP = 29, PICKUP_DISTANCE = 35, DETACH_SPEED = 92, COOLDOWN = 1.4;
   const MAX_LINK = 155, STRETCH_DELAY = 0.75;
+  const SHIELD_SECONDS = 6;
   const EXIT = { x: 288, y: 18, width: 94, height: 88 };
+  const ASSETS = {
+    'sofa-dark': { image: 'assets/rescue/sofa-dark.png', frame: { x: 15, y: 150, width: 1758, height: 675 }, label: '黑沙发' },
+    'sofa-gray': { image: 'assets/rescue/sofa-gray.png', frame: { x: 9, y: 154, width: 1757, height: 643 }, label: '灰沙发' },
+    table: { image: 'assets/rescue/table.png', frame: { x: 80, y: 90, width: 1824, height: 618 }, label: '桌子' },
+    goose: { image: 'assets/rescue/goose.png', frame: { x: 345, y: 90, width: 445, height: 1298 }, label: '巡逻鹅' },
+    'plush-blue': { image: 'assets/rescue/plush-blue.png', frame: { x: 73, y: 40, width: 1357, height: 949 }, label: '护盾' },
+  };
   const STAGES = [
-    { name: '草地集合', goal: 3, seconds: 90, hint: '靠近伙伴，带到右上方出口', people: [[85, 535], [300, 515], [140, 420], [75, 290], [290, 270]], walls: [], rotators: [] },
-    { name: '一起过窄门', goal: 4, seconds: 100, hint: '转弯慢一点，让队伍对准中间的门', people: [[85, 540], [310, 530], [125, 440], [280, 425], [85, 205], [295, 175]], walls: [{ x: 0, y: 302, width: 164, height: 23 }, { x: 236, y: 302, width: 164, height: 23 }], rotators: [] },
-    { name: '绕过风车', goal: 5, seconds: 110, hint: '留意转动的栏杆，掉队伙伴还能接回来', people: [[75, 555], [175, 535], [305, 525], [325, 410], [75, 390], [85, 215], [285, 175]], walls: [], rotators: [{ x: 200, y: 300, length: 156, thickness: 19, angle: 0.35, speed: 0.72 }] },
+    { name: '绕开家具', goal: 3, seconds: 90, hint: '绕开家具，蓝玩偶提供短暂抗撞保护', people: [[85, 535], [300, 515], [150, 420], [70, 230], [285, 285]],
+      walls: [{ x: 38, y: 300, width: 124, height: 68, asset: 'sofa-dark' }, { x: 244, y: 394, width: 104, height: 66, asset: 'table' }, { x: 226, y: 166, width: 128, height: 74, asset: 'sofa-gray' }], rotators: [], geese: [], item: [200, 510] },
+    { name: '家具窄通道', goal: 4, seconds: 100, hint: '先集合，再排队穿过两张沙发之间', people: [[70, 550], [315, 545], [135, 470], [290, 465], [55, 185], [305, 205]],
+      walls: [{ x: 16, y: 350, width: 138, height: 68, asset: 'sofa-dark' }, { x: 232, y: 350, width: 152, height: 76, asset: 'sofa-gray' }, { x: 85, y: 213, width: 128, height: 72, asset: 'table' }], rotators: [], geese: [], item: [192, 475] },
+    { name: '大鹅来巡逻', goal: 5, seconds: 110, hint: '留意巡逻鹅；护盾不能防队伍拉散', people: [[65, 560], [180, 535], [325, 555], [190, 420], [55, 350], [335, 320], [275, 110]],
+      walls: [{ x: 12, y: 440, width: 122, height: 66, asset: 'sofa-dark' }, { x: 267, y: 424, width: 121, height: 72, asset: 'sofa-gray' }, { x: 18, y: 142, width: 110, height: 64, asset: 'table' }],
+      rotators: [{ x: 200, y: 300, length: 156, thickness: 19, angle: 0.35, speed: 0.72 }],
+      geese: [{ from: [198, 145], to: [330, 145], speed: 105, halfSpine: 24, radius: 12 }], item: [205, 390] },
   ];
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const length = (x, y) => Math.hypot(x, y);
@@ -24,7 +37,7 @@
       this.onComplete = options.onComplete || (() => {});
       this.reducedMotion = Boolean(root.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
       this.images = new Map(); this.destroyed = false;
-      if (typeof root.Image === 'function') for (const level of this.levels) {
+      if (typeof root.Image === 'function') for (const level of [...this.levels, ...Object.values(ASSETS)]) {
         if (!level?.image || this.images.has(level.image)) continue;
         const image = new root.Image(); this.images.set(level.image, image);
         image.onload = () => { if (!this.destroyed) this.render(); };
@@ -50,6 +63,9 @@
       this.people = this.stage.people.map(([x, y], id) => ({ id, x, y, vx: 0, vy: 0, radius: PERSON_RADIUS, level: 1 + (this.stageIndex * 3 + id) % 11, state: 'waiting', cooldown: 0, stretchTime: 0, flash: 0 }));
       this.walls = this.stage.walls.map(wall => ({ ...wall }));
       this.rotators = this.stage.rotators.map(rotator => ({ ...rotator }));
+      this.geese = this.stage.geese.map(goose => ({ ...goose, from: goose.from.slice(), to: goose.to.slice(), x: goose.from[0], y: goose.from[1], vx: 0, vy: 0, distance: 0, direction: 1 }));
+      this.item = { x: this.stage.item[0], y: this.stage.item[1], available: true };
+      this.shieldRemaining = 0;
       this.chain = []; this.saved = 0; this.elapsed = 0; this.accumulator = 0;
       this.status = 'ready'; this.isPaused = false; this.lastFrame = null;
       this.effects = []; this.stopInput(); this._notify(true); this.render();
@@ -130,6 +146,7 @@
       for (let pass = 0; pass < 2; pass++) {
         for (const wall of this.walls) impact = Math.max(impact, this._rectangleContact(body, wall.x + wall.width / 2, wall.y + wall.height / 2, wall.width / 2, wall.height / 2));
         for (const bar of this.rotators) impact = Math.max(impact, this._rectangleContact(body, bar.x, bar.y, bar.length / 2, bar.thickness / 2, bar.angle, bar.speed));
+        for (const goose of this.geese) impact = Math.max(impact, this._gooseContact(body, goose));
         const r = body.radius;
         if (body.x < r) { impact = Math.max(impact, -body.vx); body.x = r; body.vx = Math.max(0, body.vx); }
         if (body.x > WIDTH - r) { impact = Math.max(impact, body.vx); body.x = WIDTH - r; body.vx = Math.min(0, body.vx); }
@@ -141,11 +158,40 @@
       return impact;
     }
 
+    _moveGeese(dt) {
+      for (const goose of this.geese) {
+        const dx = goose.to[0] - goose.from[0], dy = goose.to[1] - goose.from[1], distance = length(dx, dy);
+        if (!distance) { goose.vx = goose.vy = 0; continue; }
+        const oldX = goose.x, oldY = goose.y;
+        goose.distance += goose.speed * goose.direction * dt;
+        if (goose.distance > distance) { goose.distance = 2 * distance - goose.distance; goose.direction = -1; }
+        else if (goose.distance < 0) { goose.distance = -goose.distance; goose.direction = 1; }
+        goose.x = goose.from[0] + dx * goose.distance / distance; goose.y = goose.from[1] + dy * goose.distance / distance;
+        goose.vx = (goose.x - oldX) / dt; goose.vy = (goose.y - oldY) / dt;
+      }
+    }
+
+    _gooseContact(body, goose) {
+      // The goose's thin body is a capsule, not the large rectangle enclosing
+      // its head and wings. Contact velocity includes the goose's own motion.
+      const nearestX = clamp(body.x, goose.x - goose.halfSpine, goose.x + goose.halfSpine);
+      let nx = body.x - nearestX, ny = body.y - goose.y, distance = length(nx, ny);
+      const radius = body.radius + goose.radius;
+      if (distance >= radius) return 0;
+      if (distance > 1e-8) { nx /= distance; ny /= distance; }
+      else { nx = 0; ny = body.vy - goose.vy <= 0 ? 1 : -1; }
+      const approach = (body.vx - goose.vx) * nx + (body.vy - goose.vy) * ny;
+      body.x += nx * (radius - distance + 0.001); body.y += ny * (radius - distance + 0.001);
+      if (approach < 0) { body.vx -= approach * nx; body.vy -= approach * ny; }
+      return Math.max(0, -approach);
+    }
+
     _detach(person, reason = 'impact') {
-      if (person.state !== 'following') return;
+      if (person.state !== 'following' || (reason === 'impact' && this.shieldRemaining > 0)) return false;
       this.chain = this.chain.filter(id => id !== person.id);
       person.state = 'waiting'; person.cooldown = COOLDOWN; person.stretchTime = 0; person.flash = 0.65;
       this._event('detach', { id: person.id, level: person.level, x: person.x, y: person.y, reason });
+      return true;
     }
 
     _people(dt) {
@@ -172,8 +218,7 @@
         if (speed > FOLLOW_SPEED) { person.vx *= FOLLOW_SPEED / speed; person.vy *= FOLLOW_SPEED / speed; }
         person.x += person.vx * dt; person.y += person.vy * dt;
         const impact = this._collide(person);
-        if (impact >= DETACH_SPEED) this._detach(person);
-        else previous = person;
+        if (!(impact >= DETACH_SPEED && this._detach(person))) previous = person;
       }
     }
 
@@ -193,7 +238,19 @@
 
     _clearRecruitmentLine(a, b) {
       return !this.walls.some(wall => this._lineBlocked(a, b, wall.x + wall.width / 2, wall.y + wall.height / 2, wall.width / 2, wall.height / 2))
-        && !this.rotators.some(bar => this._lineBlocked(a, b, bar.x, bar.y, bar.length / 2, bar.thickness / 2, bar.angle));
+        && !this.rotators.some(bar => this._lineBlocked(a, b, bar.x, bar.y, bar.length / 2, bar.thickness / 2, bar.angle))
+        && !this.geese.some(goose => this._lineBlocked(a, b, goose.x, goose.y, goose.halfSpine, goose.radius)
+          || [-1, 1].some(side => {
+            const dx = b.x - a.x, dy = b.y - a.y, px = goose.x + side * goose.halfSpine, py = goose.y;
+            const t = clamp(((px - a.x) * dx + (py - a.y) * dy) / (dx * dx + dy * dy || 1), 0, 1);
+            return length(a.x + dx * t - px, a.y + dy * t - py) <= goose.radius + 1;
+          }));
+    }
+
+    _collectItem() {
+      if (!this.item.available || length(this.leader.x - this.item.x, this.leader.y - this.item.y) > 32 || !this._clearRecruitmentLine(this.leader, this.item)) return;
+      this.item.available = false; this.shieldRemaining = SHIELD_SECONDS;
+      this._event('item', { item: 'shield', duration: SHIELD_SECONDS, shieldRemaining: SHIELD_SECONDS, x: this.item.x, y: this.item.y });
     }
 
     _collect() {
@@ -244,8 +301,11 @@
         if (this.status === 'ready' && moved > 0.001) this.status = 'playing';
         if (this.status === 'ready') continue;
         this.elapsed = Math.min(this.stage.seconds, this.elapsed + dt);
+        this.shieldRemaining = Math.max(0, this.shieldRemaining - dt);
         for (const bar of this.rotators) bar.angle += bar.speed * dt;
+        this._moveGeese(dt);
         this._collide(this.leader);
+        this._collectItem();
         this._people(dt); this._collect(); this._rescue();
         this._advanceEffects(dt);
         if (this.saved >= this.stage.goal) this._complete(true);
@@ -262,13 +322,13 @@
     getState() {
       const remaining = Math.max(0, this.stage.seconds - this.elapsed);
       return { stageIndex: this.stageIndex, stageName: this.stage.name, stageCount: STAGES.length, goal: this.stage.goal, total: this.people.length, saved: this.saved, following: this.chain.length,
-        remaining, score: this.saved * 100 + (this.status === 'won' ? Math.floor(remaining + 1e-7) * 5 : 0), status: this.status, isPaused: this.isPaused };
+        remaining, shieldRemaining: this.shieldRemaining, score: this.saved * 100 + (this.status === 'won' ? Math.floor(remaining + 1e-7) * 5 : 0), status: this.status, isPaused: this.isPaused };
     }
 
     _notify(force = false) {
       const state = this.getState();
       // HUD needs tenths, not 120 announcements each second. getState remains exact.
-      const signature = JSON.stringify({ ...state, remaining: Math.ceil(state.remaining * 10) / 10 });
+      const signature = JSON.stringify({ ...state, remaining: Math.ceil(state.remaining * 10) / 10, shieldRemaining: Math.ceil(state.shieldRemaining * 10) / 10 });
       if (force || signature !== this.stateSignature) { this.stateSignature = signature; this.onChange(state); }
     }
 
@@ -277,6 +337,22 @@
       ctx.beginPath();
       if (typeof ctx.roundRect === 'function') ctx.roundRect(x, y, width, height, radius);
       else ctx.rect(x, y, width, height);
+    }
+
+    _asset(name, x, y, width, height, flip = false, angle = 0) {
+      const info = ASSETS[name], image = info && this.images.get(info.image), ctx = this.ctx;
+      if (!image?.complete || !image.naturalWidth || !image.naturalHeight) {
+        ctx.fillStyle = '#665f54'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(info?.label || '', x, y);
+        return;
+      }
+      const f = info.frame;
+      const valid = f && [f.x, f.y, f.width, f.height].every(Number.isFinite) && f.x >= 0 && f.y >= 0 && f.width > 0 && f.height > 0 && f.x + f.width <= image.naturalWidth && f.y + f.height <= image.naturalHeight;
+      const source = valid ? [f.x, f.y, f.width, f.height] : [0, 0, image.naturalWidth, image.naturalHeight];
+      const scale = Math.min(width / source[2], height / source[3]);
+      const w = source[2] * scale, h = source[3] * scale;
+      ctx.save(); ctx.translate(x, y); if (angle) ctx.rotate(angle); if (flip) ctx.scale(-1, 1);
+      ctx.shadowColor = 'rgba(70,63,57,.16)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 2;
+      ctx.drawImage(image, ...source, -w / 2, -h / 2, w, h); ctx.restore();
     }
 
     _sprite(person, side) {
@@ -321,13 +397,29 @@
       ctx.font = '12px system-ui'; ctx.fillText(`救出 ${this.saved} / ${this.stage.goal} 位`, 20, 55);
       ctx.font = '10px system-ui'; ctx.fillText(this.stage.hint, 20, 77);
       for (const wall of this.walls) {
-        ctx.fillStyle = '#dca7a0'; this._roundRect(wall.x, wall.y, wall.width, wall.height, 7); ctx.fill();
-        ctx.fillStyle = '#efcac3'; this._roundRect(wall.x + 3, wall.y + 3, wall.width - 6, 6, 3); ctx.fill();
+        // The base outline makes the rectangular collision footprint legible
+        // even where a transparent photograph has legs or rounded cushions.
+        ctx.fillStyle = wall.asset ? '#dcd3c47a' : '#dca7a0'; this._roundRect(wall.x, wall.y, wall.width, wall.height, 7); ctx.fill();
+        ctx.strokeStyle = '#b3a591'; ctx.lineWidth = 1.3; ctx.stroke();
+        if (wall.asset) this._asset(wall.asset, wall.x + wall.width / 2, wall.y + wall.height / 2, wall.width, wall.height);
+        else { ctx.fillStyle = '#efcac3'; this._roundRect(wall.x + 3, wall.y + 3, wall.width - 6, 6, 3); ctx.fill(); }
       }
       for (const bar of this.rotators) {
         ctx.strokeStyle = 'rgba(202,133,106,.35)'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 6]); ctx.beginPath(); ctx.arc(bar.x, bar.y, bar.length / 2 + 22, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
         ctx.save(); ctx.translate(bar.x, bar.y); ctx.rotate(bar.angle); ctx.fillStyle = '#cf9187'; this._roundRect(-bar.length / 2, -bar.thickness / 2, bar.length, bar.thickness, 8); ctx.fill();
         ctx.fillStyle = '#f0caa8'; ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      }
+      for (const goose of this.geese) {
+        ctx.strokeStyle = '#d3ac79'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 6]); ctx.beginPath(); ctx.moveTo(...goose.from); ctx.lineTo(...goose.to); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#e9d6b879'; ctx.strokeStyle = '#cfa16a'; this._roundRect(goose.x - goose.halfSpine - goose.radius, goose.y - goose.radius, (goose.halfSpine + goose.radius) * 2, goose.radius * 2, goose.radius); ctx.fill(); ctx.stroke();
+        // The source goose is upright. Turn its long body along its patrol,
+        // keeping the visible silhouette aligned with the horizontal capsule.
+        this._asset('goose', goose.x, goose.y, 32, 82, false, goose.direction < 0 ? -Math.PI / 2 : Math.PI / 2);
+      }
+      if (this.item.available) {
+        ctx.fillStyle = '#dceef2'; ctx.strokeStyle = '#8cb5c2'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(this.item.x, this.item.y, 23, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        this._asset('plush-blue', this.item.x, this.item.y - 3, 42, 45);
+        ctx.fillStyle = '#557d91'; ctx.font = '10px system-ui'; ctx.textAlign = 'center'; ctx.fillText('抗撞 6 秒', this.item.x, this.item.y + 34);
       }
       let previous = this.leader;
       ctx.strokeStyle = '#7fa78b'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
@@ -336,6 +428,10 @@
         ctx.quadraticCurveTo((previous.x + person.x) / 2 + 4, (previous.y + person.y) / 2 + 4, person.x, person.y); ctx.stroke(); previous = person;
       }
       ctx.setLineDash([]);
+      if (this.shieldRemaining > 0) for (const member of [this.leader, ...this.chain.map(id => this.people[id])]) {
+        ctx.strokeStyle = '#70b7d1'; ctx.fillStyle = 'rgba(154,216,232,.17)'; ctx.lineWidth = 1.7;
+        ctx.beginPath(); ctx.arc(member.x, member.y, member.radius + 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      }
       for (const person of this.people) {
         if (person.state === 'saved') continue;
         ctx.strokeStyle = person.cooldown > 0 ? '#cb8b75' : person.state === 'following' ? '#7ba38a' : '#ccb891'; ctx.lineWidth = 1.5;

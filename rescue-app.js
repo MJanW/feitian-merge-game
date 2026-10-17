@@ -2,7 +2,7 @@
   'use strict';
   function initRescue(document, window) {
     const $ = id => document.getElementById(id);
-    const BEST_PREFIX = 'feitian-rescue-best-v1:';
+    const BEST_PREFIX = 'feitian-rescue-best-v2:';
     const keys = new Set();
     const directional = { ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0], ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1] };
     const canvas = $('rescue-canvas');
@@ -37,6 +37,7 @@
       if (state.status === 'won') return '伙伴们安全到达了！';
       if (state.status === 'lost') return '时间到了，再试一次更顺的路线';
       if (blocked()) return '已暂停，点击「继续」后出发';
+      if (state.shieldRemaining > 0) return `护队 ${Math.ceil(state.shieldRemaining)} 秒 · 抗撞不掉队，仍需绕开家具`;
       if (notice && Date.now() < noticeUntil) return notice;
       return state.status === 'ready' ? '拖动水瓶出发，碰到朋友就能带上他' : `队伍 ${state.following} 人 · 把朋友带进绿色出口`;
     }
@@ -72,10 +73,10 @@
       $('rescue-result-title').focus({ preventScroll: true });
     }
     function onEvent(event) {
-      const messages = { collect: '接到朋友啦，慢一点转弯', detach: '有人掉队了！可以回去接他', rescue: '一位朋友安全到达', win: '伙伴们安全到达了！', lose: '时间到了，再试一次' };
+      const messages = { collect: '接到朋友啦，慢一点转弯', detach: '有人掉队了！可以回去接他', rescue: '一位朋友安全到达', item: '蓝玩偶护队！6 秒内撞击不会掉队', win: '伙伴们安全到达了！', lose: '时间到了，再试一次' };
       notice = messages[event.type] || ''; noticeUntil = Date.now() + 1700;
       if (event.type === 'collect' || event.type === 'rescue') callAudio('playMerge', { level: event.type === 'collect' ? 2 : 5 });
-      else if (event.type === 'win') callAudio('playMerge', { level: 8 });
+      else if (event.type === 'win' || event.type === 'item') callAudio('playMerge', { level: event.type === 'win' ? 8 : 6 });
       else if (event.type === 'detach') callAudio('playDrop');
     }
     function ensureGame() {
