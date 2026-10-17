@@ -2,7 +2,7 @@
   'use strict';
 
   const WIDTH = 400, HEIGHT = 650, STEP_MS = 1000 / 120;
-  const CHARGE_MS = 1200, DISTANCE_PER_MS = 0.23, FOOT_RADIUS = 10, PROJECTION = 0.55;
+  const CHARGE_MS = 1800, DISTANCE_PER_MS = 276 / CHARGE_MS, FOOT_RADIUS = 10, PROJECTION = 0.55;
   const Platforms = root.JumpPlatforms || (typeof require === 'function' ? require('./jump-platforms.js') : null);
   let PlatformRenderer = root.JumpPlatformRenderer;
   if (!PlatformRenderer && typeof require === 'function') {
@@ -11,6 +11,7 @@
   }
   const KINDS = Object.keys(Platforms.MODELS);
   const BONUS_WAIT_MS = 2000;
+  const EVOLUTION_POINTS = 50;
   const FALL_SECONDS = 0.54, DRIFT_SECONDS = 0.025;
   const EDGE_HOLD_SECONDS = 0.12, EDGE_TIP_SECONDS = 0.3;
   const BONUSES = Object.freeze({
@@ -25,9 +26,9 @@
 
   function evolutionForScore(value) {
     const score = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
-    const evolutions = Math.floor(score / 200), levelIndex = evolutions % 12, remainder = score % 200;
+    const evolutions = Math.floor(score / EVOLUTION_POINTS), levelIndex = evolutions % 12, remainder = score % EVOLUTION_POINTS;
     return { levelIndex, photoNumber: levelIndex - 1, cycle: Math.floor(evolutions / 12) + 1,
-      evolutions, fractionToNext: remainder / 200, pointsToNext: 200 - remainder };
+      evolutions, fractionToNext: remainder / EVOLUTION_POINTS, pointsToNext: EVOLUTION_POINTS - remainder };
   }
 
   class JumpGame {

@@ -112,7 +112,7 @@
       if (next.bonusAvailable) return `${next.bonusLabel}：停留 ${Math.ceil(next.bonusRemainingMs / 1000)} 秒再得 +${next.bonusPoints}`;
       if (notice && Date.now() < noticeUntil) return notice;
       if (next.status === 'ready') return '按住画面或下方按钮蓄力，松手起跳';
-      return next.combo > 1 ? `连续中心 ${next.combo} 次！继续挑战` : '落台得分，每 200 分进化一次';
+      return next.combo > 1 ? `连续中心 ${next.combo} 次！继续挑战` : '落台得分，每 50 分进化一次';
     }
     function render(next) {
       const revision = ++renderRevision;
