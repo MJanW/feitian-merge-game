@@ -68,10 +68,13 @@
       this.elapsed = 0; this.accumulator = 0; this.lastFrame = null;
       this.currentId = 0; this.lastPoints = 0; this.lastPerfect = false;
       this.bonusIdleMs = 0;
-      this.player = { x: 125, y: 0, z: 0 };
-      this.platforms = [Platforms.createPlatform(0, 'grass', { x: 125, y: 0 })];
-      this.platforms.push(Platforms.createPlatform(1, 'parcel', { x: 275, y: -Math.sqrt(240 * 240 - 150 * 150) }));
-      this._appendPlatform(); this._appendPlatform();
+      const startX = this._roll() < 0.5 ? 125 : 275;
+      this.player = { x: startX, y: 0, z: 0 };
+      this.platforms = [Platforms.createPlatform(0, 'grass', { x: startX, y: 0 })];
+      // Draw a fresh opening on every reset, using the same visibility and
+      // reachability checks as the rest of the route. Keep the random stream
+      // running across rounds instead of replaying a scripted introduction.
+      for (let index = 0; index < 3; index++) this._appendPlatform();
       this.cameraY = this._cameraAnchor(); this.cameraFrom = this.cameraY; this.cameraTo = this.cameraY; this.cameraTime = 0.4;
       this.jump = null; this.fall = null; this.teeter = null; this.fallTime = 0;
       this.squeeze = 0; this.squeezeVelocity = 0;
@@ -89,9 +92,9 @@
       const previous = this.platforms[this.platforms.length - 1], id = previous.id + 1;
       const difficulty = Math.min(1, id / 120);
       const alternatives = KINDS.length - 1;
-      const kind = id === 2 ? 'record' : id === 3 ? 'cube' : KINDS[(KINDS.indexOf(previous.kind) + 1 + Math.min(alternatives - 1, Math.floor(this._roll() * alternatives))) % KINDS.length];
+      const kind = KINDS[(KINDS.indexOf(previous.kind) + 1 + Math.min(alternatives - 1, Math.floor(this._roll() * alternatives))) % KINDS.length];
       const model = Platforms.MODELS[kind];
-      const size = id === 2 ? 0.69 : id === 3 ? 1.1 : [0.68, 0.82, 0.96, 1.1, 1.22][(id + Math.floor(this._roll() * 5)) % 5] * (1 - difficulty * 0.055);
+      const size = [0.68, 0.82, 0.96, 1.1, 1.22][(id + Math.floor(this._roll() * 5)) % 5] * (1 - difficulty * 0.055);
       const angle = model.shape === 'circle' ? 0 : model.angle + (this._roll() - 0.5) * 0.32;
       const depth = clamp(model.depth + (this._roll() - 0.5) * 12, 18, 60);
       const gapGroup = (id + Math.floor(this._roll() * 3)) % 3;
