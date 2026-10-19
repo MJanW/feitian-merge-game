@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f4f7f4">
-  <meta name="description" content="一周目合成飞天，二周目带队飞天，三周目跳跃飞天：蓄力跳上新平台，每 50 分进化，12 种形态无限循环。">
+  <meta name="description" content="合成、带队、跳跃、守卫，四种飞天玩法。第四周目摆放人物、合成进化，抵挡酒瓶大军。">
   <title>合成飞天</title>
   <link rel="icon" href="assets/photo-10.png" type="image/png">
-  <link rel="stylesheet" href="styles.css?v=20261018-editorial1">
+  <link rel="stylesheet" href="styles.css?v=20261019-defense1">
+  <link rel="stylesheet" href="defense.css?v=20261019-defense1">
   <script defer src="vendor/matter.min.js"></script>
   <script defer src="levels.js?v=20261017-size10"></script>
   <script defer src="sound.js?v=20261016-finale300"></script>
@@ -24,7 +25,12 @@
   <script defer src="jump-sound.js?v=20261017-classic1"></script>
   <script defer src="jump-leaderboard.js?v=20261017-jumpboard1"></script>
   <script defer src="jump-app.js?v=20261017-softjump1"></script>
-  <script defer src="modes.js?v=20261017-jump1"></script>
+  <script defer src="defense-enemies.js?v=20261019-defense1"></script>
+  <script defer src="defense-game.js?v=20261019-defense1"></script>
+  <script defer src="defense-renderer.js?v=20261019-defense1"></script>
+  <script defer src="defense-sound.js?v=20261019-defense1"></script>
+  <script defer src="defense-app.js?v=20261019-defense1"></script>
+  <script defer src="modes.js?v=20261019-defense1"></script>
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -41,6 +47,7 @@
       <button id="mode-merge" aria-label="一周目·合成飞天" type="button" role="tab" aria-selected="true" aria-controls="merge-panel" tabindex="0"><span class="mode-number" aria-hidden="true">01</span><span class="mode-label">合成飞天</span></button>
       <button id="mode-rescue" aria-label="二周目·带队飞天" type="button" role="tab" aria-selected="false" aria-controls="rescue-panel" tabindex="-1"><span class="mode-number" aria-hidden="true">02</span><span class="mode-label">带队飞天</span></button>
       <button id="mode-jump" aria-label="三周目·跳跃飞天" type="button" role="tab" aria-selected="false" aria-controls="jump-panel" tabindex="-1"><span class="mode-number" aria-hidden="true">03</span><span class="mode-label">跳跃飞天</span></button>
+      <button id="mode-defense" aria-label="四周目·守卫飞天" type="button" role="tab" aria-selected="false" aria-controls="defense-panel" tabindex="-1"><span class="mode-number" aria-hidden="true">04</span><span class="mode-label">守卫飞天</span></button>
     </div>
   </div>
   <section id="merge-panel" role="tabpanel" aria-labelledby="mode-merge">
@@ -123,6 +130,42 @@
           <div class="jump-controls" role="group" aria-label="跳跃飞天操作"><button id="jump-hold" class="jump-primary" type="button" aria-label="按住蓄力，松开跳跃">按住蓄力</button><button id="jump-pause" type="button" aria-pressed="false">暂停</button><button id="jump-restart" type="button">重开</button><button id="jump-sound" type="button" aria-pressed="true">音效开</button></div>
         </div>
         <p class="jump-tips"><span class="tips-label">玩法 / HOW TO PLAY</span>脚底圆圈至少一半落在台上才能站稳，搭边不足一半会滑落。<br>落稳 +1 · 连续中心 +2 / +4 / +6…最高 +32<br>特殊台停留 2 秒：井盖 +5 · 魔方 +10 · 店铺 +15 · 唱片 +30<br>每 50 分进化，图 -1 → 10 无限循环。<span class="keyboard-tip"><br>按住空格蓄力 · 松开起跳 · P 暂停</span></p>
+      </aside>
+    </div>
+  </section>
+  <section id="defense-panel" role="tabpanel" aria-labelledby="mode-defense" hidden>
+    <div class="defense-layout">
+      <section class="defense-play" aria-label="守卫飞天战场">
+        <div class="defense-board">
+          <canvas id="defense-canvas" width="400" height="650" tabindex="0" aria-label="塔防战场：点击空位招募，拖动相同等级人物合成。方向键选择阵位，回车招募，U 进化，P 暂停。" aria-describedby="defense-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
+          <div id="defense-intro" class="defense-intro">
+            <span class="defense-eyebrow">第四周目 / DEFENSE</span>
+            <h2>这一回，<br>守住最后一道门。</h2>
+            <p>酒瓶大军沿路而来。<br>让熟悉的面孔组成你的防线。</p>
+            <ol><li><span>01</span>点击空位，招募防御者</li><li><span>02</span>拖动同阶，合成下一形态</li><li><span>03</span>自动攻击，守住一波又一波</li></ol>
+            <button id="defense-start" class="primary-button" type="button">开始守卫 <span aria-hidden="true">↗</span></button>
+          </div>
+          <div id="defense-paused" class="defense-paused" hidden><strong>防线暂歇</strong><span>点“继续”，回到战场</span></div>
+          <div id="defense-result" class="defense-result" role="group" aria-labelledby="defense-result-title" aria-describedby="defense-result-detail" hidden>
+            <div class="defense-result-card"><span class="defense-eyebrow">本次守卫 / REPORT</span><h2 id="defense-result-title" tabindex="-1">防线失守</h2><p id="defense-result-detail"></p><button id="defense-retry" class="primary-button" type="button">重新布阵</button></div>
+          </div>
+        </div>
+        <p id="defense-status" class="defense-status" role="status" aria-live="polite">点击开始守卫，建立你的防线</p>
+      </section>
+      <aside class="defense-side" aria-label="守卫飞天信息和操作">
+        <header class="defense-head"><span class="mode-caption">第四周目 / DEFENSE</span><h1>守卫飞天</h1><p>摆下熟悉的面孔，挡住来势汹汹的酒瓶。</p></header>
+        <div class="defense-hud" aria-label="战场信息">
+          <div class="defense-stat"><span>波次</span><strong id="defense-wave">0</strong></div>
+          <div class="defense-stat"><span>防线</span><strong id="defense-lives">12/12</strong></div>
+          <div class="defense-stat"><span>金币</span><strong id="defense-gold">60</strong></div>
+          <div class="defense-stat"><span>得分</span><strong id="defense-score">0</strong></div>
+        </div>
+        <p class="defense-record">本机最高 <strong id="defense-best">0</strong><span>一支队伍，十一种形态。</span></p>
+        <div class="defense-tools">
+          <div class="defense-selection-row"><p id="defense-selection">选择一位防御者</p><button id="defense-upgrade" class="primary-button" type="button" disabled>进化</button></div>
+          <div class="defense-controls" role="group" aria-label="守卫飞天操作"><button id="defense-pause" class="secondary-button" type="button" aria-pressed="false">暂停</button><button id="defense-restart" class="secondary-button" type="button">重开</button><button id="defense-sound" class="secondary-button" type="button" aria-pressed="true">音效开</button></div>
+        </div>
+        <div class="defense-tips"><span class="tips-label">布阵手记 / FIELD NOTES</span><p>空位招募，空位移动；相同等级拖到一起就能合成。也可以选中人物，花金币直接进化。</p><p>从 0 号到 10 号，攻击会逐步增强。留意快跑的酒瓶，也别放过厚血的精英。</p><p class="keyboard-tip">方向键选择 · 回车招募 · U 进化 · P 暂停</p></div>
       </aside>
     </div>
   </section>

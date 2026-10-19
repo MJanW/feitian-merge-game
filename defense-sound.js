@@ -1,0 +1,124 @@
+(function (root) {
+  'use strict';
+  const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+
+  // Short synthesized game cues only. No external audio request and no sound
+  // before a user gesture; pause/mode switching clears even scheduled notes.
+  class DefenseAudio {
+    constructor(options = {}) {
+      this.enabled = options.enabled !== false;
+      this.context = null;
+      this._gesture = false;
+      this._voices = new Set();
+      this._lastShot = -Infinity;
+      this._lastKill = -Infinity;
+      this._generation = 0;
+    }
+
+    unlock() {
+      this._gesture = true;
+      let context;
+      try {
+        const Context = root.AudioContext || root.webkitAudioContext;
+        if ((!this.context || this.context.state === 'closed') && Context) {
+          this.context = new Context(); this._lastShot = -Infinity; this._lastKill = -Infinity;
+        }
+        context = this.context;
+        if (!context || !this.enabled) return Promise.resolve(false);
+        const generation = this._generation;
+        const pending = context.state === 'suspended' ? context.resume() : null;
+        return Promise.resolve(pending).then(() => generation === this._generation && context === this.context && this._canPlay()).catch(() => false);
+      } catch (_) { return Promise.resolve(false); }
+    }
+
+    _canPlay() { return this.enabled && this._gesture && this.context?.state === 'running'; }
+    setEnabled(enabled) { this.enabled = Boolean(enabled); if (!this.enabled) this.pause(); }
+    _release(voice) {
+      this._voices.delete(voice);
+      try { voice.oscillator.disconnect(); } catch (_) {}
+      try { voice.gain?.disconnect(); } catch (_) {}
+    }
+    _note(frequency, delay, duration, volume, end = frequency, type = 'sine') {
+      if (!this._canPlay() || this._voices.size >= 18) return false;
+      let voice;
+      try {
+        const ctx = this.context, start = ctx.currentTime + clamp(delay, 0, .6), length = clamp(duration, .025, .5);
+        const oscillator = ctx.createOscillator(); voice = { oscillator, gain: null };
+        this._voices.add(voice);
+        const gain = ctx.createGain(); voice.gain = gain;
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(clamp(frequency, 70, 1600), start);
+        oscillator.frequency.exponentialRampToValueAtTime(clamp(end, 70, 1600), start + length);
+        gain.gain.setValueAtTime(.0001, start);
+        gain.gain.exponentialRampToValueAtTime(clamp(volume, .0001, .055), start + .005);
+        gain.gain.exponentialRampToValueAtTime(.0001, start + length);
+        oscillator.connect(gain); gain.connect(ctx.destination);
+        oscillator.onended = () => this._release(voice);
+        oscillator.start(start); oscillator.stop(start + length + .02);
+        return true;
+      } catch (_) {
+        if (voice) { try { voice.oscillator.stop(); } catch (_) {} this._release(voice); }
+        return false;
+      }
+    }
+
+    play(event) {
+      if (!this._canPlay()) return false;
+      const type = typeof event === 'string' ? event : event?.type;
+      const level = Number.isFinite(event?.level) ? clamp(event.level, 0, 10) : 0;
+      const now = this.context.currentTime;
+      switch (type) {
+        case 'shot': case 'shoot':
+          if (now - this._lastShot < .075) return false;
+          this._lastShot = now;
+          return this._note(460 + level * 25, 0, .045, .013, 190 + level * 8, 'triangle');
+        case 'kill':
+          if (now - this._lastKill < .055) return false;
+          this._lastKill = now;
+          this._note(780, 0, .07, .021, 1140);
+          return this._note(1180, .03, .11, .012, 780);
+        case 'merge': case 'upgrade': {
+          const pitch = 1 + level * .025;
+          [392, 493.88, 587.33, 783.99].forEach((frequency, index) => this._note(frequency * pitch, index * .055, .16, .028));
+          return true;
+        }
+        case 'spawn': case 'place': case 'move':
+          this._note(220, 0, .06, .022, 330, 'triangle');
+          return this._note(440, .04, .1, .016, 520);
+        case 'wave':
+          this._note(196, 0, .15, .022, 196, 'triangle');
+          this._note(294, .12, .14, .025, 294, 'triangle');
+          return this._note(392, .24, .22, .025);
+        case 'clear':
+          [392, 523.25, 659.25, 783.99].forEach((frequency, index) => this._note(frequency, index * .07, .16, .025));
+          return true;
+        case 'hit': case 'leak':
+          this._note(180, 0, .15, .04, 90, 'triangle');
+          return this._note(240, .13, .16, .025, 110, 'triangle');
+        case 'lose': case 'gameover':
+          this.pause();
+          [330, 277.18, 220, 146.83].forEach((frequency, index) => this._note(frequency, index * .13, .24, .03, frequency * .92, 'triangle'));
+          return true;
+        default: return false;
+      }
+    }
+
+    pause() {
+      this._generation++;
+      for (const voice of Array.from(this._voices)) {
+        try { voice.oscillator.onended = null; voice.oscillator.stop(); } catch (_) {}
+        this._release(voice);
+      }
+    }
+    destroy() {
+      this.pause(); this._gesture = false;
+      const context = this.context; this.context = null;
+      if (context && context.state !== 'closed') {
+        try { return Promise.resolve(context.close()).catch(() => {}); } catch (_) {}
+      }
+      return Promise.resolve();
+    }
+  }
+  root.DefenseAudio = DefenseAudio;
+  if (typeof module !== 'undefined' && module.exports) module.exports = DefenseAudio;
+})(typeof window !== 'undefined' ? window : globalThis);

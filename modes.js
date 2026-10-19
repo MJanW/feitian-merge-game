@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function initModes(document, window) {
-    const names = ['merge', 'rescue', 'jump'];
+    const names = ['merge', 'rescue', 'jump', 'defense'];
     let current = 'merge';
     const api = {
       get current() { return current; },
