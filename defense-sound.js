@@ -74,9 +74,12 @@
       const now = this.context.currentTime;
       switch (type) {
         case 'slash':
-          if (now - this._lastShot < .12) return false;
+          // Eggs have a separate crack cue. Layer a low impact with a short
+          // metallic strike for bottles, and cap the cadence in crowded fights.
+          if (event?.targetType === 'supply' || now - this._lastShot < .085) return false;
           this._lastShot = now;
-          return this._note(720, 0, .055, .013, 140, 'triangle');
+          this._note(175, 0, .075, .036, 75, 'triangle');
+          return this._note(event?.ability === 'ice' ? 1420 : 1080, .003, .055, .022, 430, 'square');
         case 'special':
           if (now - this._lastSpecial < .22) return false;
           this._lastSpecial = now;
@@ -98,7 +101,7 @@
         case 'supplyHit':
           if (now - this._lastSupplyHit < .09) return false;
           this._lastSupplyHit = now;
-          return this._note(880, 0, .045, .014, 510, 'triangle');
+          return this._note(920, 0, .055, .027, 260, 'triangle');
         case 'hatch':
           if (now - this._lastHatch < .12) return false;
           this._lastHatch = now;
@@ -110,6 +113,14 @@
           [392, 493.88, 587.33, 783.99].forEach((frequency, index) => this._note(frequency * pitch, index * .055, .16, .028));
           return true;
         }
+        case 'route': {
+          const tones = { ice: [784, 1175, 1568], fire: [196, 392, 588], lightning: [440, 880, 1320] };
+          (tones[event.route] || tones.ice).forEach((frequency, index) => this._note(frequency, index * .075, .19, .028, frequency * 1.05, event.route === 'lightning' ? 'triangle' : 'sine'));
+          return true;
+        }
+        case 'evolveFail':
+          this._note(260, 0, .11, .025, 160, 'triangle');
+          return this._note(165, .07, .13, .023, 85, 'triangle');
         case 'spawn': case 'place': case 'move':
           this._note(220, 0, .06, .022, 330, 'triangle');
           return this._note(440, .04, .1, .016, 520);

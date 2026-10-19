@@ -4,6 +4,7 @@
   const INK = '#294329', PAPER = '#fff8dc', ORANGE = '#e98235';
   const engine = () => root.DefenseGame;
   const ABILITY = { normal: '#e7eddf', ice: '#9de6f2', fire: '#ffb44d', lightning: '#f7e76a' };
+  const ROUTE_MARK = { ice: '❄', fire: '炎', lightning: 'ϟ' };
   const TAU = Math.PI * 2;
   const FONT = '"Avenir Next", "PingFang SC", sans-serif';
   const MONO = '"SFMono-Regular", Consolas, monospace';
@@ -28,6 +29,12 @@
   function text(ctx, content, x, y, size = 11, color = INK, weight = '500', align = 'left', font = FONT) {
     ctx.fillStyle = color; ctx.font = `${weight} ${size}px ${font}`;
     ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillText(String(content), x, y);
+  }
+  function impactNumber(ctx, value, x, y, color) {
+    ctx.font = `800 12px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.strokeStyle = '#495236'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+    const label = `−${Number.isInteger(value) ? value : Math.round(value * 10) / 10}`;
+    ctx.strokeText(label, x, y); ctx.fillStyle = color; ctx.fillText(label, x, y);
   }
   function roadPath(ctx, path) {
     ctx.beginPath(); path.forEach((point, i) => i ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
@@ -136,7 +143,7 @@
   }
   function portrait(ctx, unit, options, x = unit.x, y = unit.y, opacity = 1) {
     const info = form(unit, options), image = getImage(options.images, info, unit.level);
-    const stats = engine()?.statsForLevel?.(unit.level) || {}, ability = stats.ability || 'normal';
+    const stats = engine()?.statsForLevel?.(unit.level, unit.routes, unit.route) || {}, ability = stats.ability || 'normal';
     const pulse = options.reducedMotion ? 0 : clamp(number(unit.pulse) / .6, 0, 1);
     ctx.save(); ctx.globalAlpha *= opacity; ctx.translate(x, y + 15);
     ellipse(ctx, 1, 2, 21, 6, '#345d3555', '#d9e5a650', 1);
@@ -157,23 +164,31 @@
     round(ctx, x - width / 2, y + 19, width, 15, 5, ability === 'normal' ? '#365e35' : '#354c43', ability === 'normal' ? '#d6e59b' : ABILITY[ability], 1.4);
     text(ctx, label, x, y + 27, 8, '#fffce6', '800', 'center', MONO);
     if (ability !== 'normal') {
-      round(ctx, x + 15, y - 27, 16, 15, 6, ABILITY[ability], '#406441', 1.2);
-      text(ctx, ability === 'ice' ? '❄' : ability === 'fire' ? '炎' : 'ϟ', x + 23, y - 19, 10, '#254e4b', '800', 'center');
+      const rank = Math.max(1, number(stats.ranks?.[ability], number(unit.routes?.[ability], 1)));
+      const badge = `${ROUTE_MARK[ability] || '✦'}${rank}`, badgeWidth = Math.max(23, badge.length * 5.5 + 8);
+      round(ctx, x + 10, y - 27, badgeWidth, 15, 6, ABILITY[ability], '#406441', 1.2);
+      text(ctx, badge, x + 10 + badgeWidth / 2, y - 19, 9, '#254e4b', '800', 'center');
+      // Retained routes remain visible even when the latest choice changes
+      // the primary blade color. The badge number is that route's rank.
+      let marker = 0;
+      for (const route of ['ice', 'fire', 'lightning']) {
+        if (route !== ability && number(stats.ranks?.[route]) > 0) ellipse(ctx, x - 20 + marker++ * 8, y - 22, 3, 3, ABILITY[route], '#406441', 1);
+      }
     }
     ctx.restore();
   }
   function orbit(ctx, unit, game, options) {
     const blades = engine()?.bladesFor?.(unit, number(game.elapsed)) || [];
-    const stats = engine()?.statsForLevel?.(unit.level) || {};
+    const stats = engine()?.statsForLevel?.(unit.level, unit.routes, unit.route) || {};
     const ability = stats.ability || 'normal', color = ABILITY[ability] || ABILITY.normal;
     for (const blade of blades) {
       if (![blade.x, blade.y, blade.innerX, blade.innerY, blade.outerX, blade.outerY].every(Number.isFinite)) continue;
       const radius = Math.hypot(blade.x - unit.x, blade.y - unit.y), angle = Math.atan2(blade.y - unit.y, blade.x - unit.x);
       if (!options.reducedMotion) {
-        ctx.beginPath(); ctx.arc(unit.x, unit.y, radius, angle - .36, angle);
-        ctx.strokeStyle = ability === 'normal' ? '#fff9d840' : color + '65'; ctx.lineWidth = 5; ctx.stroke();
-        ctx.beginPath(); ctx.arc(unit.x, unit.y, radius, angle - .17, angle);
-        ctx.strokeStyle = color + 'aa'; ctx.lineWidth = 2.5; ctx.stroke();
+        ctx.beginPath(); ctx.arc(unit.x, unit.y, radius, angle - .42, angle);
+        ctx.strokeStyle = ability === 'normal' ? '#fff9d84d' : color + '65'; ctx.lineWidth = 6; ctx.stroke();
+        ctx.beginPath(); ctx.arc(unit.x, unit.y, radius, angle - .2, angle);
+        ctx.strokeStyle = color + 'bb'; ctx.lineWidth = 2.8; ctx.stroke();
       }
       const dx = blade.outerX - blade.innerX, dy = blade.outerY - blade.innerY, length = Math.max(1, Math.hypot(dx, dy));
       const nx = -dy / length, ny = dx / length, bx = blade.innerX + dx * .25, by = blade.innerY + dy * .25;
@@ -272,19 +287,33 @@
     const time = number(game.elapsed) * 1000;
     const wobble = options.reducedMotion ? 0 : Math.sin(time / 170 + number(e.id) * 1.7) * .035;
     const hit = clamp(number(e.hit) / .12, 0, 1);
-    ellipse(ctx, e.x + 1.5, e.y + 19 * scale, 10 * scale, 4, '#29432944');
+    const recoil = options.reducedMotion ? 0 : Math.sin(hit * Math.PI * .75) * 3.2;
+    const hitAngle = number(e.hitAngle, number(e.id) % 2 ? 0 : Math.PI);
+    const lean = options.reducedMotion ? 0 : Math.cos(hitAngle) * hit * .12;
+    ellipse(ctx, e.x + 1.5, e.y + 27 * scale, 13 * scale, 5, '#29432944');
     const images = options.enemyImages, image = typeof images?.get === 'function' ? images.get(e.kind) : images?.[e.kind];
-    ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(wobble); ctx.scale(scale, scale);
+    ctx.save(); ctx.translate(e.x + Math.cos(hitAngle) * recoil, e.y + Math.sin(hitAngle) * recoil); ctx.rotate(wobble + lean); ctx.scale(scale, scale);
     if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
-      const source = crop(image, data.frame), ratio = Math.min(21 / source[2], 42 / source[3]);
+      const source = crop(image, data.frame), ratio = Math.min(29 / source[2], 57 / source[3]);
       const w = source[2] * ratio, h = source[3] * ratio;
-      ctx.drawImage(image, ...source, -w / 2, 20 - h, w, h);
-      if (hit > 0) ellipse(ctx, 0, 0, w * .7, h * .45, null, `rgba(255,245,161,${hit})`, 2);
-    } else { ctx.scale(.7, .85); bottle(ctx, e.kind, hit); }
-    if (number(e.slowTime) > 0) ellipse(ctx, 0, 18, 13, 5, '#b4f3ff55', '#d3fbff', 1.5);
+      ctx.drawImage(image, ...source, -w / 2, 27 - h, w, h);
+      if (hit > 0) {
+        // Screen the same transparent crop so the flash follows the real
+        // bottle silhouette and cannot brighten a rectangular background.
+        ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha *= hit * .7;
+        ctx.drawImage(image, ...source, -w / 2, 27 - h, w, h); ctx.restore();
+        ellipse(ctx, 0, 0, w * .66, h * .45, null, `rgba(255,245,161,${hit * .8})`, 2);
+      }
+    } else { ctx.save(); ctx.scale(.96, 1.15); bottle(ctx, e.kind, hit); ctx.restore(); }
+    if (number(e.slowTime) > 0) ellipse(ctx, 0, 25, 16, 6, '#b4f3ff55', '#d3fbff', 1.5);
     ctx.restore();
+  }
+
+  function enemyVitals(ctx, e) {
+    if (!Number.isFinite(e.x) || !Number.isFinite(e.y) || e.y < -45 || e.y > 700) return;
+    const isBoss = Boolean(e.boss || e.isBoss), scale = isBoss ? 1.2 : 1;
     const hp = Math.max(0, Math.ceil(number(e.hp))), ratio = clamp(number(e.hp) / Math.max(1, number(e.maxHp, e.hp)), 0, 1);
-    const barY = e.y - 29 * scale, barW = isBoss ? 31 : 25;
+    const barY = e.y - 37 * scale, barW = isBoss ? 32 : 27;
     round(ctx, e.x - barW / 2 - 1, barY - 11, barW + 2, 16, 4, '#fff9db', '#5e6945', 1);
     text(ctx, hp, e.x, barY - 5, hp > 999 ? 7 : 9, '#34482e', '800', 'center', MONO);
     ctx.fillStyle = '#d2d7a6'; ctx.fillRect(e.x - barW / 2 + 2, barY + 1, barW - 4, 2.5);
@@ -306,6 +335,7 @@
     ellipse(ctx, egg.x + 1, egg.y + 20, 23, 7, '#526e4324');
     ellipse(ctx, egg.x, egg.y + 18, 21, 6, '#b5cd9f', '#9bb58a');
     ctx.save(); ctx.translate(egg.x, egg.y); ctx.rotate(sway);
+    if (!options.reducedMotion && hit > 0) ctx.scale(1 + hit * .06, 1 - hit * .07);
     eggPath(ctx); ctx.fillStyle = '#fff9e9'; ctx.fill();
     ctx.strokeStyle = '#7b7948'; ctx.lineWidth = 2; ctx.stroke();
     ctx.save(); eggPath(ctx); ctx.clip();
@@ -334,8 +364,17 @@
     const color = e.color || e.tint || (e.type === 'leak' ? ORANGE : '#d7ad4a');
     if (e.type === 'slash') {
       ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(number(e.angle));
-      ctx.beginPath(); ctx.arc(0, 0, 8 + motion * 13, -.8, 1.05);
-      ctx.strokeStyle = ABILITY[e.ability] || '#fff6c1'; ctx.lineWidth = 4 * fade + .5; ctx.stroke(); ctx.restore();
+      const strikeColor = ABILITY[e.ability] || '#fff6c1';
+      ctx.beginPath(); ctx.arc(0, 0, 10 + motion * 15, -1.15, 1.05);
+      ctx.strokeStyle = '#5c6a3d80'; ctx.lineWidth = 7 * fade + 1; ctx.stroke();
+      ctx.strokeStyle = strikeColor; ctx.lineWidth = 4.5 * fade + .5; ctx.stroke();
+      if (t < .55) {
+        const r = 8 + motion * 9;
+        polygon(ctx, [[-r, 0], [-3, -3], [0, -r], [3, -3], [r, 0], [3, 3], [0, r], [-3, 3]], '#fff8c9', strikeColor, 1);
+        ellipse(ctx, 0, 0, 3, 3, '#fffef1');
+      }
+      ctx.restore();
+      if (number(e.damage) > 0) impactNumber(ctx, e.damage, e.x + 15, e.y - 18 - motion * 18, '#fff3bf');
     } else if (e.type === 'fire') {
       const r = number(e.radius, 42) * (.35 + motion * .65);
       ellipse(ctx, e.x, e.y, r, r, '#ffb94b25', '#fbb94d', 2 * fade + .5);
@@ -351,6 +390,16 @@
       ctx.strokeStyle = '#fff8b8'; ctx.lineWidth = 2.2; ctx.stroke();
     } else if (e.type === 'score' || e.type === 'damage') {
       text(ctx, e.text || `${e.type === 'score' ? '+' : '−'}${Math.ceil(number(e.value, number(e.amount)))}`, e.x, e.y - 20 - motion * 25, 13, e.type === 'score' ? '#3a6f4a' : ORANGE, '700', 'center', MONO);
+    } else if (e.type === 'evolveFail') {
+      ellipse(ctx, e.x, e.y + 2, 19 + motion * 12, 10 + motion * 7, null, '#849080', 2 * fade + .4);
+      for (let i = 0; i < 6; i++) {
+        const a = i * TAU / 6 + .3, r = 16 + motion * 20;
+        const x = e.x + Math.cos(a) * r, y = e.y + Math.sin(a) * r + motion * motion * 10;
+        polygon(ctx, [[x - 2, y - 3], [x + 3, y - 1], [x + 1, y + 3], [x - 3, y + 1]], '#9ba595', '#6d7b66', .7);
+      }
+      const labelY = e.y - 44 - motion * 8;
+      round(ctx, e.x - 28, labelY - 8, 56, 16, 5, '#e8ebdbed', '#8b9580', .8);
+      text(ctx, number(e.lostLevel) > 0 ? '降 1 级' : '进化未成', e.x, labelY, 9, '#617157', '700', 'center');
     } else if (e.type === 'merge' || e.type === 'upgrade') {
       ellipse(ctx, e.x, e.y - 3, 18 + motion * 28, 18 + motion * 28, null, '#d5a443', 2 * fade + .7);
       for (let i = 0; i < 8; i++) {
@@ -392,7 +441,7 @@
       ctx.clearRect(0, 0, 400, 650); terrain(ctx, game);
       const units = game.units || [], slots = game.slots || [], active = selectedUnit(game, options);
       if (active) {
-        const range = number(engine()?.statsForLevel?.(active.level)?.orbitRadius, number(active.range, 82));
+        const range = number(engine()?.statsForLevel?.(active.level, active.routes, active.route)?.orbitRadius, number(active.range, 52));
         ctx.save(); ctx.setLineDash([4, 5]);
         ellipse(ctx, active.x, active.y, range, range, '#386c4e08', '#577b4d50');
         ctx.restore();
@@ -423,6 +472,9 @@
           portrait(ctx, u, options, options.drag.x, options.drag.y - 14, .92);
         }
       }
+      // Bottle bodies overlap in a dense queue. Draw all health labels in a
+      // final pass so the following bottle (or its flash) cannot cover them.
+      for (const e of game.enemies || []) enemyVitals(ctx, e);
     } finally { ctx.restore(); }
   }
 

@@ -4,14 +4,14 @@
   const WIDTH = 400, HEIGHT = 650, STEP_MS = 1000 / 60, MAX_DELTA = 250;
   const PATH = Object.freeze([{ x: 32, y: -35 }, { x: 32, y: 315 }, { x: 366, y: 315 }, { x: 366, y: 345 }].map(Object.freeze));
   const SUPPLY_LANE = Object.freeze({ x: 366, startY: 690, stopY: 395, spacing: 52, capacity: 6 });
-  const SLOTS = Object.freeze([90, 160, 230, 395, 465, 535].flatMap(y => [85, 155, 225, 295].map(x => ({ x, y }))).map((slot, id) => Object.freeze({ id, ...slot })));
+  const SLOTS = Object.freeze([90, 160, 245, 385, 460, 535].flatMap(y => [85, 155, 225, 295].map(x => ({ x, y }))).map((slot, id) => Object.freeze({ id, ...slot })));
   const FALLBACK_TYPES = [
-    { kind: 'whisky', name: '威士忌', hp: 4, speed: 24, reward: 9, tint: '#c58a39' },
-    { kind: 'brandy', name: '白兰地', hp: 7, speed: 18, reward: 15, tint: '#a76135' },
-    { kind: 'wine', name: '红酒', hp: 3, speed: 29, reward: 8, tint: '#7b344d' },
-    { kind: 'baijiu', name: '白酒', hp: 5, speed: 25, reward: 12, tint: '#d65a42' },
-    { kind: 'gin', name: '金酒', hp: 2, speed: 37, reward: 8, tint: '#4d9bb1' },
-    { kind: 'champagne', name: '香槟', hp: 10, speed: 20, reward: 20, tint: '#71915b' },
+    { kind: 'whisky', name: '威士忌', hp: 8, speed: 31, reward: 9, tint: '#c58a39' },
+    { kind: 'brandy', name: '白兰地', hp: 14, speed: 23, reward: 15, tint: '#a76135' },
+    { kind: 'wine', name: '红酒', hp: 6, speed: 37, reward: 8, tint: '#7b344d' },
+    { kind: 'baijiu', name: '白酒', hp: 10, speed: 32, reward: 12, tint: '#d65a42' },
+    { kind: 'gin', name: '金酒', hp: 4, speed: 48, reward: 8, tint: '#4d9bb1' },
+    { kind: 'champagne', name: '香槟', hp: 20, speed: 26, reward: 20, tint: '#71915b' },
   ];
   const PATH_LENGTH = PATH.slice(1).reduce((sum, point, index) => sum + Math.hypot(point.x - PATH[index].x, point.y - PATH[index].y), 0);
   const TAU = Math.PI * 2, SAFE_LIMIT = Number.MAX_SAFE_INTEGER;
@@ -19,18 +19,26 @@
   const safe = value => Math.min(SAFE_LIMIT, Math.max(0, Number.isFinite(value) ? value : SAFE_LIMIT));
   const levelNumber = level => Number.isSafeInteger(level) && level >= 0 ? level : 0;
   const noop = () => {};
-  const statsForLevel = level => {
-    const n = levelNumber(level), ability = n >= 11 ? 'lightning' : n >= 7 ? 'fire' : n >= 3 ? 'ice' : 'normal';
-    const orbitRadius = 82 + Math.min(26, n * 1.6);
+  const ROUTES = Object.freeze(['ice', 'fire', 'lightning']);
+  const routeRanks = routes => Object.fromEntries(ROUTES.map(route => [route, Number.isSafeInteger(routes?.[route]) && routes[route] > 0 ? routes[route] : 0]));
+  const evolutionChance = level => Math.max(0.55, 0.95 - levelNumber(level) * 0.03);
+  const statsForLevel = (level, routes = {}, activeRoute) => {
+    const n = levelNumber(level), ranks = routeRanks(routes);
+    const ability = ranks[activeRoute] > 0 ? activeRoute : ROUTES.reduce((chosen, route) => ranks[route] > (ranks[chosen] || 0) ? route : chosen, 'normal');
+    const orbitRadius = 52 + Math.min(16, n);
     return { damage: safe(n + 1), range: orbitRadius, orbitRadius, bladeCount: Math.min(4, 1 + Math.floor(n / 4)),
       angularSpeed: 2.6 + Math.min(0.6, n * 0.025), bladeLength: 24, bladeWidth: 7,
-      slow: n >= 3 ? 0.28 : 0, splash: n >= 7 ? 42 : 0, chain: n >= 11 ? 3 : 0,
-      ability, specialName: ({ normal: '环刃', ice: '霜刃', fire: '焰刃', lightning: '雷刃' })[ability] };
+      slow: ranks.ice ? Math.min(0.6, 0.2 + ranks.ice * 0.05) : 0,
+      splash: ranks.fire ? Math.min(64, 30 + ranks.fire * 5) : 0,
+      splashDamage: ranks.fire ? Math.min(0.8, 0.4 + ranks.fire * 0.05) : 0,
+      chain: ranks.lightning ? Math.min(5, 1 + ranks.lightning) : 0,
+      chainDamage: ranks.lightning ? Math.min(0.8, 0.4 + ranks.lightning * 0.08) : 0,
+      ability, ranks, specialName: ({ normal: '环刃', ice: '霜刃', fire: '焰刃', lightning: '雷刃' })[ability] };
   };
   const upgradeCost = level => Number.isSafeInteger(level) && level >= 0 && level < SAFE_LIMIT
     ? safe(Math.max(15, Math.round(safe(18 + level * 8 + level * level * 0.6) / 5) * 5)) : null;
   const bladesFor = (unit, time) => {
-    const stats = statsForLevel(unit.level), phase = Number.isFinite(unit.phase) ? unit.phase : (unit.id || 0) * 2.399963229728653;
+    const stats = statsForLevel(unit.level, unit.routes, unit.route), phase = Number.isFinite(unit.phase) ? unit.phase : (unit.id || 0) * 2.399963229728653;
     const rotation = ((Number.isFinite(time) ? time : 0) * stats.angularSpeed + phase) % TAU;
     return Array.from({ length: stats.bladeCount }, (_, index) => {
       const angle = rotation + index * TAU / stats.bladeCount, dx = Math.cos(angle), dy = Math.sin(angle);
@@ -63,13 +71,13 @@
       this.maxLevel = 0; this.elapsed = 0; this.accumulator = 0; this.nextWaveIn = 0;
       this.units = []; this.enemies = []; this.supplies = []; this.bullets = []; this.effects = [];
       this.spawnQueue = []; this.spawnTimer = 0; this.waveActive = false; this.completed = false;
-      this.sequence = 0; this.changeTimer = 0; this.supplySequence = 0;
+      this.sequence = 0; this.changeTimer = 0; this.supplySequence = 0; this.pendingEvolution = null;
       this._makeUnit(15); this._spawnSupply(); this._notify();
       return true;
     }
 
     start() {
-      if (this.status !== 'ready') return false;
+      if (this.status !== 'ready' || this.pendingEvolution) return false;
       this.status = 'playing'; this._beginWave(); this._notify(); return true;
     }
 
@@ -82,7 +90,8 @@
       return { status: this.status, isPaused: this.isPaused, score: this.score, wave: this.wave, gold: this.gold,
         lives: this.lives, maxLives: this.maxLives, kills: this.kills, unitCount: this.units.length,
         maxLevel: this.maxLevel, reserve: this.reserve, hatched: this.hatched, supplyCount: this.supplies.length, nextWaveIn: this.nextWaveIn,
-        remaining: this.enemies.length + this.spawnQueue.length, elapsed: this.elapsed };
+        remaining: this.enemies.length + this.spawnQueue.length, elapsed: this.elapsed,
+        pendingEvolution: this.pendingEvolution ? { ...this.pendingEvolution, choices: [...this.pendingEvolution.choices] } : null };
     }
 
     place(slot) {
@@ -96,7 +105,8 @@
       const source = this._unitAt(fromSlot), target = this._unitAt(toSlot);
       if (!source || (target && (target.level !== source.level || target.level >= SAFE_LIMIT))) return false;
       if (target) {
-        this.units.splice(this.units.indexOf(source), 1); this._evolve(target, 'merge');
+        this.units.splice(this.units.indexOf(source), 1);
+        this._attemptEvolution(target, 'merge', { materialId: source.id, sourceRoutes: routeRanks(source.routes), cost: 0 });
       } else {
         Object.assign(source, { slot: toSlot, x: SLOTS[toSlot].x, y: SLOTS[toSlot].y, pulse: 0.35 });
         this._event('move', { unitId: source.id, fromSlot, slot: toSlot, level: source.level });
@@ -108,20 +118,20 @@
       if (!this._canAct() || !this._validSlot(slot)) return false;
       const unit = this._unitAt(slot), cost = unit && upgradeCost(unit.level);
       if (!unit || cost === null || this.gold < cost) return false;
-      this.gold -= cost; this._evolve(unit, 'upgrade'); this._notify(); return true;
+      this.gold -= cost; this._attemptEvolution(unit, 'upgrade', { cost }); this._notify(); return true;
     }
 
     step(milliseconds) {
-      if (this.status !== 'playing' || this.isPaused || !Number.isFinite(milliseconds) || milliseconds <= 0) return;
+      if (this.status !== 'playing' || this.isPaused || this.pendingEvolution || !Number.isFinite(milliseconds) || milliseconds <= 0) return;
       // A background-tab gap must not advance a whole unseen wave. Small deltas
       // accumulate, so 30, 60 and 120 Hz share the same deterministic simulation.
       this.accumulator += Math.min(milliseconds, MAX_DELTA);
-      while (this.accumulator + 1e-8 >= STEP_MS && this.status === 'playing') {
+      while (this.accumulator + 1e-8 >= STEP_MS && this.status === 'playing' && !this.pendingEvolution) {
         this.accumulator = Math.max(0, this.accumulator - STEP_MS); this._tick(STEP_MS / 1000);
       }
     }
 
-    _canAct() { return (this.status === 'ready' || this.status === 'playing') && !this.isPaused; }
+    _canAct() { return (this.status === 'ready' || this.status === 'playing') && !this.isPaused && !this.pendingEvolution; }
     _validSlot(slot) { return Number.isInteger(slot) && slot >= 0 && slot < SLOTS.length; }
     _unitAt(slot) { return this.units.find(unit => unit.slot === slot); }
     _notify() { this.onChange(this.getState()); }
@@ -129,13 +139,50 @@
     _effect(type, at, details = {}) { this.effects.push({ type, x: at.x, y: at.y, age: 0, duration: 0.55, ...details }); }
     _roll() { const value = this.random(); return Number.isFinite(value) ? clamp(value, 0, 1 - Number.EPSILON) : 0.5; }
     _makeUnit(slot) {
-      const unit = { id: ++this.sequence, slot, level: 0, x: SLOTS[slot].x, y: SLOTS[slot].y, cooldown: 0, pulse: 0, phase: this.sequence * 2.399963229728653, bladeHits: {} };
+      const unit = { id: ++this.sequence, slot, level: 0, x: SLOTS[slot].x, y: SLOTS[slot].y, cooldown: 0, pulse: 0, phase: this.sequence * 2.399963229728653, bladeHits: {}, routes: { ice: 0, fire: 0, lightning: 0 }, route: null, routeChoices: {} };
       this.units.push(unit); return unit;
     }
-    _evolve(unit, type) {
-      unit.level++; unit.cooldown = 0; unit.bladeHits = {}; unit.pulse = 0.6; this.maxLevel = Math.max(this.maxLevel, unit.level);
-      this._effect(type, unit, { level: unit.level, duration: 0.8 });
-      this._event(type, { unitId: unit.id, slot: unit.slot, level: unit.level });
+    _attemptEvolution(unit, method, details) {
+      const chance = evolutionChance(unit.level);
+      // Costs/materials are paid once by the caller. Failed evolution lowers
+      // one level; milestone choices are remembered but only active at/above it.
+      if (this._roll() >= chance) {
+        const previousLevel = unit.level; unit.level = Math.max(0, unit.level - 1);
+        this._syncRoutes(unit); unit.bladeHits = {}; unit.pulse = 0.2;
+        this._effect('evolveFail', unit, { duration: 0.7, previousLevel, level: unit.level, lostLevel: previousLevel - unit.level });
+        this._event('evolveFail', { method, unitId: unit.id, slot: unit.slot, previousLevel, level: unit.level, chance, ...details });
+        return;
+      }
+      unit.level++; this._syncRoutes(unit); unit.cooldown = 0; unit.bladeHits = {}; unit.pulse = 0.6; this.maxLevel = Math.max(this.maxLevel, unit.level);
+      if ((unit.level + 1) % 4 === 0) {
+        this.pendingEvolution = { unitId: unit.id, level: unit.level, choices: [...ROUTES] };
+        this.accumulator = 0;
+      }
+      this._effect(method, unit, { level: unit.level, duration: 0.8 });
+      this._event(method, { unitId: unit.id, slot: unit.slot, level: unit.level, chance, ...details });
+    }
+
+    _syncRoutes(unit) {
+      const ranks = { ice: 0, fire: 0, lightning: 0 }; let latest = -1, active = null;
+      for (const [key, route] of Object.entries(unit.routeChoices || {})) {
+        const stage = Number(key);
+        if (!Number.isSafeInteger(stage) || stage < 3 || (stage + 1) % 4 !== 0 || stage > unit.level || !ROUTES.includes(route)) continue;
+        ranks[route] = safe(ranks[route] + 1);
+        if (stage > latest) { latest = stage; active = route; }
+      }
+      unit.routes = ranks; unit.route = active;
+    }
+
+    chooseEvolution(route) {
+      const pending = this.pendingEvolution;
+      if (!pending || !ROUTES.includes(route) || this.status === 'lost') return false;
+      const unit = this.units.find(value => value.id === pending.unitId);
+      if (!unit) return false;
+      unit.routeChoices = { ...unit.routeChoices, [pending.level]: route }; this._syncRoutes(unit);
+      unit.bladeHits = {}; unit.pulse = 0.6; this.pendingEvolution = null; this.accumulator = 0;
+      this._effect('route', unit, { route, duration: 0.8 });
+      this._event('route', { unitId: unit.id, slot: unit.slot, level: unit.level, route, rank: unit.routes[route], routes: { ...unit.routes } });
+      this._notify(); return true;
     }
 
     _spawnSupply() {
@@ -160,14 +207,14 @@
     }
 
     _swing(unit, dt) {
-      const stats = statsForLevel(unit.level), hits = unit.bladeHits || (unit.bladeHits = {});
+      const stats = statsForLevel(unit.level, unit.routes, unit.route), hits = unit.bladeHits || (unit.bladeHits = {});
       for (const key of Object.keys(hits)) if (hits[key] <= this.elapsed) delete hits[key];
       // Substep the same radial segments the renderer draws. The thin blade
       // cannot tunnel between ticks, and each blade hits once per revolution.
       const samples = Math.max(1, Math.ceil(stats.angularSpeed * dt / 0.025));
       const objects = [...this.enemies.map(object => ({ type: 'enemy', object })), ...this.supplies.map(object => ({ type: 'supply', object }))];
-      const candidates = objects.filter(({ object }) => {
-        const radius = object.boss ? 17 : 13;
+      const candidates = objects.filter(({ type, object }) => {
+        const radius = type === 'supply' ? 13 : object.boss ? 23 : 18;
         const distance = Math.hypot(object.x - unit.x, object.y - unit.y);
         return object.y <= HEIGHT + 20 && Math.abs(distance - stats.orbitRadius) <= stats.bladeLength / 2 + radius + stats.bladeWidth;
       });
@@ -178,7 +225,7 @@
           for (const { type, object } of candidates) {
             const key = `${type}:${object.id}:${blade.index}`;
             if (hits[key] || !(type === 'supply' ? this.supplies : this.enemies).includes(object)) continue;
-            const radius = object.boss ? 17 : 13;
+            const radius = type === 'supply' ? 13 : object.boss ? 23 : 18;
             if (segmentDistance(object, blade.innerX, blade.innerY, blade.outerX, blade.outerY) > radius + stats.bladeWidth / 2) continue;
             hits[key] = this.elapsed + TAU / stats.angularSpeed * 0.8;
             this._bladeHit(unit, blade, object, type, stats);
@@ -192,9 +239,10 @@
       const origin = { x: target.x, y: target.y };
       const nearby = stats.splash ? objects.filter(object => object !== target && Math.hypot(object.x - target.x, object.y - target.y) <= stats.splash) : [];
       const hit = (object, amount) => type === 'supply' ? this._damageSupply(object, amount) : this._damage(object, amount, stats.slow);
+      const dealt = Math.min(target.hp, stats.damage); target.hitAngle = blade.angle;
       hit(target, stats.damage);
-      for (const object of nearby) hit(object, stats.damage * 0.45);
-      this._effect('slash', origin, { angle: blade.angle, ability: stats.ability, duration: 0.2 });
+      for (const object of nearby) hit(object, stats.damage * stats.splashDamage);
+      this._effect('slash', origin, { angle: blade.angle, ability: stats.ability, damage: dealt, duration: 0.22 });
       if (stats.splash) this._effect('fire', origin, { radius: stats.splash, duration: 0.35 });
       if (stats.chain) {
         let previous = origin;
@@ -204,7 +252,7 @@
             .sort((a, b) => Math.hypot(a.x - previous.x, a.y - previous.y) - Math.hypot(b.x - previous.x, b.y - previous.y))[0];
           if (!next) break;
           this._effect('chain', next, { fromX: previous.x, fromY: previous.y, duration: 0.25 });
-          const position = { x: next.x, y: next.y }; struck.add(next); hit(next, stats.damage * 0.6); previous = position;
+          const position = { x: next.x, y: next.y }; struck.add(next); hit(next, stats.damage * stats.chainDamage); previous = position;
         }
       }
       if (stats.splash || stats.chain) this._event('special', { ability: stats.ability, x: origin.x, y: origin.y, unitId: unit.id });
@@ -215,7 +263,7 @@
 
     _beginWave() {
       this.wave = safe(this.wave + 1); this.waveActive = true; this.nextWaveIn = 0;
-      const count = Math.min(44, 6 + this.wave * 2);
+      const count = Math.min(52, 8 + this.wave * 2);
       const kinds = this.wave === 1 ? ['wine', 'whisky'] : this.wave < 3 ? ['wine', 'whisky', 'gin'] : this.wave < 5 ? ['wine', 'whisky', 'gin', 'baijiu'] : this.types.map(type => type.kind);
       this.spawnQueue = Array.from({ length: count }, (_, index) => ({ kind: kinds[Math.floor(this._roll() * kinds.length)], boss: this.wave % 5 === 0 && index === count - 1 }));
       if (this.wave % 5 === 0) this.spawnQueue[this.spawnQueue.length - 1].kind = 'champagne';
@@ -254,7 +302,7 @@
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 1e-8) {
           this._spawnEnemy(this.spawnQueue.shift());
-          this.spawnTimer += Math.max(0.43, 1.35 - (this.wave - 1) * 0.055);
+          this.spawnTimer += Math.max(0.28, 0.7 - (this.wave - 1) * 0.025);
         }
       }
       for (const enemy of this.enemies.slice()) {
@@ -269,7 +317,7 @@
       }
       for (const unit of this.units.slice()) this._swing(unit, dt);
       if (this.waveActive && !this.spawnQueue.length && !this.enemies.length) {
-        this.waveActive = false; this.nextWaveIn = 5;
+        this.waveActive = false; this.nextWaveIn = 3;
         const bonus = safe(15 + this.wave * 3); this.gold = safe(this.gold + bonus); this.score = safe(this.score + this.wave * 5);
         this._event('clear', { wave: this.wave, gold: bonus }); this._notify();
       } else if (!this.waveActive) {
@@ -319,7 +367,8 @@
 
   DefenseGame.WIDTH = WIDTH; DefenseGame.HEIGHT = HEIGHT; DefenseGame.SLOTS = SLOTS; DefenseGame.PATH = PATH;
   DefenseGame.PATH_LENGTH = PATH_LENGTH; DefenseGame.upgradeCost = upgradeCost; DefenseGame.statsForLevel = statsForLevel; DefenseGame.bladesFor = bladesFor;
-  DefenseGame.SUPPLY_LANE = SUPPLY_LANE;
+  DefenseGame.SUPPLY_LANE = SUPPLY_LANE; DefenseGame.ROUTES = ROUTES;
+  DefenseGame.evolutionChance = evolutionChance; DefenseGame.upgradeSuccessRate = evolutionChance;
   root.DefenseGame = DefenseGame;
   if (typeof module !== 'undefined' && module.exports) module.exports = DefenseGame;
 })(typeof window !== 'undefined' ? window : globalThis);

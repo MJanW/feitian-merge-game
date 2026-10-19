@@ -5,13 +5,16 @@
     const $ = id => document.getElementById(id);
     const canvas = $('defense-canvas');
     if (!canvas) return null;
-    const BEST_KEY = 'feitian-defense-best-v3';
+    const BEST_KEY = 'feitian-defense-best-v4';
     const HIT_RADIUS = 34;
     let game = null, audio = null, state = null, context = null;
     let active = false, focused = true, manualPaused = false;
     let selectedSlot = null, hoverSlot = null, pointer = null;
     let frame = null, lastFrame = null, destroyed = false;
     let best = 0, savedWarning = false, notice = '', noticeUntil = 0;
+    let evolutionVisible = false, evolutionFocus = null;
+    const routeNames = { ice: '寒霜', fire: '焰刃', lightning: '雷霆' };
+    const routeKeys = Object.keys(routeNames);
     const images = [], enemyImages = {}, listeners = [];
     const reducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
     let soundEnabled = typeof window.GameSoundEnabled === 'boolean' ? window.GameSoundEnabled : read('photo-merge-sound', 'on') !== 'off';
@@ -38,10 +41,13 @@
       const count = Math.max(1, levels.length - 1), photoIndex = level % count;
       return { ...levels[photoIndex + 1], photoIndex, cycle: Math.floor(level / count), displayLevel: level + 1 };
     }
-    function combatStats(unit) { return unit ? window.DefenseGame.statsForLevel(unit.level) : null; }
+    function combatStats(unit) { return unit ? window.DefenseGame.statsForLevel(unit.level, unit.routes, unit.route) : null; }
     function abilityName(stats) { return ({ ice: '寒霜', fire: '焰刃', lightning: '雷霆' })[stats?.ability] || '旋刃'; }
+    function chanceFor(unit) { return unit ? window.DefenseGame.evolutionChance(unit.level) : 0; }
+    function percent(value) { return `${Math.round(value * 1000) / 10}%`; }
+    function routeSummary(unit) { return routeKeys.filter(route => unit?.routes?.[route] > 0).map(route => `${routeNames[route]} ${unit.routes[route]}`).join(' · '); }
     function blocked() { return !active || !focused || document.hidden || manualPaused || Boolean(document.querySelector('dialog[open]')); }
-    function canAct() { return Boolean(game && state && state.status !== 'lost' && !state.isPaused && !blocked()); }
+    function canAct() { return Boolean(game && state && state.status !== 'lost' && !state.isPaused && !state.pendingEvolution && !blocked()); }
     function clearInput() {
       const previous = pointer; pointer = null; hoverSlot = null;
       try { if (previous && canvas.hasPointerCapture?.(previous.id)) canvas.releasePointerCapture(previous.id); } catch { /* Capture may already have ended. */ }
@@ -59,12 +65,12 @@
       });
     }
     function requestFrame() {
-      if (frame === null && active && !blocked() && state?.status === 'playing' && !state.isPaused && !destroyed && window.requestAnimationFrame) frame = window.requestAnimationFrame(tick);
+      if (frame === null && active && !blocked() && state?.status === 'playing' && !state.isPaused && !state.pendingEvolution && !destroyed && window.requestAnimationFrame) frame = window.requestAnimationFrame(tick);
     }
     function tick(timestamp) {
       frame = null;
       if (blocked()) { syncPause(); return; }
-      if (!game || state?.status !== 'playing' || state.isPaused || destroyed) { lastFrame = null; return; }
+      if (!game || state?.status !== 'playing' || state.isPaused || state.pendingEvolution || destroyed) { lastFrame = null; return; }
       const elapsed = lastFrame === null ? 0 : Math.min(100, Math.max(0, timestamp - lastFrame));
       lastFrame = timestamp;
       if (elapsed > 0) game.step(elapsed);
@@ -94,10 +100,37 @@
     function statusText(next) {
       if (next.status === 'lost') return '防线失守了，换个阵容再试一次';
       if (blocked() || next.isPaused) return '已暂停，点击「继续」守卫';
+      if (next.pendingEvolution) return '特殊进化！战场已冻结，请选择一条路线';
       if (notice && Date.now() < noticeUntil) return notice;
       if (next.status === 'ready') return '点击「出发」，布置你的第一道防线';
       if (next.nextWaveIn > 0) return '下一波即将来袭 · 趁现在调整阵容';
       return `第 ${next.wave} 波 · 剩余 ${next.remaining} 个入侵者 · 击碎孵化蛋获得同伴`;
+    }
+    function renderEvolution(next) {
+      const pending = next.pendingEvolution;
+      const visible = Boolean(pending && active && !blocked() && !next.isPaused && next.status !== 'lost');
+      prop('defense-evolution', 'hidden', !visible);
+      if (pending) {
+        clearInput(); stopFrame();
+        const unit = game?.units.find(candidate => candidate.id === pending.unitId);
+        const replacedRoute = unit?.routeChoices?.[pending.level];
+        text('defense-evolution-title', `Lv.${pending.level + 1} · 选择进化路线`);
+        text('defense-evolution-detail', replacedRoute ? `此阶段曾选择${routeNames[replacedRoute]}。这次选择会替换该阶段能力，其他阶段保留。` : '保留已学能力。选择新路线，或再次选择已有路线来强化。');
+        for (const route of routeKeys) {
+          const rank = Math.max(0, (unit?.routes?.[route] || 0) - Number(replacedRoute === route));
+          text(`defense-route-${route}-rank`, replacedRoute === route ? `保留 ${rank + 1} 阶` : replacedRoute ? `替换为 ${rank + 1} 阶` : rank ? `强化 ${rank} → ${rank + 1}` : '首次觉醒');
+          prop(`defense-route-${route}`, 'disabled', !visible || !pending.choices.includes(route));
+        }
+      }
+      if (visible && !evolutionVisible) {
+        if (!evolutionFocus) evolutionFocus = document.activeElement;
+        $('defense-route-ice')?.focus({ preventScroll: true });
+      } else if (!visible && evolutionVisible && !pending && active && !blocked() && !next.isPaused) {
+        const previous = evolutionFocus;
+        (previous?.focus && !previous.disabled ? previous : canvas).focus({ preventScroll: true });
+        evolutionFocus = null;
+      }
+      evolutionVisible = visible;
     }
     function render(next) {
       state = next; saveBest(next.score);
@@ -112,11 +145,14 @@
       text('defense-status', statusText(next) + (savedWarning ? ' · 本机记录暂未保存' : ''));
       const reserveHint = next.reserve > 0 ? ` · 待命 ${next.reserve}` : '';
       const stats = combatStats(unit);
+      const chance = chanceFor(unit);
       text('defense-selection', (unit ? `Lv.${unit.level + 1} ${abilityName(stats)} · 伤害 ${stats.damage.toLocaleString()}` : next.reserve > 0 ? '点击空位让同伴上场' : '拖近酒瓶迎敌 · 拖近孵化蛋召集') + reserveHint);
-      text('defense-unit-stats', unit ? `${stats.bladeCount} 把环绕刀 · 同级拖拽合成` : '1级每刀1点伤害，进化持续增强');
+      text('defense-unit-stats', unit ? `${stats.bladeCount} 把飞刃 · ${routeSummary(unit) || '每4级选择特殊路线'}` : '1级每刀1点伤害，进化持续增强');
       text('defense-reserve', `待命 ${next.reserve} 位`);
-      text('defense-upgrade', unit ? `进化 · ${Number.isFinite(cost) ? cost.toLocaleString() : '—'}` : '选择守卫');
-      prop('defense-upgrade', 'disabled', !unit || !Number.isFinite(cost) || next.gold < cost || paused || ended);
+      text('defense-upgrade', unit ? `进化 ${percent(chance)}` : '选择守卫');
+      text('defense-evolution-risk', unit ? `${Number.isFinite(cost) ? cost.toLocaleString() : '—'} 金币 · 合成成功 ${percent(chance)}。失败扣币／耗拖入者并降1级，最低1级；沿用目标路线。` : '先选守卫查看成功率。进化失败扣币；合成失败耗拖入者，均降1级（最低1级）。');
+      prop('defense-upgrade', 'disabled', !unit || !Number.isFinite(cost) || next.gold < cost || paused || ended || Boolean(next.pendingEvolution));
+      prop('defense-restart', 'disabled', Boolean(next.pendingEvolution));
       text('defense-pause', paused ? '继续' : '暂停');
       attr('defense-pause', 'aria-pressed', String(paused));
       prop('defense-pause', 'disabled', next.status !== 'playing');
@@ -127,6 +163,7 @@
         text('defense-result-title', '防线守到了第几波？');
         text('defense-result-detail', `${next.score.toLocaleString()} 分 · 第 ${next.wave} 波 · 击退 ${next.kills} 个入侵者` + (savedWarning ? ' · 本机记录保存失败' : ` · 本机最高 ${best.toLocaleString()}`));
       }
+      renderEvolution(next);
       requestFrame();
     }
     function completed(next) {
@@ -137,10 +174,9 @@
     function onEvent(event) {
       if (active && !blocked()) callAudio('play', event);
       const messages = { merge: '合成成功，守卫进化了！', upgrade: '进化成功，火力升级！', hit: '有入侵者突破了防线！', clear: '这一波守住了！趁现在移动和进化', hatch: event.reserve ? '孵化成功！阵位已满，同伴正在待命' : '孵化成功，新同伴加入防线！', wave: `第 ${event.wave || game?.getState().wave || 1} 波来袭` };
-      if ((event.type === 'merge' || event.type === 'upgrade') && [3, 7, 11].includes(event.level)) {
-        messages[event.type] = ({ 3: '特殊进化：寒霜刀刃，命中减速！', 7: '特殊进化：焰刃，命中触发范围灼烧！', 11: '特殊进化：雷霆，闪电连锁攻击！' })[event.level];
-      }
-      if (messages[event.type]) { notice = messages[event.type]; noticeUntil = Date.now() + 1700; }
+      if (event.type === 'evolveFail') messages.evolveFail = `${event.method === 'merge' ? '合成失败，拖入的守卫已消耗' : `进化失败，已消耗 ${event.cost} 金币`}；守卫回到 Lv.${event.level + 1}`;
+      if (event.type === 'route') messages.route = `${routeNames[event.route] || '特殊'}路线 ${event.rank} 阶！所选路线已生效`;
+      if (messages[event.type]) { notice = messages[event.type]; noticeUntil = Date.now() + (event.type === 'evolveFail' ? 4200 : 1700); }
     }
     function preload() {
       if (typeof window.Image !== 'function') return;
@@ -178,7 +214,7 @@
       }
     }
     function reset(ask = true) {
-      if (!active || !ensureGame()) return;
+      if (!active || !ensureGame() || state?.pendingEvolution) return;
       if (ask && state?.status === 'playing') {
         clearInput(); stopFrame(); game.pause(true); callAudio('pause');
         if (!window.confirm('重新开始会清空本局进度，本机最高分会保留。确定吗？')) { syncPause(); return; }
@@ -208,6 +244,11 @@
       if (!game.upgrade(selectedSlot)) showNotice('金币不足，击退入侵者后再进化');
       render(game.getState()); draw();
     }
+    function chooseRoute(route) {
+      if (!game || !state?.pendingEvolution || !evolutionVisible || blocked() || state.isPaused) return;
+      clearInput(); stopFrame();
+      if (game.chooseEvolution(route)) { render(game.getState()); draw(); requestFrame(); }
+    }
     function finishPointer(event) {
       if (!pointer || pointer.id !== event.pointerId) return;
       const held = pointer, destination = slotAt(position(event));
@@ -218,7 +259,7 @@
         const source = unitAt(held.slot);
         if (destination !== null && destination !== held.slot && source?.id === held.unitId) {
           if (game.move(held.slot, destination)) selectedSlot = destination;
-          else showNotice('只能合成相同形态，或拖到空位移动');
+          else showNotice('只能合成相同等级的守卫，或拖到空位移动');
         }
       } else if (!held.moved && destination === held.slot) deploy(destination);
       render(game.getState()); draw();
@@ -236,7 +277,7 @@
       canvas.focus({ preventScroll: true }); render(game.getState()); draw();
     });
     function movePointer(event) {
-      if (!active || blocked() || pointer && pointer.id !== event.pointerId) return;
+      if (!active || blocked() || state?.pendingEvolution || pointer && pointer.id !== event.pointerId) return;
       const point = position(event); hoverSlot = slotAt(point);
       if (pointer && point) {
         event.preventDefault(); pointer.x = point.x; pointer.y = point.y;
@@ -268,6 +309,17 @@
       selectedSlot = chosen;
     }
     listen(document, 'keydown', event => {
+      if (active && state?.pendingEvolution) {
+        if (!evolutionVisible || blocked() || event.metaKey || event.ctrlKey || event.altKey) return;
+        const choices = routeKeys.map(route => $(`defense-route-${route}`)).filter(button => button && !button.disabled);
+        const current = choices.indexOf(document.activeElement);
+        if (event.key === 'Tab' || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+          event.preventDefault();
+          const reverse = event.shiftKey || event.key === 'ArrowUp' || event.key === 'ArrowLeft';
+          choices[(current + (reverse ? -1 : 1) + choices.length) % choices.length]?.focus({ preventScroll: true });
+        } else if (!/^(BUTTON|A)$/.test(event.target?.tagName || '')) event.preventDefault();
+        return;
+      }
       if (!active || !game || event.metaKey || event.ctrlKey || event.altKey || event.target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(event.target?.tagName || '') || document.querySelector('dialog[open]')) return;
       const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
       if (key === 'Tab') { clearInput(); draw(); return; }
@@ -281,13 +333,14 @@
     function togglePause() {
       if (!active || !game || state.status !== 'playing') return;
       focused = true; manualPaused = !manualPaused; syncPause();
-      if (!manualPaused) canvas.focus({ preventScroll: true });
+      if (!manualPaused && !state.pendingEvolution) canvas.focus({ preventScroll: true });
     }
     listen($('defense-start'), 'click', () => {
-      if (!active || !ensureGame() || state.status !== 'ready') return;
+      if (!active || !ensureGame() || state.status !== 'ready' || state.pendingEvolution) return;
       focused = true; manualPaused = false; game.start(); syncPause(); canvas.focus({ preventScroll: true });
     });
     listen($('defense-upgrade'), 'click', upgrade);
+    for (const route of routeKeys) listen($(`defense-route-${route}`), 'click', () => chooseRoute(route));
     listen($('defense-pause'), 'click', togglePause);
     listen($('defense-restart'), 'click', () => reset());
     listen($('defense-retry'), 'click', () => reset(false));

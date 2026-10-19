@@ -8,7 +8,7 @@
   <title>合成飞天</title>
   <link rel="icon" href="assets/photo-10.png" type="image/png">
   <link rel="stylesheet" href="styles.css?v=20261019-defense1">
-  <link rel="stylesheet" href="defense.css?v=20261019-blades1">
+  <link rel="stylesheet" href="defense.css?v=20261019-evolution1">
   <script defer src="vendor/matter.min.js"></script>
   <script defer src="levels.js?v=20261017-size10"></script>
   <script defer src="sound.js?v=20261016-finale300"></script>
@@ -25,12 +25,12 @@
   <script defer src="jump-sound.js?v=20261017-classic1"></script>
   <script defer src="jump-leaderboard.js?v=20261017-jumpboard1"></script>
   <script defer src="jump-app.js?v=20261017-softjump1"></script>
-  <script defer src="defense-forms.js?v=20261019-blades1"></script>
-  <script defer src="defense-enemies.js?v=20261019-blades1"></script>
-  <script defer src="defense-game.js?v=20261019-blades1"></script>
-  <script defer src="defense-renderer.js?v=20261019-blades1"></script>
-  <script defer src="defense-sound.js?v=20261019-blades1"></script>
-  <script defer src="defense-app.js?v=20261019-blades1"></script>
+  <script defer src="defense-forms.js?v=20261019-evolution1"></script>
+  <script defer src="defense-enemies.js?v=20261019-evolution1"></script>
+  <script defer src="defense-game.js?v=20261019-evolution1"></script>
+  <script defer src="defense-renderer.js?v=20261019-evolution1"></script>
+  <script defer src="defense-sound.js?v=20261019-evolution1"></script>
+  <script defer src="defense-app.js?v=20261019-evolution1"></script>
   <script defer src="modes.js?v=20261019-defense1"></script>
 </head>
 <body>
@@ -145,11 +145,23 @@
               <div class="defense-emblem" aria-hidden="true">✦</div>
               <h2>小刀转起来，<br>同伴多起来。</h2>
               <p>左边酒瓶来袭，右边同伴待醒。<br>把守卫放在哪里，由你决定。</p>
-              <ol><li><span>1</span>靠右击碎孵化蛋，召集新同伴</li><li><span>2</span>拖动同级守卫合成，继续进化</li><li><span>3</span>解锁寒霜、焰刃、雷霆特殊攻击</li></ol>
+              <ol><li><span>1</span>靠右击碎孵化蛋，召集新同伴</li><li><span>2</span>进化有风险，失败消耗资源并降一级</li><li><span>3</span>每4级选择寒霜、焰刃或雷霆路线</li></ol>
               <button id="defense-start" class="primary-button" type="button">出发，守住防线 <span aria-hidden="true">▶</span></button>
             </div>
           </div>
           <div id="defense-paused" class="defense-paused" hidden><strong>休息一下</strong><span>点“继续”，回到战场</span></div>
+          <div id="defense-evolution" class="defense-evolution" role="dialog" aria-modal="true" aria-labelledby="defense-evolution-title" aria-describedby="defense-evolution-detail" hidden>
+            <div class="defense-evolution-card">
+              <span class="defense-eyebrow">SPECIAL EVOLUTION · 战场已冻结</span>
+              <h2 id="defense-evolution-title">选择进化路线</h2>
+              <p id="defense-evolution-detail">保留已学能力。选择新路线，或再次选择已有路线来强化。</p>
+              <div class="defense-route-choices">
+                <button id="defense-route-ice" class="defense-route defense-route-ice" type="button"><span class="defense-route-icon" aria-hidden="true">❄</span><span><strong>寒霜 <small id="defense-route-ice-rank">首次觉醒</small></strong><span>刀刃减速，强化后减速更强</span></span></button>
+                <button id="defense-route-fire" class="defense-route defense-route-fire" type="button"><span class="defense-route-icon" aria-hidden="true">✹</span><span><strong>焰刃 <small id="defense-route-fire-rank">首次觉醒</small></strong><span>范围灼烧，强化后伤害更高</span></span></button>
+                <button id="defense-route-lightning" class="defense-route defense-route-lightning" type="button"><span class="defense-route-icon" aria-hidden="true">ϟ</span><span><strong>雷霆 <small id="defense-route-lightning-rank">首次觉醒</small></strong><span>连锁闪电，强化后命中更多目标</span></span></button>
+              </div>
+            </div>
+          </div>
           <div id="defense-result" class="defense-result" role="group" aria-labelledby="defense-result-title" aria-describedby="defense-result-detail" hidden>
             <div class="defense-result-card"><span class="defense-eyebrow">本次守卫 / REPORT</span><h2 id="defense-result-title" tabindex="-1">防线失守</h2><p id="defense-result-detail"></p><button id="defense-retry" class="primary-button" type="button">再战一回</button></div>
           </div>
@@ -166,10 +178,11 @@
         </div>
         <p class="defense-record">本机最高 <strong id="defense-best">0</strong><span id="defense-reserve">待命 0 位</span></p>
         <div class="defense-tools">
-          <div class="defense-selection-row"><div class="defense-selection-copy"><p id="defense-selection">选择一位守卫</p><p id="defense-unit-stats">Lv.1 每次命中造成 1 点伤害</p></div><button id="defense-upgrade" class="primary-button" type="button" disabled>进化</button></div>
+          <div class="defense-selection-row"><div class="defense-selection-copy"><p id="defense-selection">选择一位守卫</p><p id="defense-unit-stats">Lv.1 每次命中造成 1 点伤害</p></div><button id="defense-upgrade" class="primary-button" type="button" aria-describedby="defense-evolution-risk" disabled>进化</button></div>
+          <p id="defense-evolution-risk" class="defense-evolution-risk">选择守卫查看进化成功率。失败会消耗资源并降一级，最低保留1级。</p>
           <div class="defense-controls" role="group" aria-label="守卫飞天操作"><button id="defense-pause" class="secondary-button" type="button" aria-pressed="false">暂停</button><button id="defense-restart" class="secondary-button" type="button">重开</button><button id="defense-sound" class="secondary-button" type="button" aria-pressed="true">音效开</button></div>
         </div>
-        <div class="defense-tips"><span class="tips-label">你的守卫手册</span><p><b>击蛋召集</b> 旋转小刀碰到酒瓶或孵化蛋才会造成伤害。把同伴放在路线附近，让每次旋转都打中目标。</p><p><b>同级合成</b> 24 个阵位自由换位，同级守卫拖到一起进化。金币也可升级，等级继续成长。</p><div class="defense-skills"><span>Lv.4 寒霜</span><span>Lv.8 焰刃</span><span>Lv.12 雷霆</span></div><p class="keyboard-tip">方向键选择 · 回车部署 · U 进化 · P 暂停</p></div>
+        <div class="defense-tips"><span class="tips-label">你的守卫手册</span><p><b>击蛋召集</b> 旋转小刀碰到酒瓶或孵化蛋才会造成伤害。把同伴放在路线附近，让每次旋转都打中目标。</p><p><b>冒险进化</b> 24个阵位自由移动，同级合成沿用目标路线。等级越高，成功率越低（95%至55%）；失败消耗金币或拖入者，并降一级。低于特殊门槛会暂失该阶段能力。</p><div class="defense-skills"><span>每4级选择路线</span><span>同路线可强化</span><span>不同路线可组合</span></div><p class="keyboard-tip">方向键选择 · 回车部署 · U 进化 · P 暂停</p></div>
       </aside>
     </div>
   </section>
