@@ -39,7 +39,7 @@
 #defense-panel .defense-tools { margin-top: 22px; padding: 14px; border: 1.5px solid #c8cba5; border-radius: 16px; background: #fffbed; box-shadow: 0 3px 0 #dedfc0; }
 #defense-panel .defense-selection-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding-bottom: 12px; }
 #defense-panel .defense-selection-copy { min-width: 0; }
-#defense-panel #defense-selection { color: #3c592e; font-size: 11px; font-weight: 700; line-height: 1.6; }
+#defense-panel #defense-selection { color: #3c592e; font-size: 11px; font-weight: 700; line-height: 1.6; white-space: nowrap; overflow-x: auto; scrollbar-width: thin; }
 #defense-panel #defense-unit-stats { margin-top: 5px; color: var(--d-muted); font-size: 10px; line-height: 1.5; }
 #defense-panel #defense-upgrade { min-width: 100px; padding: 8px 12px; font-size: 11px; }
 #defense-panel .defense-evolution-risk { margin: 0 0 12px; color: #866545; font-size: 10px; line-height: 1.65; }
@@ -99,7 +99,8 @@
   #defense-panel .defense-head h1 { font-size: 39px; }
   #defense-panel .defense-head p { font-size: 11px; margin-top: 8px; }
   #defense-panel .defense-tools { margin-top: 17px; }
-  #defense-panel .defense-tips { margin-top: 13px; }
+  #defense-panel .defense-tips { margin-top: 10px; font-size: 10px; line-height: 1.65; }
+  #defense-panel .defense-skills { margin: 8px 0; }
 }
 @media (max-width: 779px) and (orientation: portrait) {
   #defense-panel .defense-layout { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 49px minmax(0, 1fr) 97px; gap: 6px; width: 100%; max-width: 560px; height: var(--panel-height); min-height: 0; padding: 7px calc(8px + var(--safe-right)) calc(9px + var(--safe-bottom)) calc(8px + var(--safe-left)); }
@@ -115,7 +116,7 @@
   #defense-panel .defense-status { min-height: 13px; max-height: 13px; font-size: 9px; line-height: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #defense-panel .defense-tools { grid-column: 1; grid-row: 3; display: grid; grid-template-columns: minmax(105px, 1.5fr) repeat(3, minmax(0, 1fr)); grid-template-rows: 17px 27px 44px; gap: 3px 6px; width: 100%; height: 97px; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
   #defense-panel .defense-selection-row, #defense-panel .defense-controls, #defense-panel .defense-selection-copy { display: contents; }
-  #defense-panel #defense-selection { grid-column: 1 / -1; grid-row: 1; font-size: 9px; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #defense-panel #defense-selection { grid-column: 1 / -1; grid-row: 1; font-size: 9px; line-height: 15px; white-space: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
   #defense-panel #defense-unit-stats { display: none; }
   #defense-panel .defense-evolution-risk { grid-column: 1 / -1; grid-row: 2; margin: 0; font-size: 9px; line-height: 13px; }
   #defense-panel #defense-upgrade { grid-column: 1; grid-row: 3; min-width: 0; min-height: 44px; height: 44px; padding: 3px; font-size: 10px; }

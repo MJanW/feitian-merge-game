@@ -46,6 +46,9 @@
     function chanceFor(unit) { return unit ? window.DefenseGame.evolutionChance(unit.level) : 0; }
     function percent(value) { return `${Math.round(value * 1000) / 10}%`; }
     function routeSummary(unit) { return routeKeys.filter(route => unit?.routes?.[route] > 0).map(route => `${routeNames[route]} ${unit.routes[route]}`).join(' · '); }
+    function routePath(unit) {
+      return window.DefenseGame.evolutionPath(unit).map(({ level, route }) => `${routeNames[route]}${level > unit.level ? '（休眠）' : ''}`).join('→') || '未分支';
+    }
     function blocked() { return !active || !focused || document.hidden || manualPaused || Boolean(document.querySelector('dialog[open]')); }
     function canAct() { return Boolean(game && state && state.status !== 'lost' && !state.isPaused && !state.pendingEvolution && !blocked()); }
     function clearInput() {
@@ -115,7 +118,7 @@
         const unit = game?.units.find(candidate => candidate.id === pending.unitId);
         const replacedRoute = unit?.routeChoices?.[pending.level];
         text('defense-evolution-title', `Lv.${pending.level + 1} · 选择进化路线`);
-        text('defense-evolution-detail', replacedRoute ? `此阶段曾选择${routeNames[replacedRoute]}。这次选择会替换该阶段能力，其他阶段保留。` : '保留已学能力。选择新路线，或再次选择已有路线来强化。');
+        text('defense-evolution-detail', (replacedRoute ? `此阶段曾选择${routeNames[replacedRoute]}。这次选择会替换该阶段能力，其他阶段保留。` : '保留已学能力。选择新路线，或再次选择已有路线来强化。') + '仅同级、完整路线相同可合成。');
         for (const route of routeKeys) {
           const rank = Math.max(0, (unit?.routes?.[route] || 0) - Number(replacedRoute === route));
           text(`defense-route-${route}-rank`, replacedRoute === route ? `保留 ${rank + 1} 阶` : replacedRoute ? `替换为 ${rank + 1} 阶` : rank ? `强化 ${rank} → ${rank + 1}` : '首次觉醒');
@@ -146,11 +149,14 @@
       const reserveHint = next.reserve > 0 ? ` · 待命 ${next.reserve}` : '';
       const stats = combatStats(unit);
       const chance = chanceFor(unit);
-      text('defense-selection', (unit ? `Lv.${unit.level + 1} ${abilityName(stats)} · 伤害 ${stats.damage.toLocaleString()}` : next.reserve > 0 ? '点击空位让同伴上场' : '拖近酒瓶迎敌 · 拖近孵化蛋召集') + reserveHint);
+      const selection = (unit ? `Lv.${unit.level + 1} ${abilityName(stats)} · 伤害 ${stats.damage.toLocaleString()} · 路线：${routePath(unit)}` : next.reserve > 0 ? '点击空位让同伴上场' : '拖近酒瓶迎敌 · 拖近孵化蛋召集') + reserveHint;
+      text('defense-selection', selection);
+      attr('defense-selection', 'title', selection);
+      attr('defense-selection', 'aria-label', selection);
       text('defense-unit-stats', unit ? `${stats.bladeCount} 把飞刃 · ${routeSummary(unit) || '每4级选择特殊路线'}` : '1级每刀1点伤害，进化持续增强');
       text('defense-reserve', `待命 ${next.reserve} 位`);
       text('defense-upgrade', unit ? `进化 ${percent(chance)}` : '选择守卫');
-      text('defense-evolution-risk', unit ? `${Number.isFinite(cost) ? cost.toLocaleString() : '—'} 金币 · 合成成功 ${percent(chance)}。失败扣币／耗拖入者并降1级，最低1级；沿用目标路线。` : '先选守卫查看成功率。进化失败扣币；合成失败耗拖入者，均降1级（最低1级）。');
+      text('defense-evolution-risk', unit ? `${Number.isFinite(cost) ? cost.toLocaleString() : '—'} 金币 · 合成成功 ${percent(chance)}，须同级同路线。失败扣币／耗拖入者并降1级，最低1级。` : '同级同路线才能合成。进化失败扣币；合成失败耗拖入者，均降1级（最低1级）。');
       prop('defense-upgrade', 'disabled', !unit || !Number.isFinite(cost) || next.gold < cost || paused || ended || Boolean(next.pendingEvolution));
       prop('defense-restart', 'disabled', Boolean(next.pendingEvolution));
       text('defense-pause', paused ? '继续' : '暂停');
@@ -259,7 +265,12 @@
         const source = unitAt(held.slot);
         if (destination !== null && destination !== held.slot && source?.id === held.unitId) {
           if (game.move(held.slot, destination)) selectedSlot = destination;
-          else showNotice('只能合成相同等级的守卫，或拖到空位移动');
+          else {
+            const target = unitAt(destination);
+            showNotice(target && source.level === target.level && !window.DefenseGame.canMerge(source, target)
+              ? '进化路线不同，无法合成；双方守卫均已保留'
+              : '只能合成相同等级、相同路线的守卫，或拖到空位移动');
+          }
         }
       } else if (!held.moved && destination === held.slot) deploy(destination);
       render(game.getState()); draw();

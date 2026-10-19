@@ -5,6 +5,8 @@
   const engine = () => root.DefenseGame;
   const ABILITY = { normal: '#e7eddf', ice: '#9de6f2', fire: '#ffb44d', lightning: '#f7e76a' };
   const ROUTE_MARK = { ice: '❄', fire: '炎', lightning: 'ϟ' };
+  const ROUTES = ['ice', 'fire', 'lightning'];
+  const ROUTE_INK = { ice: '#368eac', fire: '#bd532d', lightning: '#897130' };
   const TAU = Math.PI * 2;
   const FONT = '"Avenir Next", "PingFang SC", sans-serif';
   const MONO = '"SFMono-Regular", Consolas, monospace';
@@ -102,7 +104,7 @@
     text(ctx, '飞刃守卫 · 无限进化', 185, 28, 12, '#fff7d3', '800', 'center');
     round(ctx, 63, 580, 229, 48, 12, '#5c843d', '#3d6b34', 2);
     text(ctx, '左侧迎敌  ·  右侧击蛋', 177, 594, 11, '#fff9da', '700', 'center');
-    text(ctx, number(game.reserve) > 0 ? `待命 ${Math.floor(game.reserve)} 位 · 点击空位部署` : '拖动换位 · 同级合成', 177, 614, 10, '#e7edbd', '600', 'center');
+    text(ctx, number(game.reserve) > 0 ? `待命 ${Math.floor(game.reserve)} 位 · 点击空位部署` : '拖动换位 · 同级同路径合成', 177, 614, 10, '#e7edbd', '600', 'center');
     ellipse(ctx, 366, 646, 23, 9, '#314e2d');
     ellipse(ctx, 366, 642, 23, 7, '#bc9b62', '#5b6235', 2);
     ellipse(ctx, 366, 641, 17, 4, '#496c38');
@@ -111,10 +113,11 @@
   function selectedUnit(game, options) {
     return (game.units || []).find(unit => unit.slot === options.selectedSlot);
   }
-  function cell(ctx, slot, unit, selected, canMerge, hovered) {
+  function cell(ctx, slot, unit, selected, canMerge, hovered, incompatible) {
     const { x, y } = slot;
     const base = (Math.round(x / 70) + Math.round(y / 70)) % 2 ? '#acd269' : '#9fc85b';
-    round(ctx, x - 32, y - 32, 64, 64, 7, selected ? '#dfe88b' : hovered ? '#c4de7a' : base, selected ? '#ffeb81' : canMerge ? '#fcf3bc' : '#759c4690', selected || canMerge ? 3 : 1.2);
+    const rejected = hovered && incompatible;
+    round(ctx, x - 32, y - 32, 64, 64, 7, selected ? '#dfe88b' : rejected ? '#d5a67e' : hovered ? '#c4de7a' : base, selected ? '#ffeb81' : rejected ? '#a84339' : canMerge ? '#fcf3bc' : '#759c4690', selected || canMerge || rejected ? 3 : 1.2);
     if (unit) ellipse(ctx, x, y + 13, 24, 8, '#6d983c66');
     else {
       line(ctx, x - 4, y + 1, x + 4, y + 1, '#6a963f66', 1.6);
@@ -141,12 +144,60 @@
     const valid = Array.isArray(frame) && frame.length === 4 && frame.every(Number.isFinite) && frame[0] >= 0 && frame[1] >= 0 && frame[2] > 0 && frame[3] > 0 && frame[0] + frame[2] <= image.naturalWidth && frame[1] + frame[3] <= image.naturalHeight;
     return valid ? frame : [0, 0, image.naturalWidth, image.naturalHeight];
   }
-  function portrait(ctx, unit, options, x = unit.x, y = unit.y, opacity = 1) {
+  // Ambient attributes stay tied to simulation time. Pausing or choosing a route
+  // therefore freezes the whole model; reduced motion keeps the shape language.
+  function attributes(ctx, unit, stats, options, elapsed) {
+    const ranks = stats.ranks || {}, dominant = stats.ability || 'normal';
+    const phase = options.reducedMotion ? 0 : number(elapsed) * 2.2 + number(unit.phase, number(unit.id) * .71);
+    for (const route of [...ROUTES.filter(route => route !== dominant), dominant]) {
+      if (number(ranks[route]) <= 0) continue;
+      const primary = route === dominant, strength = primary ? 1 : .52;
+      ctx.save(); ctx.globalAlpha *= strength;
+      const color = ABILITY[route], ink = ROUTE_INK[route];
+      // A restrained colored backing makes identical photos legible even at
+      // mobile size, without tinting faces or expanding physical hitboxes.
+      ellipse(ctx, 0, -11, 28, 32, color + (primary ? '45' : '25'));
+      ellipse(ctx, 0, 14, 28, 8, color + '6b', ink, primary ? 1.5 : 1);
+      if (route === 'ice') {
+        for (const side of [-1, 1]) {
+          const drift = options.reducedMotion ? 0 : Math.sin(phase + side) * 1.1;
+          const x = side * 24, y = -9 + drift;
+          polygon(ctx, [[x, y - 24], [x + side * 6, y - 9], [x + side * 3, y + 12], [x - side * 5, y + 9], [x - side * 3, y - 12]], '#b9f0f5b8', ink, 1.1);
+          line(ctx, x, y - 21, x, y + 9, '#f1ffff', 1.3);
+          line(ctx, x, y - 2, x + side * 5, y - 8, '#f1ffff', 1);
+          polygon(ctx, [[side * 12, 17], [side * 17, 4], [side * 21, 16]], '#dffcffdd', ink, .8);
+        }
+        for (const side of [-1, 1]) line(ctx, side * 6, 14, side * 21, 14, '#f1ffff', 1);
+      } else if (route === 'fire') {
+        for (const [side, offset] of [[-1, 0], [1, 1.8]]) {
+          const flicker = options.reducedMotion ? 0 : Math.sin(phase * 1.6 + offset) * 2;
+          const x = side * 23;
+          polygon(ctx, [[x - side * 7, 15], [x + side * 7, 7], [x + side * 8, -9], [x + side * 2, -4], [x + side * 4, -31 + flicker], [x - side * 5, -20], [x - side * 8, -30 - flicker], [x - side * 9, 0]], '#ef843caa', '#c65b34', 1.1);
+          polygon(ctx, [[x - side * 4, 13], [x + side * 3, 6], [x + side * 1, -13 + flicker], [x - side * 4, -4], [x - side * 6, -13]], '#ffe28e');
+          const rise = options.reducedMotion ? 0 : (phase + offset) % 2.4;
+          ellipse(ctx, side * (27 + Math.sin(phase + offset)), -25 - rise * 5, 1.6, 2.2, '#ffe8ad');
+        }
+        line(ctx, -16, 14, 16, 14, '#ffebae', 2);
+      } else if (route === 'lightning') {
+        const drift = options.reducedMotion ? 0 : Math.sin(phase * 1.4) * 2;
+        for (const side of [-1, 1]) {
+          const points = [[side * 18, -39], [side * 28, -26], [side * 22, -23], [side * (30 + drift), -7], [side * 24, -6], [side * 28, 10], [side * 17, 17]];
+          ctx.beginPath(); points.forEach(([x, y], index) => index ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+          ctx.strokeStyle = '#b48d32'; ctx.lineWidth = 3.8; ctx.lineJoin = 'round'; ctx.stroke();
+          ctx.strokeStyle = '#fff4ab'; ctx.lineWidth = 1.7; ctx.stroke();
+          polygon(ctx, [[side * 12, 9], [side * 18, 12], [side * 14, 14], [side * 21, 17], [side * 10, 15], [side * 14, 12]], '#fff6b0', ink, .6);
+        }
+      }
+      ctx.restore();
+    }
+  }
+  function portrait(ctx, unit, options, x = unit.x, y = unit.y, opacity = 1, elapsed = 0) {
     const info = form(unit, options), image = getImage(options.images, info, unit.level);
     const stats = engine()?.statsForLevel?.(unit.level, unit.routes, unit.route) || {}, ability = stats.ability || 'normal';
     const pulse = options.reducedMotion ? 0 : clamp(number(unit.pulse) / .6, 0, 1);
     ctx.save(); ctx.globalAlpha *= opacity; ctx.translate(x, y + 15);
     ellipse(ctx, 1, 2, 21, 6, '#345d3555', '#d9e5a650', 1);
+    ctx.save(); ctx.translate(0, -15); attributes(ctx, unit, stats, options, elapsed); ctx.restore();
     const spring = 1 + Math.sin(pulse * Math.PI) * .08;
     ctx.scale(1 / spring, spring);
     if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
@@ -175,6 +226,13 @@
         if (route !== ability && number(stats.ranks?.[route]) > 0) ellipse(ctx, x - 20 + marker++ * 8, y - 22, 3, 3, ABILITY[route], '#406441', 1);
       }
     }
+    const dormant = engine()?.evolutionPath?.(unit)?.filter(step => step.level > unit.level) || [];
+    if (dormant.length) {
+      const mark = [...new Set(dormant.map(step => ROUTE_MARK[step.route] || '').filter(Boolean))].join('');
+      const badge = `${mark}休`, width = Math.max(28, badge.length * 8 + 8);
+      round(ctx, x - width / 2, y - 44, width, 13, 4, '#e8e9dc', '#818a7c', 1);
+      text(ctx, badge, x, y - 37, 8, '#657061', '700', 'center');
+    }
     ctx.restore();
   }
   function orbit(ctx, unit, game, options) {
@@ -196,7 +254,9 @@
       line(ctx, bx + nx * 5, by + ny * 5, bx - nx * 5, by - ny * 5, '#4d613d', 2.5);
       polygon(ctx, [[bx + nx * 3.5, by + ny * 3.5], [blade.outerX, blade.outerY], [bx - nx * 3.5, by - ny * 3.5]], color, '#355046', 1.4);
       line(ctx, bx, by, blade.outerX, blade.outerY, '#fffef0', 1.2);
-      if (ability === 'fire') {
+      if (ability === 'ice') {
+        polygon(ctx, [[bx + nx * 4, by + ny * 4], [bx + nx * 7 + dx * .2, by + ny * 7 + dy * .2], [bx + dx * .4, by + dy * .4]], '#dffcff', '#368eac', .7);
+      } else if (ability === 'fire') {
         polygon(ctx, [[bx + nx * 5, by + ny * 5], [bx - dx * .16 + nx * 10, by - dy * .16 + ny * 10], [bx + dx * .35 + nx * 3, by + dy * .35 + ny * 3]], '#f79a3d88');
       } else if (ability === 'lightning') {
         const ex = blade.outerX, ey = blade.outerY;
@@ -439,7 +499,8 @@
     try {
       ctx.beginPath(); ctx.rect(0, 0, 400, 650); ctx.clip();
       ctx.clearRect(0, 0, 400, 650); terrain(ctx, game);
-      const units = game.units || [], slots = game.slots || [], active = selectedUnit(game, options);
+      const units = game.units || [], slots = game.slots || [];
+      const active = options.drag?.moved ? units.find(unit => unit.slot === options.drag.fromSlot) : selectedUnit(game, options);
       if (active) {
         const range = number(engine()?.statsForLevel?.(active.level, active.routes, active.route)?.orbitRadius, number(active.range, 52));
         ctx.save(); ctx.setLineDash([4, 5]);
@@ -449,10 +510,12 @@
       for (let i = 0; i < slots.length; i++) {
         const slot = slots[i], index = Number.isFinite(slot.id) ? slot.id : i;
         const unit = units.find(u => u.slot === index);
-        const mergeable = active && unit && active.id !== unit.id && active.level === unit.level;
-        cell(ctx, { ...slot, id: index }, unit, index === options.selectedSlot, mergeable, index === options.hoverSlot);
+        const candidate = active && unit && active.id !== unit.id;
+        const mergeable = candidate && Boolean(engine()?.canMerge?.(active, unit));
+        const incompatible = candidate && active.level === unit.level && !mergeable;
+        cell(ctx, { ...slot, id: index }, unit, index === active?.slot, mergeable, index === options.hoverSlot, incompatible);
       }
-      for (const unit of units) portrait(ctx, unit, options, unit.x, unit.y, options.drag?.moved && options.drag.fromSlot === unit.slot ? .22 : 1);
+      for (const unit of units) portrait(ctx, unit, options, unit.x, unit.y, options.drag?.moved && options.drag.fromSlot === unit.slot ? .22 : 1, game.elapsed);
       // The route is separate from build slots, so depth order can remain stable.
       for (const e of game.enemies || []) enemy(ctx, e, game, options);
       for (const egg of game.supplies || []) supply(ctx, egg, game, options);
@@ -469,8 +532,15 @@
         const u = units.find(unit => unit.slot === options.drag.fromSlot);
         if (u && Number.isFinite(options.drag.x) && Number.isFinite(options.drag.y)) {
           ellipse(ctx, options.drag.x, options.drag.y + 29, 28, 7, '#213f3128');
-          portrait(ctx, u, options, options.drag.x, options.drag.y - 14, .92);
+          portrait(ctx, u, options, options.drag.x, options.drag.y - 14, .92, game.elapsed);
         }
+      }
+      // A rejected drop label stays above portraits, attribute effects and the
+      // dragged preview, so players can see why the same-level units differ.
+      const hovered = units.find(unit => unit.slot === options.hoverSlot);
+      if (active && hovered && active.id !== hovered.id && active.level === hovered.level && !engine()?.canMerge?.(active, hovered)) {
+        round(ctx, hovered.x - 29, hovered.y - 44, 58, 15, 4, '#a84339', '#fff1d7', .8);
+        text(ctx, '× 路径不同', hovered.x, hovered.y - 36, 8, '#fff8df', '800', 'center');
       }
       // Bottle bodies overlap in a dense queue. Draw all health labels in a
       // final pass so the following bottle (or its flash) cannot cover them.

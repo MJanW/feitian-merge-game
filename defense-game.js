@@ -20,6 +20,21 @@
   const levelNumber = level => Number.isSafeInteger(level) && level >= 0 ? level : 0;
   const noop = () => {};
   const ROUTES = Object.freeze(['ice', 'fire', 'lightning']);
+  // Remembered choices remain part of a defender's lineage after a downgrade,
+  // even while their attacks are inactive below the corresponding milestone.
+  const evolutionPath = unit => Object.entries(unit?.routeChoices || {})
+    .map(([key, route]) => ({ key, level: Number(key), route }))
+    .filter(entry => Number.isSafeInteger(entry.level) && entry.level >= 3 && entry.level < SAFE_LIMIT &&
+      (entry.level + 1) % 4 === 0 && entry.key === String(entry.level) && ROUTES.includes(entry.route))
+    .sort((a, b) => a.level - b.level)
+    .map(({ level, route }) => ({ level, route }));
+  const canMerge = (source, target) => {
+    if (!source || !target || source === target || source.id === target.id ||
+      !Number.isSafeInteger(source.level) || source.level < 0 || source.level >= SAFE_LIMIT || source.level !== target.level) return false;
+    const sourcePath = evolutionPath(source), targetPath = evolutionPath(target);
+    return sourcePath.length === targetPath.length && sourcePath.every((entry, index) =>
+      entry.level === targetPath[index].level && entry.route === targetPath[index].route);
+  };
   const routeRanks = routes => Object.fromEntries(ROUTES.map(route => [route, Number.isSafeInteger(routes?.[route]) && routes[route] > 0 ? routes[route] : 0]));
   const evolutionChance = level => Math.max(0.55, 0.95 - levelNumber(level) * 0.03);
   const statsForLevel = (level, routes = {}, activeRoute) => {
@@ -103,7 +118,7 @@
     move(fromSlot, toSlot) {
       if (!this._canAct() || !this._validSlot(fromSlot) || !this._validSlot(toSlot) || fromSlot === toSlot) return false;
       const source = this._unitAt(fromSlot), target = this._unitAt(toSlot);
-      if (!source || (target && (target.level !== source.level || target.level >= SAFE_LIMIT))) return false;
+      if (!source || (target && !canMerge(source, target))) return false;
       if (target) {
         this.units.splice(this.units.indexOf(source), 1);
         this._attemptEvolution(target, 'merge', { materialId: source.id, sourceRoutes: routeRanks(source.routes), cost: 0 });
@@ -164,9 +179,8 @@
 
     _syncRoutes(unit) {
       const ranks = { ice: 0, fire: 0, lightning: 0 }; let latest = -1, active = null;
-      for (const [key, route] of Object.entries(unit.routeChoices || {})) {
-        const stage = Number(key);
-        if (!Number.isSafeInteger(stage) || stage < 3 || (stage + 1) % 4 !== 0 || stage > unit.level || !ROUTES.includes(route)) continue;
+      for (const { level: stage, route } of evolutionPath(unit)) {
+        if (stage > unit.level) continue;
         ranks[route] = safe(ranks[route] + 1);
         if (stage > latest) { latest = stage; active = route; }
       }
@@ -368,6 +382,7 @@
   DefenseGame.WIDTH = WIDTH; DefenseGame.HEIGHT = HEIGHT; DefenseGame.SLOTS = SLOTS; DefenseGame.PATH = PATH;
   DefenseGame.PATH_LENGTH = PATH_LENGTH; DefenseGame.upgradeCost = upgradeCost; DefenseGame.statsForLevel = statsForLevel; DefenseGame.bladesFor = bladesFor;
   DefenseGame.SUPPLY_LANE = SUPPLY_LANE; DefenseGame.ROUTES = ROUTES;
+  DefenseGame.evolutionPath = evolutionPath; DefenseGame.canMerge = canMerge;
   DefenseGame.evolutionChance = evolutionChance; DefenseGame.upgradeSuccessRate = evolutionChance;
   root.DefenseGame = DefenseGame;
   if (typeof module !== 'undefined' && module.exports) module.exports = DefenseGame;
