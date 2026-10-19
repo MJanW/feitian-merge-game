@@ -238,6 +238,14 @@
     }
   }
 
+  // Only the extrusion compresses: the world-space landing footprint stays
+  // unchanged, while the top and everything standing on it move together.
+  function deformation(p, compression = 0) {
+    const amount = Number.isFinite(compression) ? Math.max(-.03, Math.min(.10, compression)) : 0;
+    const topOffset = p.depth * amount;
+    return { topOffset, depth: p.depth - topOffset };
+  }
+
   function draw(ctx, p, options = {}) {
     const projection = options.projection ?? .55, cameraY = options.cameraY ?? 0, currentId = options.currentId ?? 0;
     const centerY = p.y * projection + cameraY, colors = PALETTES[p.kind] || PALETTES.stone;
@@ -245,6 +253,7 @@
     const vertices = local?.map(point => ({ x: point.x, y: point.y * projection }));
     if (vertices && signedArea(vertices) < 0) vertices.reverse();
     const bounds = geometry.bounds(p), halfWidth = bounds.width / 2, halfHeight = bounds.height * projection / 2;
+    const { topOffset, depth } = deformation(p, options.compression);
     ctx.save();
     try {
       if (p.id > currentId + 1) ctx.globalAlpha *= .84;
@@ -255,12 +264,13 @@
       if (p.shape === 'circle') ellipse(ctx, 12, p.depth + 12, p.rx * 1.02, p.ry * projection * .86, '#6c786426');
       else polygon(ctx, vertices.map(v => ({ x: v.x + 13, y: v.y + p.depth + 12 })), '#6c786426');
       ctx.restore();
-      if (p.shape === 'circle') cylinder(ctx, p, projection, colors);
+      ctx.translate(0, topOffset);
+      if (p.shape === 'circle') cylinder(ctx, { ...p, depth }, projection, colors);
       else {
         let side = 0;
         for (let i = 0; i < vertices.length; i++) {
           const a = vertices[i], b = vertices[(i + 1) % vertices.length];
-          if (b.x - a.x < -.01) face(ctx, a, b, p.depth, b.y < a.y ? colors.light : colors.dark, p.kind, side++);
+          if (b.x - a.x < -.01) face(ctx, a, b, depth, b.y < a.y ? colors.light : colors.dark, p.kind, side++);
         }
       }
       if (p.shape === 'circle') { ctx.beginPath(); ctx.ellipse(0, 0, p.rx, p.ry * projection, 0, 0, TAU); }
@@ -276,6 +286,8 @@
         ellipse(ctx, 0, 0, 2.3, 2.3, p.kind === 'record' ? '#76604a' : '#577e77');
       }
       ctx.restore();
+      // Return to the fixed base coordinate system for the next-block label.
+      ctx.translate(0, -topOffset);
       if (p.id === currentId + 1) {
         ctx.fillStyle = '#526a68'; ctx.font = '600 11px "Avenir Next","PingFang SC",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText('下一座', 0, halfHeight + p.depth + 17, Math.max(44, halfWidth * 2));
@@ -283,7 +295,7 @@
     } finally { ctx.restore(); }
   }
 
-  const renderer = { draw };
+  const renderer = { draw, deformation };
   root.JumpPlatformRenderer = renderer;
   if (typeof module !== 'undefined' && module.exports) module.exports = renderer;
 })(typeof window !== 'undefined' ? window : globalThis);

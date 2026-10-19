@@ -70,11 +70,13 @@
       this.bonusIdleMs = 0;
       const startX = this._roll() < 0.5 ? 125 : 275;
       this.player = { x: startX, y: 0, z: 0 };
-      this.platforms = [Platforms.createPlatform(0, 'grass', { x: startX, y: 0 })];
+      this.platforms = [{ ...Platforms.createPlatform(0, 'grass', { x: startX, y: 0 }),
+        heading: startX < WIDTH / 2 ? 1 : -1, routeRun: 0 }];
       // Draw a fresh opening on every reset, using the same visibility and
       // reachability checks as the rest of the route. Keep the random stream
       // running across rounds instead of replaying a scripted introduction.
       for (let index = 0; index < 3; index++) this._appendPlatform();
+      this.cameraX = this._cameraTargetX(); this.cameraFromX = this.cameraX; this.cameraToX = this.cameraX;
       this.cameraY = this._cameraAnchor(); this.cameraFrom = this.cameraY; this.cameraTo = this.cameraY; this.cameraTime = 0.4;
       this.jump = null; this.fall = null; this.teeter = null; this.fallTime = 0;
       this.squeeze = 0; this.squeezeVelocity = 0;
@@ -99,15 +101,19 @@
       const depth = clamp(model.depth + (this._roll() - 0.5) * 12, 18, 60);
       const gapGroup = (id + Math.floor(this._roll() * 3)) % 3;
       const requestedDistance = [165, 215, 270][gapGroup] + this._roll() * 20;
-      const preferredX = 75 + this._roll() * 250;
+      const previousHeading = previous.heading || (previous.x < WIDTH / 2 ? 1 : -1);
+      const turn = id > 1 && (previous.routeRun >= 3 || this._roll() < 0.38);
+      const heading = turn ? -previousHeading : previousHeading;
+      const routeRun = turn ? 1 : (previous.routeRun || 0) + 1;
       const oldBounds = Platforms.bounds(previous);
       const previousOutline = Platforms.outline(previous);
       const reachable = CHARGE_MS * DISTANCE_PER_MS - 2;
       const maximum = Math.min(290, 354 - previous.radius);
       let best = null;
-      // Search a small deterministic fan instead of rejecting random samples
-      // indefinitely. Broad size changes persist late in a run. If a large
-      // roof leaves little room, shrink only the next prop until it fits.
+      // The two diagonal world axes are perpendicular before isometric
+      // projection. Continue for a short random run or turn exactly 90°;
+      // horizontal camera movement lets either axis continue beyond the board.
+      // Search finite sizes/distances along that axis, never arbitrary angles.
       for (let attempt = 0; attempt < 7 && !best; attempt++) {
         const shrink = Math.pow(0.88, attempt);
         const platform = Platforms.createPlatform(id, kind, {
@@ -117,28 +123,38 @@
         });
         const local = Platforms.bounds(platform), minimum = Math.max(160, previous.radius + platform.radius + 18);
         const desired = clamp(requestedDistance, minimum, maximum);
-        const distances = [desired, ...Array.from({ length: 13 }, (_, index) => minimum + (maximum - minimum) * index / 12)];
-        for (const distance of distances) for (let direction = -12; direction <= 12; direction++) {
-          const theta = direction * Math.PI / 32;
-          const dx = Math.sin(theta) * distance, dy = -Math.cos(theta) * distance;
+        const distances = [desired, ...Array.from({ length: 25 }, (_, index) => minimum + (maximum - minimum) * index / 24)];
+        for (const distance of distances) {
+          const dx = heading * distance / Math.SQRT2, dy = -distance / Math.SQRT2;
           const x = previous.x + dx, y = previous.y + dy;
-          if (-dy < 110 || x + local.minX < 14 || x + local.maxX > WIDTH - 14) continue;
+          const pairWidth = Math.max(oldBounds.maxX, x + local.maxX) - Math.min(oldBounds.minX, x + local.minX);
+          if (-dy < 110 || pairWidth > WIDTH - 28) continue;
           // Screen distance, not unprojected world distance, determines charge.
           // Every stable foot centre lies inside this convex top. Checking its
           // complete outline plus a margin also bounds circular sampling error.
           if (previousOutline.some(vertex => projectedDistance(dx - vertex.x, dy - vertex.y) > reachable)) continue;
           // Bodies extend down from their top. Separation is checked after
           // projection, including depth, so a tall prop cannot cover a top.
-          const horizontallyClear = x + local.minX >= oldBounds.maxX + 8 || x + local.maxX <= oldBounds.minX - 8;
-          const verticallyClear = (y + local.maxY) * PROJECTION + platform.depth <= oldBounds.minY * PROJECTION - 8;
-          if (!horizontallyClear && !verticallyClear) continue;
-          if (Math.abs(dx) < 55 && -dy * PROJECTION < 125) continue;
-          const cost = Math.abs(distance - desired) * 1.6 + Math.abs(x - preferredX) * 0.35;
-          if (!best || cost < best.cost) best = { ...platform, x, y, cost };
+          if (this.platforms.slice(-3).some(older => {
+            const bounds = Platforms.bounds(older);
+            const horizontallyClear = x + local.minX >= bounds.maxX + 8 || x + local.maxX <= bounds.minX - 8;
+            const verticallyClear = (y + local.maxY) * PROJECTION + platform.depth <= bounds.minY * PROJECTION - 8;
+            return !horizontallyClear && !verticallyClear;
+          })) continue;
+          const cost = Math.abs(distance - desired);
+          if (!best || cost < best.cost) best = { ...platform, x, y, heading, routeRun, cost };
         }
       }
       if (!best) throw new Error('No reachable jump platform fits the board');
       delete best.cost; this.platforms.push(best);
+    }
+
+    _cameraTargetX(current = this._current(), next = this._next()) {
+      // Bounds include the full rotated top. Generated pairs fit inside these
+      // margins; centring their union keeps both models and supported feet in
+      // view even after several straight jumps in the same world direction.
+      const from = Platforms.bounds(current), to = Platforms.bounds(next);
+      return (WIDTH - Math.min(from.minX, to.minX) - Math.max(from.maxX, to.maxX)) / 2;
     }
 
     _current() { return this.platforms.find(platform => platform.id === this.currentId); }
@@ -157,12 +173,17 @@
       this.chargePoseStart = this.squeeze;
       this.chargePoseVelocity = this.squeeze || this.squeezeVelocity ? this.squeezeVelocity - 500 / CHARGE_MS : 0;
       this.chargePoseDuration = clamp(Math.abs(this.squeeze) * 480, 60, 240);
+      const platform = this._current();
+      this.blockPoseStart = platform.compression || 0;
+      this.blockPoseVelocity = this.blockPoseStart || platform.compressionVelocity ? (platform.compressionVelocity || 0) - 100 / CHARGE_MS : 0;
+      this.blockPoseDuration = clamp(Math.abs(this.blockPoseStart) * 600, 60, 120);
       this.bonusIdleMs = 0;
       this._notify(true); return true;
     }
 
     releaseCharge() {
       if (this.destroyed || this.isPaused || this.phase !== 'charging') return false;
+      this._chargePlatformPose(this._heldCharge());
       const next = this._next(), dx = next.x - this.player.x, dy = next.y - this.player.y;
       const distanceToTarget = projectedDistance(dx, dy), distance = this._heldCharge() * DISTANCE_PER_MS;
       this.jump = { fromX: this.player.x, fromY: this.player.y,
@@ -170,7 +191,7 @@
         toY: this.player.y + dy / distanceToTarget * distance,
         time: 0, duration: 0.3 + distance / 1000,
         height: this.reducedMotion ? 54 : 56 + distance * 0.18,
-        direction: dx < 0 ? -1 : 1 };
+        direction: dx < 0 ? -1 : 1, platformOffset: this._platformOffset(this._current()) };
       this.jump.stableLanding = this._landingAt(this.jump.toX, this.jump.toY).ratio >= 0.5;
       this.teeter = null;
       this.phase = 'jumping'; this.chargeMs = 0;
@@ -272,6 +293,7 @@
         return;
       }
       this.phase = 'idle'; this.landingPulse = 0.32;
+      if (!this.reducedMotion) support.platform.compressionVelocity = (support.platform.compressionVelocity || 0) + .45;
       // An impact adds velocity to the same spring used for charging/takeoff;
       // the pose itself never snaps to a different scale at a phase boundary.
       if (!this.reducedMotion) this.squeezeVelocity += 3.4;
@@ -293,6 +315,7 @@
       // visited set, remembers the journey. Collision only uses current/next.
       this.platforms = this.platforms.filter(platform => platform.id >= this.currentId - 2);
       while (this.platforms[this.platforms.length - 1].id < this.currentId + 3) this._appendPlatform();
+      this.cameraFromX = this.cameraX || 0; this.cameraToX = this._cameraTargetX();
       this._event('land', { points, perfect, samePlatform: false, score: this.score, hops: this.hops });
       if (perfect) this._event('perfect', { points, combo: this.combo, score: this.score });
       this._evolveFrom(previousScore);
@@ -320,6 +343,40 @@
       this.squeezeVelocity = pose !== this.squeeze ? 0 : (held < CHARGE_MS ? 500 / CHARGE_MS : 0) +
         this.chargePoseStart * 6 * t * (t - 1) / duration +
         this.chargePoseVelocity * (1 - 4 * t + 3 * t * t);
+    }
+
+    _chargePlatformPose(heldMs) {
+      const platform = this._current();
+      if (this.reducedMotion) { platform.compression = 0; platform.compressionVelocity = 0; return; }
+      const held = clamp(heldMs, 0, CHARGE_MS), durationMs = this.blockPoseDuration || 60;
+      const t = clamp(held / durationMs, 0, 1), rest = 1 - t, seconds = durationMs / 1000;
+      const start = this.blockPoseStart || 0, velocity = this.blockPoseVelocity || 0;
+      const pose = held / CHARGE_MS * .1 + start * rest * rest * (1 + 2 * t) + velocity * seconds * t * rest * rest;
+      platform.compression = clamp(pose, -.02, .1);
+      platform.compressionVelocity = pose !== platform.compression ? 0 : (held < CHARGE_MS ? 100 / CHARGE_MS : 0) +
+        start * 6 * t * (t - 1) / seconds + velocity * (1 - 4 * t + 3 * t * t);
+    }
+
+    _stepPlatforms(dt) {
+      for (const platform of this.platforms) {
+        if (this.reducedMotion) { platform.compression = 0; platform.compressionVelocity = 0; continue; }
+        if (this.phase === 'charging' && platform.id === this.currentId) continue;
+        let compression = platform.compression || 0, velocity = platform.compressionVelocity || 0;
+        velocity += (-compression * 320 - velocity * 22) * dt;
+        compression = clamp(compression + velocity * dt, -.02, .1);
+        if (Math.abs(compression) < .00001 && Math.abs(velocity) < .0001) compression = velocity = 0;
+        platform.compression = compression; platform.compressionVelocity = velocity;
+      }
+      if (this.phase === 'charging') this._chargePlatformPose(this.chargeMs - this.chargeRemainderStart);
+    }
+
+    _platformOffset(platform) { return this.reducedMotion || !platform ? 0 : platform.depth * (platform.compression || 0); }
+
+    _footOffset() {
+      if (this.reducedMotion) return 0;
+      if (this.phase === 'idle' || this.phase === 'charging') return this._platformOffset(this._current());
+      if (this.phase === 'jumping') return (this.jump.platformOffset || 0) * (1 - smooth(clamp(this.jump.time / this.jump.duration / .3, 0, 1)));
+      return 0;
     }
 
     _stepPose(dt) {
@@ -350,6 +407,7 @@
         this.effects = this.effects.filter(effect => effect.age < 0.9);
         this.cameraTime = Math.min(0.4, this.cameraTime + dt);
         this.cameraY = this.cameraFrom + (this.cameraTo - this.cameraFrom) * smooth(this.cameraTime / 0.4);
+        this.cameraX = (this.cameraFromX || 0) + ((this.cameraToX || 0) - (this.cameraFromX || 0)) * smooth(this.cameraTime / 0.4);
         if (this.status === 'lost') continue;
         if (this.phase === 'charging') this.chargeMs = Math.min(CHARGE_MS + this.chargeRemainderStart, this.chargeMs + STEP_MS);
         else if (this.phase === 'jumping') {
@@ -373,10 +431,11 @@
           if (this.fallTime >= FALL_SECONDS) this._finish();
         } else if (this.phase === 'idle') this._waitForBonus(STEP_MS);
         this._stepPose(dt);
+        this._stepPlatforms(dt);
       }
       // Include the last partial tick so visual feedback matches the same
       // precise press duration used by releaseCharge, without mutating render.
-      if (this.phase === 'charging') this._chargePose(this._heldCharge());
+      if (this.phase === 'charging') { this._chargePose(this._heldCharge()); this._chargePlatformPose(this._heldCharge()); }
       this._notify();
     }
 
@@ -408,7 +467,7 @@
       const y = platform.y * PROJECTION + this.cameraY;
       if (y < -150 || y > this.visibleHeight + 100) return;
       const renderer = root.JumpPlatformRenderer || PlatformRenderer;
-      if (renderer) renderer.draw(this.ctx, platform, { cameraY: this.cameraY, projection: PROJECTION, currentId: this.currentId });
+      if (renderer) renderer.draw(this.ctx, platform, { cameraY: this.cameraY, projection: PROJECTION, currentId: this.currentId, compression: this.reducedMotion ? 0 : platform.compression || 0 });
     }
 
     _flipSprite(centerY) {
@@ -430,7 +489,7 @@
 
     _sprite() {
       const ctx = this.ctx, state = this.getState(), info = this.levels[state.levelIndex] || {};
-      const image = this.images.get(info.image), screenY = this.player.y * PROJECTION + this.cameraY;
+      const image = this.images.get(info.image), screenY = this.player.y * PROJECTION + this.cameraY + this._footOffset();
       const falling = this.phase === 'falling';
       const alpha = falling ? 1 - smooth(clamp((this.fallTime - 0.24) / (FALL_SECONDS - 0.24), 0, 1)) : 1;
       ctx.save(); ctx.globalAlpha = alpha;
@@ -506,10 +565,11 @@
         const x = 25 + (i * 113) % 355, y = (85 + (i * 83) % 475) * this.visibleHeight / HEIGHT;
         ctx.beginPath(); ctx.moveTo(x - 3, y); ctx.lineTo(x + 3, y); ctx.moveTo(x, y - 3); ctx.lineTo(x, y + 3); ctx.stroke();
       }
+      ctx.save(); ctx.translate(this.cameraX || 0, 0);
       const current = this._current(), next = this._next();
       ctx.strokeStyle = '#9f94874d'; ctx.lineWidth = 2; ctx.setLineDash([3, 8]);
-      ctx.beginPath(); ctx.moveTo(current.x, current.y * PROJECTION + this.cameraY);
-      ctx.lineTo(next.x, next.y * PROJECTION + this.cameraY); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(current.x, current.y * PROJECTION + this.cameraY + this._platformOffset(current));
+      ctx.lineTo(next.x, next.y * PROJECTION + this.cameraY + this._platformOffset(next)); ctx.stroke(); ctx.setLineDash([]);
       // Keep the opening instructions clear; reveal distant scenery on the
       // first charge, when the introduction disappears.
       let spriteDrawn = false;
@@ -524,7 +584,7 @@
       if (!this.reducedMotion && this.landingPulse > 0) {
         ctx.strokeStyle = '#b18a6177'; ctx.lineWidth = 2;
         const r = 18 + (0.32 - this.landingPulse) * 110;
-        this._ellipse(this.player.x, this.player.y * PROJECTION + this.cameraY, r, r * PROJECTION); ctx.stroke();
+        this._ellipse(this.player.x, this.player.y * PROJECTION + this.cameraY + this._footOffset(), r, r * PROJECTION); ctx.stroke();
       }
       if (!spriteDrawn) this._sprite();
       for (const effect of this.effects) {
@@ -533,6 +593,7 @@
         ctx.fillText(`+${effect.points}`, effect.x, effect.y * PROJECTION + this.cameraY - 66 - (this.reducedMotion ? 0 : effect.age * 35));
         ctx.restore();
       }
+      ctx.restore();
       if (this.evolutionPulse > 0) {
         ctx.save(); ctx.globalAlpha = Math.min(1, this.evolutionPulse * 4);
         ctx.fillStyle = '#94714f'; ctx.font = 'bold 17px system-ui'; ctx.textAlign = 'center';
