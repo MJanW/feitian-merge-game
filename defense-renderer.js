@@ -1,11 +1,13 @@
 (function (root) {
   'use strict';
   const catalog = typeof module !== 'undefined' && module.exports ? require('./defense-enemies.js') : root.DefenseEnemies;
-  const INK = '#1d332f', PAPER = '#fffdf9', ORANGE = '#d45538';
+  const INK = '#294329', PAPER = '#fff8dc', ORANGE = '#e98235';
+  const engine = () => root.DefenseGame;
+  const ABILITY = { normal: '#e7eddf', ice: '#9de6f2', fire: '#ffb44d', lightning: '#f7e76a' };
   const TAU = Math.PI * 2;
   const FONT = '"Avenir Next", "PingFang SC", sans-serif';
   const MONO = '"SFMono-Regular", Consolas, monospace';
-  const PATH = [{ x: 38, y: -35 }, { x: 38, y: 315 }, { x: 352, y: 315 }, { x: 352, y: 345 }];
+  const PATH = [{ x: 32, y: -35 }, { x: 32, y: 315 }, { x: 366, y: 315 }, { x: 366, y: 345 }];
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const number = (n, fallback = 0) => Number.isFinite(n) ? n : fallback;
 
@@ -40,48 +42,63 @@
     line(ctx, -4, -3, 0, 1, color, 1.5); line(ctx, 0, 1, 4, -3, color, 1.5); ctx.restore();
   }
 
+  function round(ctx, x, y, w, h, radius, fill, stroke, width = 1) {
+    const r = Math.min(radius, w / 2, h / 2);
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.stroke(); }
+  }
+  function bush(ctx, x, y, scale = 1) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+    ellipse(ctx, 0, 7, 18, 6, '#3c793b44');
+    for (const [dx, dy, r] of [[-10, 0, 10], [0, -6, 13], [12, 1, 10]]) {
+      ellipse(ctx, dx, dy, r, r * .8, '#518a38', '#366a35', 1.6);
+      ellipse(ctx, dx - 2, dy - 3, r * .65, r * .48, '#79ae44');
+    }
+    ctx.restore();
+  }
+  function flower(ctx, x, y) {
+    line(ctx, x, y + 6, x, y, '#558739', 1.5);
+    for (let i = 0; i < 5; i++) ellipse(ctx, x + Math.cos(i * TAU / 5) * 3.2, y + Math.sin(i * TAU / 5) * 3.2, 2.6, 2.6, '#fffbdc');
+    ellipse(ctx, x, y, 2.3, 2.3, '#efbd4b');
+  }
   function terrain(ctx, game) {
-    ctx.fillStyle = '#e9eddf'; ctx.fillRect(0, 0, 400, 650);
-    // Two quiet lawns keep the twelve pieces legible, with a route carved into
-    // the field rather than an opaque card laid over the whole game.
-    ctx.fillStyle = '#eff1e6'; ctx.fillRect(78, 80, 246, 196); ctx.fillRect(76, 355, 244, 172);
+    ctx.fillStyle = '#86b74d'; ctx.fillRect(0, 0, 400, 650);
+    // A continuous lawn, rather than separate card boxes, makes all 24 cells
+    // feel like part of the playfield shown in the reference video.
+    for (let row = 0; row < 10; row++) for (let col = 0; col < 6; col++) {
+      ctx.fillStyle = (row + col) % 2 ? '#9fc85d' : '#a9cf66';
+      ctx.fillRect(50 + col * 70, 54 + row * 70, 70, 70);
+    }
     const path = game.path || PATH;
     ctx.lineJoin = 'round'; ctx.lineCap = 'butt';
-    roadPath(ctx, path); ctx.strokeStyle = '#bdbea9'; ctx.lineWidth = 64; ctx.stroke();
-    roadPath(ctx, path); ctx.strokeStyle = '#e0d9bf'; ctx.lineWidth = 58; ctx.stroke();
-    roadPath(ctx, path); ctx.strokeStyle = '#e9e1cb'; ctx.lineWidth = 48; ctx.stroke();
-    for (let y = 38; y < 290; y += 62) chevron(ctx, 38, y, 0);
-    for (let x = 96; x < 325; x += 64) chevron(ctx, x, 315, -Math.PI / 2);
-    // The hatching lane has its own color and travels upward. Keeping a gap
-    // below the gate makes it distinct from the downward enemy route.
-    ctx.fillStyle = '#b8cbb6'; ctx.fillRect(321, 375, 62, 275);
-    ctx.fillStyle = '#d4e0cc'; ctx.fillRect(324, 378, 56, 272);
-    ctx.fillStyle = '#e4ebda'; ctx.fillRect(329, 382, 46, 268);
-    for (let y = 400; y < 635; y += 51) chevron(ctx, 352, y, Math.PI, '#92ad8e');
-    for (const [x, y, s] of [[90, 49, 1], [311, 118, .8], [309, 262, .8], [88, 280, .8], [150, 79, .7], [293, 79, .8], [13, 381, .8], [39, 464, 1], [30, 539, .9], [110, 557, .8], [229, 539, .7], [302, 570, .8], [220, 609, 1]]) grass(ctx, x, y, s);
-    // Small geometric flower beds give direction and scale without blocking play.
-    for (const [x, y] of [[321, 53], [28, 423], [279, 577]]) {
-      ellipse(ctx, x, y, 10, 4, '#cdd8b9');
-      for (let j = 0; j < 4; j++) {
-        const px = x + Math.cos(j * 2.2) * 6, py = y - 3 + Math.sin(j * 2.2) * 4;
-        ellipse(ctx, px, py, 2.2, 2.2, j % 2 ? '#f5e4a8' : '#e0a17f');
-      }
+    roadPath(ctx, path); ctx.strokeStyle = '#47733b'; ctx.lineWidth = 63; ctx.stroke();
+    roadPath(ctx, path); ctx.strokeStyle = '#f1e5b7'; ctx.lineWidth = 57; ctx.stroke();
+    roadPath(ctx, path); ctx.strokeStyle = '#85877c'; ctx.lineWidth = 47; ctx.stroke();
+    ctx.save(); ctx.setLineDash([10, 12]); roadPath(ctx, path); ctx.strokeStyle = '#eee8cf'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+    round(ctx, 341, 373, 51, 288, 18, '#4c773d', '#365d31', 2);
+    round(ctx, 346, 378, 41, 282, 15, '#75974e');
+    for (let y = 399; y < 635; y += 51) chevron(ctx, 366, y, Math.PI, '#d4dda0');
+    // Timber gate between invading bottles and the egg supply lane.
+    for (let i = 0; i < 4; i++) {
+      const x = 339 + i * 16;
+      polygon(ctx, [[x, 352], [x, 332], [x + 6, 324], [x + 12, 332], [x + 12, 352]], '#b77d42', '#644b2f', 2);
+      line(ctx, x + 3, 336, x + 3, 348, '#deb16a', 1.5);
     }
-    text(ctx, '入口', 38, 14, 9, '#756d55', '600', 'center');
-    text(ctx, '布阵 · 合成 · 守住', 92, 38, 11, '#536957', '600');
-    line(ctx, 92, 53, 284, 53, '#b8c4ac');
-    text(ctx, 'FEITIAN DEFENSE', 92, 66, 8, '#667863', '500', 'left', MONO);
-    ctx.fillStyle = '#3f6559'; ctx.fillRect(320, 340, 64, 8);
-    for (let i = 0; i < 5; i++) polygon(ctx, [[324 + i * 12, 340], [330 + i * 12, 340], [325 + i * 12, 348], [319 + i * 12, 348]], '#e7c480');
-    ctx.fillStyle = '#264a3f'; ctx.fillRect(318, 335, 6, 20); ctx.fillRect(380, 335, 6, 20);
-    text(ctx, '防线', 352, 363, 10, '#365346', '600', 'center');
-    // A low source arch suggests that eggs continue emerging from below.
-    ellipse(ctx, 352, 644, 27, 10, '#b8cbb6', '#94ad8a');
-    ellipse(ctx, 352, 642, 21, 5, '#95b28f');
-    text(ctx, '靠右击蛋，召集同伴', 91, 579, 11, '#4d6853', '600');
-    text(ctx, '靠左迎敌，守住防线', 91, 598, 11, '#5b705c');
-    if (number(game.reserve) > 0) text(ctx, `待入场 ${Math.floor(game.reserve)} · 腾出空位后加入`, 91, 626, 10, '#7d6434');
-    else text(ctx, '拖动换位 · 同阶合成', 91, 626, 10, '#6c7a65');
+    round(ctx, 337, 340, 65, 7, 2, '#865831', '#644b2f', 1.5);
+    bush(ctx, 327, 27, 1.1); bush(ctx, 15, 605, 1.2); bush(ctx, 309, 602, .8);
+    for (const [x, y] of [[69, 36], [310, 45], [28, 401], [40, 543], [281, 593], [169, 615]]) flower(ctx, x, y);
+    round(ctx, 87, 13, 197, 29, 13, '#365e35', '#244a2c', 2);
+    text(ctx, '飞刃守卫 · 无限进化', 185, 28, 12, '#fff7d3', '800', 'center');
+    round(ctx, 63, 580, 229, 48, 12, '#5c843d', '#3d6b34', 2);
+    text(ctx, '左侧迎敌  ·  右侧击蛋', 177, 594, 11, '#fff9da', '700', 'center');
+    text(ctx, number(game.reserve) > 0 ? `待命 ${Math.floor(game.reserve)} 位 · 点击空位部署` : '拖动换位 · 同级合成', 177, 614, 10, '#e7edbd', '600', 'center');
+    ellipse(ctx, 366, 646, 23, 9, '#314e2d');
+    ellipse(ctx, 366, 642, 23, 7, '#bc9b62', '#5b6235', 2);
+    ellipse(ctx, 366, 641, 17, 4, '#496c38');
   }
 
   function selectedUnit(game, options) {
@@ -89,57 +106,89 @@
   }
   function cell(ctx, slot, unit, selected, canMerge, hovered) {
     const { x, y } = slot;
-    ctx.fillStyle = '#cad1bc'; ctx.fillRect(x - 31, y - 26, 62, 61);
-    ctx.fillStyle = unit ? '#fffdf4' : '#e2e7d7'; ctx.fillRect(x - 31, y - 30, 62, 60);
-    ctx.strokeStyle = selected ? ORANGE : canMerge ? '#65996c' : '#bdc8b4';
-    ctx.lineWidth = selected || canMerge ? 2 : 1;
-    ctx.strokeRect(x - 31, y - 30, 62, 60);
-    if (hovered) { ctx.fillStyle = canMerge || !unit ? '#95b98c30' : '#d4553820'; ctx.fillRect(x - 30, y - 29, 60, 58); }
-    if (!unit) {
-      ellipse(ctx, x, y, 2, 2, '#a8b79d');
-      text(ctx, String(number(slot.id, 0) + 1).padStart(2, '0'), x - 24, y + 21, 7, '#86957c', '400', 'left', MONO);
+    const base = (Math.round(x / 70) + Math.round(y / 70)) % 2 ? '#acd269' : '#9fc85b';
+    round(ctx, x - 32, y - 32, 64, 64, 7, selected ? '#dfe88b' : hovered ? '#c4de7a' : base, selected ? '#ffeb81' : canMerge ? '#fcf3bc' : '#759c4690', selected || canMerge ? 3 : 1.2);
+    if (unit) ellipse(ctx, x, y + 13, 24, 8, '#6d983c66');
+    else {
+      line(ctx, x - 4, y + 1, x + 4, y + 1, '#6a963f66', 1.6);
+      line(ctx, x, y - 3, x, y + 5, '#6a963f66', 1.6);
     }
-    if (selected || canMerge) {
-      const color = selected ? ORANGE : '#4f8358';
-      for (const side of [-1, 1]) {
-        line(ctx, x + side * 35, y - 32, x + side * 35, y - 22, color, 2);
-        line(ctx, x + side * 35, y - 32, x + side * 25, y - 32, color, 2);
-        line(ctx, x + side * 35, y + 32, x + side * 35, y + 22, color, 2);
-        line(ctx, x + side * 35, y + 32, x + side * 25, y + 32, color, 2);
-      }
+    if (selected) {
+      for (const direction of [-1, 1]) polygon(ctx, [[x + direction * 39, y - 4], [x + direction * 34, y], [x + direction * 39, y + 4]], '#fff4a0', '#b08b35', .8);
     }
   }
 
   function getImage(images, info, level) {
+    if (info?.image && typeof info.image === 'object') return info.image;
     if (!images) return null;
-    return typeof images.get === 'function' ? images.get(level) || images.get(info?.image) : images[level];
+    const index = Number.isInteger(info?.photoIndex) ? info.photoIndex : level;
+    return typeof images.get === 'function' ? images.get(index) || images.get(info?.image) : images[index];
+  }
+  function form(unit, options) {
+    if (typeof options.formForLevel === 'function') return options.formForLevel(unit.level) || {};
+    const levels = Array.isArray(options.levels) ? options.levels : options.levels?.levels || [];
+    const count = Math.max(1, levels.length - 1), photoIndex = unit.level % count;
+    return { ...levels[photoIndex + 1], photoIndex, cycle: Math.floor(unit.level / count) };
+  }
+  function crop(image, frame) {
+    const valid = Array.isArray(frame) && frame.length === 4 && frame.every(Number.isFinite) && frame[0] >= 0 && frame[1] >= 0 && frame[2] > 0 && frame[3] > 0 && frame[0] + frame[2] <= image.naturalWidth && frame[1] + frame[3] <= image.naturalHeight;
+    return valid ? frame : [0, 0, image.naturalWidth, image.naturalHeight];
   }
   function portrait(ctx, unit, options, x = unit.x, y = unit.y, opacity = 1) {
-    const levels = Array.isArray(options.levels) ? options.levels : options.levels?.levels || [];
-    const info = levels[unit.level + 1] || {}, image = getImage(options.images, info, unit.level);
+    const info = form(unit, options), image = getImage(options.images, info, unit.level);
+    const stats = engine()?.statsForLevel?.(unit.level) || {}, ability = stats.ability || 'normal';
     const pulse = options.reducedMotion ? 0 : clamp(number(unit.pulse) / .6, 0, 1);
-    ctx.save(); ctx.globalAlpha *= opacity; ctx.translate(x, y + 16);
-    ellipse(ctx, 1, 1, 22, 5, '#1d332f1c');
+    ctx.save(); ctx.globalAlpha *= opacity; ctx.translate(x, y + 15);
+    ellipse(ctx, 1, 2, 21, 6, '#345d3555', '#d9e5a650', 1);
     const spring = 1 + Math.sin(pulse * Math.PI) * .08;
     ctx.scale(1 / spring, spring);
     if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
-      const f = info.frame;
-      const valid = Array.isArray(f) && f.length === 4 && f.every(Number.isFinite) && f[0] >= 0 && f[1] >= 0 && f[2] > 0 && f[3] > 0 && f[0] + f[2] <= image.naturalWidth && f[1] + f[3] <= image.naturalHeight;
-      const source = valid ? f : [0, 0, image.naturalWidth, image.naturalHeight];
-      const scale = Math.min(58 / source[2], 61 / source[3]);
+      const source = crop(image, info.frame), scale = Math.min(49 / source[2], 52 / source[3]);
       const w = source[2] * scale, h = source[3] * scale;
       ctx.drawImage(image, ...source, -w / 2, -h, w, h);
     } else {
-      // A deliberate icon placeholder also works offline if one image is missing.
-      ctx.fillStyle = info.color || '#d8a37b'; ctx.fillRect(-11, -29, 22, 29);
-      ellipse(ctx, 0, -34, 10, 10, '#f2cdad');
+      round(ctx, -11, -29, 22, 29, 6, info.color || '#dbb071', '#4c613c', 1.5);
+      ellipse(ctx, 0, -34, 10, 10, '#f2cdad', '#735e3b', 1.5);
       line(ctx, -16, -22, 16, -22, '#50725d', 4);
     }
     ctx.restore();
     ctx.save(); ctx.globalAlpha *= opacity;
-    ctx.fillStyle = unit.level === 10 ? '#b78b35' : INK; ctx.fillRect(x - 15, y + 21, 30, 14);
-    text(ctx, `Lv.${unit.level}`, x, y + 28, 8, PAPER, '600', 'center', MONO);
+    const label = `Lv.${unit.level + 1}`, width = Math.max(32, label.length * 5.1 + 10);
+    round(ctx, x - width / 2, y + 19, width, 15, 5, ability === 'normal' ? '#365e35' : '#354c43', ability === 'normal' ? '#d6e59b' : ABILITY[ability], 1.4);
+    text(ctx, label, x, y + 27, 8, '#fffce6', '800', 'center', MONO);
+    if (ability !== 'normal') {
+      round(ctx, x + 15, y - 27, 16, 15, 6, ABILITY[ability], '#406441', 1.2);
+      text(ctx, ability === 'ice' ? '❄' : ability === 'fire' ? '炎' : 'ϟ', x + 23, y - 19, 10, '#254e4b', '800', 'center');
+    }
     ctx.restore();
+  }
+  function orbit(ctx, unit, game, options) {
+    const blades = engine()?.bladesFor?.(unit, number(game.elapsed)) || [];
+    const stats = engine()?.statsForLevel?.(unit.level) || {};
+    const ability = stats.ability || 'normal', color = ABILITY[ability] || ABILITY.normal;
+    for (const blade of blades) {
+      if (![blade.x, blade.y, blade.innerX, blade.innerY, blade.outerX, blade.outerY].every(Number.isFinite)) continue;
+      const radius = Math.hypot(blade.x - unit.x, blade.y - unit.y), angle = Math.atan2(blade.y - unit.y, blade.x - unit.x);
+      if (!options.reducedMotion) {
+        ctx.beginPath(); ctx.arc(unit.x, unit.y, radius, angle - .36, angle);
+        ctx.strokeStyle = ability === 'normal' ? '#fff9d840' : color + '65'; ctx.lineWidth = 5; ctx.stroke();
+        ctx.beginPath(); ctx.arc(unit.x, unit.y, radius, angle - .17, angle);
+        ctx.strokeStyle = color + 'aa'; ctx.lineWidth = 2.5; ctx.stroke();
+      }
+      const dx = blade.outerX - blade.innerX, dy = blade.outerY - blade.innerY, length = Math.max(1, Math.hypot(dx, dy));
+      const nx = -dy / length, ny = dx / length, bx = blade.innerX + dx * .25, by = blade.innerY + dy * .25;
+      line(ctx, blade.innerX, blade.innerY, bx, by, '#665439', 5.3);
+      line(ctx, bx + nx * 5, by + ny * 5, bx - nx * 5, by - ny * 5, '#4d613d', 2.5);
+      polygon(ctx, [[bx + nx * 3.5, by + ny * 3.5], [blade.outerX, blade.outerY], [bx - nx * 3.5, by - ny * 3.5]], color, '#355046', 1.4);
+      line(ctx, bx, by, blade.outerX, blade.outerY, '#fffef0', 1.2);
+      if (ability === 'fire') {
+        polygon(ctx, [[bx + nx * 5, by + ny * 5], [bx - dx * .16 + nx * 10, by - dy * .16 + ny * 10], [bx + dx * .35 + nx * 3, by + dy * .35 + ny * 3]], '#f79a3d88');
+      } else if (ability === 'lightning') {
+        const ex = blade.outerX, ey = blade.outerY;
+        line(ctx, ex, ey, ex + nx * 4 - dx * .1, ey + ny * 4 - dy * .1, '#ffed8a', 2);
+        line(ctx, ex + nx * 4 - dx * .1, ey + ny * 4 - dy * .1, ex + nx * 6 + dx * .1, ey + ny * 6 + dy * .1, '#fff8c8', 1.5);
+      }
+    }
   }
 
   function bottlePath(ctx, kind) {
@@ -219,20 +268,28 @@
   function enemy(ctx, e, game, options) {
     if (!Number.isFinite(e.x) || !Number.isFinite(e.y) || e.y < -45 || e.y > 700) return;
     const data = catalog?.byKind?.[e.kind] || { tint: '#c58a39' };
-    const isBoss = Boolean(e.boss || e.isBoss), scale = isBoss ? 1.24 : .9;
+    const isBoss = Boolean(e.boss || e.isBoss), scale = isBoss ? 1.2 : 1;
     const time = number(game.elapsed) * 1000;
     const wobble = options.reducedMotion ? 0 : Math.sin(time / 170 + number(e.id) * 1.7) * .035;
     const hit = clamp(number(e.hit) / .12, 0, 1);
-    ellipse(ctx, e.x + 1.5, e.y + 18 * scale, 12 * scale, 4, '#35423222');
+    ellipse(ctx, e.x + 1.5, e.y + 19 * scale, 10 * scale, 4, '#29432944');
+    const images = options.enemyImages, image = typeof images?.get === 'function' ? images.get(e.kind) : images?.[e.kind];
     ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(wobble); ctx.scale(scale, scale);
-    bottle(ctx, e.kind, hit); ctx.restore();
+    if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
+      const source = crop(image, data.frame), ratio = Math.min(21 / source[2], 42 / source[3]);
+      const w = source[2] * ratio, h = source[3] * ratio;
+      ctx.drawImage(image, ...source, -w / 2, 20 - h, w, h);
+      if (hit > 0) ellipse(ctx, 0, 0, w * .7, h * .45, null, `rgba(255,245,161,${hit})`, 2);
+    } else { ctx.scale(.7, .85); bottle(ctx, e.kind, hit); }
+    if (number(e.slowTime) > 0) ellipse(ctx, 0, 18, 13, 5, '#b4f3ff55', '#d3fbff', 1.5);
+    ctx.restore();
     const hp = Math.max(0, Math.ceil(number(e.hp))), ratio = clamp(number(e.hp) / Math.max(1, number(e.maxHp, e.hp)), 0, 1);
-    const barY = e.y - 30 * scale, barW = isBoss ? 34 : 27;
-    ctx.fillStyle = '#fffdf9ed'; ctx.fillRect(e.x - barW / 2 - 2, barY - 11, barW + 4, 16);
-    text(ctx, hp, e.x, barY - 5, 9, '#263c33', '700', 'center', MONO);
-    ctx.fillStyle = '#d7dac8'; ctx.fillRect(e.x - barW / 2, barY + 2, barW, 3);
-    ctx.fillStyle = ratio < .3 ? ORANGE : data.tint; ctx.fillRect(e.x - barW / 2, barY + 2, barW * ratio, 3);
-    if (isBoss) text(ctx, '◆', e.x, barY - 18, 10, '#a77728', '700', 'center');
+    const barY = e.y - 29 * scale, barW = isBoss ? 31 : 25;
+    round(ctx, e.x - barW / 2 - 1, barY - 11, barW + 2, 16, 4, '#fff9db', '#5e6945', 1);
+    text(ctx, hp, e.x, barY - 5, hp > 999 ? 7 : 9, '#34482e', '800', 'center', MONO);
+    ctx.fillStyle = '#d2d7a6'; ctx.fillRect(e.x - barW / 2 + 2, barY + 1, barW - 4, 2.5);
+    ctx.fillStyle = ratio < .3 ? '#df6c44' : '#629b47'; ctx.fillRect(e.x - barW / 2 + 2, barY + 1, (barW - 4) * ratio, 2.5);
+    if (isBoss) text(ctx, '♛', e.x, barY - 19, 15, '#f7d15e', '800', 'center');
   }
 
   function eggPath(ctx) {
@@ -250,7 +307,7 @@
     ellipse(ctx, egg.x, egg.y + 18, 21, 6, '#b5cd9f', '#9bb58a');
     ctx.save(); ctx.translate(egg.x, egg.y); ctx.rotate(sway);
     eggPath(ctx); ctx.fillStyle = '#fff9e9'; ctx.fill();
-    ctx.strokeStyle = '#b7a683'; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.strokeStyle = '#7b7948'; ctx.lineWidth = 2; ctx.stroke();
     ctx.save(); eggPath(ctx); ctx.clip();
     ellipse(ctx, -7, -9, 5, 10, '#ffffffb8');
     ellipse(ctx, 12, 9, 4, 16, '#e0cd9b45');
@@ -275,7 +332,24 @@
     const fade = 1 - t, motion = options.reducedMotion ? .35 : t;
     ctx.save(); ctx.globalAlpha *= fade;
     const color = e.color || e.tint || (e.type === 'leak' ? ORANGE : '#d7ad4a');
-    if (e.type === 'score' || e.type === 'damage') {
+    if (e.type === 'slash') {
+      ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(number(e.angle));
+      ctx.beginPath(); ctx.arc(0, 0, 8 + motion * 13, -.8, 1.05);
+      ctx.strokeStyle = ABILITY[e.ability] || '#fff6c1'; ctx.lineWidth = 4 * fade + .5; ctx.stroke(); ctx.restore();
+    } else if (e.type === 'fire') {
+      const r = number(e.radius, 42) * (.35 + motion * .65);
+      ellipse(ctx, e.x, e.y, r, r, '#ffb94b25', '#fbb94d', 2 * fade + .5);
+      for (let i = 0; i < 7; i++) {
+        const a = i * TAU / 7, x = e.x + Math.cos(a) * r, y = e.y + Math.sin(a) * r;
+        polygon(ctx, [[x - 3, y + 5], [x + 2, y - 8], [x + 6, y + 3]], '#f29438b0');
+      }
+    } else if (e.type === 'chain' && Number.isFinite(e.fromX) && Number.isFinite(e.fromY)) {
+      const dx = e.x - e.fromX, dy = e.y - e.fromY, length = Math.max(1, Math.hypot(dx, dy));
+      ctx.beginPath(); ctx.moveTo(e.fromX, e.fromY);
+      for (let i = 1; i < 6; i++) { const t = i / 6, offset = (i % 2 ? 1 : -1) * 5; ctx.lineTo(e.fromX + dx * t - dy / length * offset, e.fromY + dy * t + dx / length * offset); }
+      ctx.lineTo(e.x, e.y); ctx.strokeStyle = '#e6a83b'; ctx.lineWidth = 5; ctx.stroke();
+      ctx.strokeStyle = '#fff8b8'; ctx.lineWidth = 2.2; ctx.stroke();
+    } else if (e.type === 'score' || e.type === 'damage') {
       text(ctx, e.text || `${e.type === 'score' ? '+' : '−'}${Math.ceil(number(e.value, number(e.amount)))}`, e.x, e.y - 20 - motion * 25, 13, e.type === 'score' ? '#3a6f4a' : ORANGE, '700', 'center', MONO);
     } else if (e.type === 'merge' || e.type === 'upgrade') {
       ellipse(ctx, e.x, e.y - 3, 18 + motion * 28, 18 + motion * 28, null, '#d5a443', 2 * fade + .7);
@@ -318,7 +392,7 @@
       ctx.clearRect(0, 0, 400, 650); terrain(ctx, game);
       const units = game.units || [], slots = game.slots || [], active = selectedUnit(game, options);
       if (active) {
-        const range = number(active.range, 180 + active.level * 5);
+        const range = number(engine()?.statsForLevel?.(active.level)?.orbitRadius, number(active.range, 82));
         ctx.save(); ctx.setLineDash([4, 5]);
         ellipse(ctx, active.x, active.y, range, range, '#386c4e08', '#577b4d50');
         ctx.restore();
@@ -326,19 +400,20 @@
       for (let i = 0; i < slots.length; i++) {
         const slot = slots[i], index = Number.isFinite(slot.id) ? slot.id : i;
         const unit = units.find(u => u.slot === index);
-        const mergeable = active && unit && active.id !== unit.id && active.level === unit.level && unit.level < 10;
+        const mergeable = active && unit && active.id !== unit.id && active.level === unit.level;
         cell(ctx, { ...slot, id: index }, unit, index === options.selectedSlot, mergeable, index === options.hoverSlot);
       }
       for (const unit of units) portrait(ctx, unit, options, unit.x, unit.y, options.drag?.moved && options.drag.fromSlot === unit.slot ? .22 : 1);
       // The route is separate from build slots, so depth order can remain stable.
       for (const e of game.enemies || []) enemy(ctx, e, game, options);
       for (const egg of game.supplies || []) supply(ctx, egg, game, options);
-      for (const b of game.bullets || []) {
-        if (!Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
-        const radius = 2.2 + Math.min(10, number(b.level)) * .15;
-        const toSupply = b.targetType === 'supply';
-        ellipse(ctx, b.x, b.y, radius + 2, radius + 2, toSupply ? '#8fb98135' : '#f6d77135');
-        ellipse(ctx, b.x, b.y, radius, radius, toSupply ? '#608c52' : b.color || '#d45538', '#fff3c5', .8);
+      for (const unit of units) {
+        // Moving the pointer is only a preview; the unit still attacks at its
+        // original slot until release, so keep that physical orbit visible.
+        ctx.save();
+        if (options.drag?.moved && options.drag.fromSlot === unit.slot) ctx.globalAlpha *= .22;
+        orbit(ctx, unit, game, options);
+        ctx.restore();
       }
       for (const e of game.effects || []) effect(ctx, e, options);
       if (options.drag?.moved) {

@@ -14,6 +14,7 @@
       this._lastKill = -Infinity;
       this._lastSupplyHit = -Infinity;
       this._lastHatch = -Infinity;
+      this._lastSpecial = -Infinity;
       this._generation = 0;
     }
 
@@ -25,6 +26,7 @@
         if ((!this.context || this.context.state === 'closed') && Context) {
           this.context = new Context(); this._lastShot = -Infinity; this._lastKill = -Infinity;
           this._lastSupplyHit = -Infinity; this._lastHatch = -Infinity;
+          this._lastSpecial = -Infinity;
         }
         context = this.context;
         if (!context || !this.enabled) return Promise.resolve(false);
@@ -71,6 +73,19 @@
       const level = Number.isFinite(event?.level) ? clamp(event.level, 0, 10) : 0;
       const now = this.context.currentTime;
       switch (type) {
+        case 'slash':
+          if (now - this._lastShot < .12) return false;
+          this._lastShot = now;
+          return this._note(720, 0, .055, .013, 140, 'triangle');
+        case 'special':
+          if (now - this._lastSpecial < .22) return false;
+          this._lastSpecial = now;
+          if (event.ability === 'lightning') {
+            this._note(1350, 0, .07, .019, 240, 'sawtooth');
+            return this._note(880, .04, .12, .016, 220, 'triangle');
+          }
+          this._note(160, 0, .13, .025, 80, 'triangle');
+          return this._note(390, .025, .09, .018, 120, 'sine');
         case 'shot': case 'shoot':
           if (now - this._lastShot < .075) return false;
           this._lastShot = now;

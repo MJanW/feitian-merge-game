@@ -5,14 +5,14 @@
     const $ = id => document.getElementById(id);
     const canvas = $('defense-canvas');
     if (!canvas) return null;
-    const BEST_KEY = 'feitian-defense-best-v2';
+    const BEST_KEY = 'feitian-defense-best-v3';
     const HIT_RADIUS = 34;
     let game = null, audio = null, state = null, context = null;
     let active = false, focused = true, manualPaused = false;
     let selectedSlot = null, hoverSlot = null, pointer = null;
     let frame = null, lastFrame = null, destroyed = false;
     let best = 0, savedWarning = false, notice = '', noticeUntil = 0;
-    const images = [], listeners = [];
+    const images = [], enemyImages = {}, listeners = [];
     const reducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
     let soundEnabled = typeof window.GameSoundEnabled === 'boolean' ? window.GameSoundEnabled : read('photo-merge-sound', 'on') !== 'off';
     window.GameSoundEnabled = soundEnabled;
@@ -32,6 +32,14 @@
     }
     function slots() { return window.DefenseGame?.SLOTS || game?.slots || []; }
     function unitAt(slot) { return game?.units?.find(unit => unit.slot === slot) || null; }
+    function formForLevel(level) {
+      const levels = window.GameLevels?.levels || [];
+      if (window.DefenseForms) return window.DefenseForms.forLevel(level, levels);
+      const count = Math.max(1, levels.length - 1), photoIndex = level % count;
+      return { ...levels[photoIndex + 1], photoIndex, cycle: Math.floor(level / count), displayLevel: level + 1 };
+    }
+    function combatStats(unit) { return unit ? window.DefenseGame.statsForLevel(unit.level) : null; }
+    function abilityName(stats) { return ({ ice: '寒霜', fire: '焰刃', lightning: '雷霆' })[stats?.ability] || '旋刃'; }
     function blocked() { return !active || !focused || document.hidden || manualPaused || Boolean(document.querySelector('dialog[open]')); }
     function canAct() { return Boolean(game && state && state.status !== 'lost' && !state.isPaused && !blocked()); }
     function clearInput() {
@@ -45,7 +53,7 @@
     function draw() {
       if (!game || !context || !active || destroyed) return;
       window.DefenseRenderer?.draw?.(context, game, {
-        images, levels: window.GameLevels?.levels || [], selectedSlot, hoverSlot,
+        images, enemyImages, formForLevel, levels: window.GameLevels?.levels || [], selectedSlot, hoverSlot,
         drag: pointer?.moved && pointer.unitId != null ? { id: pointer.id, fromSlot: pointer.slot, x: pointer.x, y: pointer.y, moved: true } : null,
         reducedMotion,
       });
@@ -87,7 +95,7 @@
       if (next.status === 'lost') return '防线失守了，换个阵容再试一次';
       if (blocked() || next.isPaused) return '已暂停，点击「继续」守卫';
       if (notice && Date.now() < noticeUntil) return notice;
-      if (next.status === 'ready') return '点击「开始守卫」，布置你的第一道防线';
+      if (next.status === 'ready') return '点击「出发」，布置你的第一道防线';
       if (next.nextWaveIn > 0) return '下一波即将来袭 · 趁现在调整阵容';
       return `第 ${next.wave} 波 · 剩余 ${next.remaining} 个入侵者 · 击碎孵化蛋获得同伴`;
     }
@@ -102,10 +110,13 @@
       text('defense-gold', String(next.gold));
       text('defense-lives', `${next.lives}/${next.maxLives}`);
       text('defense-status', statusText(next) + (savedWarning ? ' · 本机记录暂未保存' : ''));
-      const reserveHint = next.reserve > 0 ? ` · 待上场 ${next.reserve} 位` : '';
-      text('defense-selection', (unit ? unit.level >= 10 ? '已选守卫 · 已进化至最高形态' : '已选守卫 · 拖到同形态守卫上合成' : next.reserve > 0 ? '点击空位让同伴上场' : '把守卫拖到右下方，击碎孵化蛋获得同伴') + reserveHint);
-      text('defense-upgrade', unit ? unit.level >= 10 ? '已达最高形态' : `进化 · ${cost} 金币` : '选择守卫进化');
-      prop('defense-upgrade', 'disabled', !unit || unit.level >= 10 || !Number.isFinite(cost) || next.gold < cost || paused || ended);
+      const reserveHint = next.reserve > 0 ? ` · 待命 ${next.reserve}` : '';
+      const stats = combatStats(unit);
+      text('defense-selection', (unit ? `Lv.${unit.level + 1} ${abilityName(stats)} · 伤害 ${stats.damage.toLocaleString()}` : next.reserve > 0 ? '点击空位让同伴上场' : '拖近酒瓶迎敌 · 拖近孵化蛋召集') + reserveHint);
+      text('defense-unit-stats', unit ? `${stats.bladeCount} 把环绕刀 · 同级拖拽合成` : '1级每刀1点伤害，进化持续增强');
+      text('defense-reserve', `待命 ${next.reserve} 位`);
+      text('defense-upgrade', unit ? `进化 · ${Number.isFinite(cost) ? cost.toLocaleString() : '—'}` : '选择守卫');
+      prop('defense-upgrade', 'disabled', !unit || !Number.isFinite(cost) || next.gold < cost || paused || ended);
       text('defense-pause', paused ? '继续' : '暂停');
       attr('defense-pause', 'aria-pressed', String(paused));
       prop('defense-pause', 'disabled', next.status !== 'playing');
@@ -126,17 +137,28 @@
     function onEvent(event) {
       if (active && !blocked()) callAudio('play', event);
       const messages = { merge: '合成成功，守卫进化了！', upgrade: '进化成功，火力升级！', hit: '有入侵者突破了防线！', clear: '这一波守住了！趁现在移动和进化', hatch: event.reserve ? '孵化成功！阵位已满，同伴正在待命' : '孵化成功，新同伴加入防线！', wave: `第 ${event.wave || game?.getState().wave || 1} 波来袭` };
+      if ((event.type === 'merge' || event.type === 'upgrade') && [3, 7, 11].includes(event.level)) {
+        messages[event.type] = ({ 3: '特殊进化：寒霜刀刃，命中减速！', 7: '特殊进化：焰刃，命中触发范围灼烧！', 11: '特殊进化：雷霆，闪电连锁攻击！' })[event.level];
+      }
       if (messages[event.type]) { notice = messages[event.type]; noticeUntil = Date.now() + 1700; }
     }
     function preload() {
       if (typeof window.Image !== 'function') return;
       const levels = window.GameLevels?.levels || [];
-      for (let i = 0; i <= 10; i++) {
-        if (!levels[i + 1]?.image) continue;
+      const forms = window.DefenseForms?.portraits(levels) || levels.slice(1);
+      for (let i = 0; i < forms.length; i++) {
+        if (!forms[i]?.image) continue;
         const image = new window.Image();
         image.onload = () => { if (!destroyed) draw(); };
         image.onerror = () => { images[i] = null; if (!destroyed) draw(); };
-        images[i] = image; image.src = levels[i + 1].image;
+        images[i] = image; image.src = forms[i].image;
+      }
+      for (const type of window.DefenseEnemies?.types || []) {
+        if (!type.image) continue;
+        const image = new window.Image();
+        image.onload = () => { if (!destroyed) draw(); };
+        image.onerror = () => { delete enemyImages[type.kind]; if (!destroyed) draw(); };
+        enemyImages[type.kind] = image; image.src = type.image;
       }
     }
     function ensureGame() {
@@ -183,7 +205,7 @@
     }
     function upgrade() {
       if (!canAct() || selectedSlot === null || !unitAt(selectedSlot)) return;
-      if (!game.upgrade(selectedSlot)) showNotice(unitAt(selectedSlot).level >= 10 ? '这位守卫已经是最高形态' : '金币不足，击退入侵者后再进化');
+      if (!game.upgrade(selectedSlot)) showNotice('金币不足，击退入侵者后再进化');
       render(game.getState()); draw();
     }
     function finishPointer(event) {
@@ -298,7 +320,7 @@
         destroyed = true; clearInput(); stopFrame(); callAudio('destroy');
         if (game) game.pause(true);
         for (const [target, type, listener, options] of listeners) target?.removeEventListener?.(type, listener, options);
-        for (const image of images) if (image) image.onload = image.onerror = null;
+        for (const image of [...images, ...Object.values(enemyImages)]) if (image) image.onload = image.onerror = null;
       },
     };
   }

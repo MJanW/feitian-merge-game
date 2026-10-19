@@ -8,7 +8,7 @@
   <title>合成飞天</title>
   <link rel="icon" href="assets/photo-10.png" type="image/png">
   <link rel="stylesheet" href="styles.css?v=20261019-defense1">
-  <link rel="stylesheet" href="defense.css?v=20261019-defense1">
+  <link rel="stylesheet" href="defense.css?v=20261019-blades1">
   <script defer src="vendor/matter.min.js"></script>
   <script defer src="levels.js?v=20261017-size10"></script>
   <script defer src="sound.js?v=20261016-finale300"></script>
@@ -25,11 +25,12 @@
   <script defer src="jump-sound.js?v=20261017-classic1"></script>
   <script defer src="jump-leaderboard.js?v=20261017-jumpboard1"></script>
   <script defer src="jump-app.js?v=20261017-softjump1"></script>
-  <script defer src="defense-enemies.js?v=20261019-defense1"></script>
-  <script defer src="defense-game.js?v=20261019-hatch1"></script>
-  <script defer src="defense-renderer.js?v=20261019-hatch1"></script>
-  <script defer src="defense-sound.js?v=20261019-hatch1"></script>
-  <script defer src="defense-app.js?v=20261019-hatch1"></script>
+  <script defer src="defense-forms.js?v=20261019-blades1"></script>
+  <script defer src="defense-enemies.js?v=20261019-blades1"></script>
+  <script defer src="defense-game.js?v=20261019-blades1"></script>
+  <script defer src="defense-renderer.js?v=20261019-blades1"></script>
+  <script defer src="defense-sound.js?v=20261019-blades1"></script>
+  <script defer src="defense-app.js?v=20261019-blades1"></script>
   <script defer src="modes.js?v=20261019-defense1"></script>
 </head>
 <body>
@@ -137,35 +138,38 @@
     <div class="defense-layout">
       <section class="defense-play" aria-label="守卫飞天战场">
         <div class="defense-board">
-          <canvas id="defense-canvas" width="400" height="650" tabindex="0" aria-label="塔防战场：将守卫拖到右下方自动击碎孵化蛋，获得新人物；拖动同阶人物合成，靠左迎击酒瓶。方向键选择阵位，回车部署待命守卫，U 进化，P 暂停。" aria-describedby="defense-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
+          <canvas id="defense-canvas" width="400" height="650" tabindex="0" aria-label="飞刃守卫战场：身边的小刀旋转攻击酒瓶和孵化蛋。拖动守卫布阵，同级合成进化。方向键选择阵位，回车部署待命守卫，U 进化，P 暂停。" aria-describedby="defense-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
           <div id="defense-intro" class="defense-intro">
-            <span class="defense-eyebrow">第四周目 / DEFENSE</span>
-            <h2>这一回，<br>守住最后一道门。</h2>
-            <p>左边酒瓶来袭，右边同伴待醒。<br>把火力放在哪里，由你决定。</p>
-            <ol><li><span>01</span>靠右击碎孵化蛋，获得新人物</li><li><span>02</span>拖到左侧迎敌，同阶合成进化</li><li><span>03</span>分配两侧火力，守住中间的门</li></ol>
-            <button id="defense-start" class="primary-button" type="button">开始守卫 <span aria-hidden="true">↗</span></button>
+            <div class="defense-intro-card">
+              <span class="defense-eyebrow">第四周目 · 无尽守卫</span>
+              <div class="defense-emblem" aria-hidden="true">✦</div>
+              <h2>小刀转起来，<br>同伴多起来。</h2>
+              <p>左边酒瓶来袭，右边同伴待醒。<br>把守卫放在哪里，由你决定。</p>
+              <ol><li><span>1</span>靠右击碎孵化蛋，召集新同伴</li><li><span>2</span>拖动同级守卫合成，继续进化</li><li><span>3</span>解锁寒霜、焰刃、雷霆特殊攻击</li></ol>
+              <button id="defense-start" class="primary-button" type="button">出发，守住防线 <span aria-hidden="true">▶</span></button>
+            </div>
           </div>
-          <div id="defense-paused" class="defense-paused" hidden><strong>防线暂歇</strong><span>点“继续”，回到战场</span></div>
+          <div id="defense-paused" class="defense-paused" hidden><strong>休息一下</strong><span>点“继续”，回到战场</span></div>
           <div id="defense-result" class="defense-result" role="group" aria-labelledby="defense-result-title" aria-describedby="defense-result-detail" hidden>
-            <div class="defense-result-card"><span class="defense-eyebrow">本次守卫 / REPORT</span><h2 id="defense-result-title" tabindex="-1">防线失守</h2><p id="defense-result-detail"></p><button id="defense-retry" class="primary-button" type="button">重新布阵</button></div>
+            <div class="defense-result-card"><span class="defense-eyebrow">本次守卫 / REPORT</span><h2 id="defense-result-title" tabindex="-1">防线失守</h2><p id="defense-result-detail"></p><button id="defense-retry" class="primary-button" type="button">再战一回</button></div>
           </div>
         </div>
         <p id="defense-status" class="defense-status" role="status" aria-live="polite">点击开始守卫，建立你的防线</p>
       </section>
       <aside class="defense-side" aria-label="守卫飞天信息和操作">
-        <header class="defense-head"><span class="mode-caption">第四周目 / DEFENSE</span><h1>守卫飞天</h1><p>击碎孵化蛋召集同伴，调动火力守住酒潮。</p></header>
+        <header class="defense-head"><span class="mode-caption">CHAPTER 04 · ENDLESS DEFENSE</span><h1>守卫飞天<span aria-hidden="true">✦</span></h1><p>飞刃旋转，酒潮来袭。<br>从一位同伴，到一整支防线。</p></header>
         <div class="defense-hud" aria-label="战场信息">
-          <div class="defense-stat"><span>波次</span><strong id="defense-wave">0</strong></div>
-          <div class="defense-stat"><span>防线</span><strong id="defense-lives">12/12</strong></div>
-          <div class="defense-stat"><span>金币</span><strong id="defense-gold">60</strong></div>
-          <div class="defense-stat"><span>得分</span><strong id="defense-score">0</strong></div>
+          <div class="defense-stat"><span><i aria-hidden="true">⚑</i> 波次</span><strong id="defense-wave">0</strong></div>
+          <div class="defense-stat"><span><i aria-hidden="true">♥</i> 防线</span><strong id="defense-lives">12/12</strong></div>
+          <div class="defense-stat"><span><i aria-hidden="true">●</i> 金币</span><strong id="defense-gold">60</strong></div>
+          <div class="defense-stat"><span><i aria-hidden="true">✦</i> 得分</span><strong id="defense-score">0</strong></div>
         </div>
-        <p class="defense-record">本机最高 <strong id="defense-best">0</strong><span>一支队伍，十一种形态。</span></p>
+        <p class="defense-record">本机最高 <strong id="defense-best">0</strong><span id="defense-reserve">待命 0 位</span></p>
         <div class="defense-tools">
-          <div class="defense-selection-row"><p id="defense-selection">选择一位防御者</p><button id="defense-upgrade" class="primary-button" type="button" disabled>进化</button></div>
+          <div class="defense-selection-row"><div class="defense-selection-copy"><p id="defense-selection">选择一位守卫</p><p id="defense-unit-stats">Lv.1 每次命中造成 1 点伤害</p></div><button id="defense-upgrade" class="primary-button" type="button" disabled>进化</button></div>
           <div class="defense-controls" role="group" aria-label="守卫飞天操作"><button id="defense-pause" class="secondary-button" type="button" aria-pressed="false">暂停</button><button id="defense-restart" class="secondary-button" type="button">重开</button><button id="defense-sound" class="secondary-button" type="button" aria-pressed="true">音效开</button></div>
         </div>
-        <div class="defense-tips"><span class="tips-label">布阵手记 / FIELD NOTES</span><p>右下方不断出现孵化蛋，数字是剩余耐久。守卫自动攻击射程内最近的目标；击碎蛋后，新人物会加入空位。</p><p>把人物拖到左侧迎敌、右侧孵化；同阶拖到一起合成，也可花金币进化。阵位满时，新同伴先待命，腾出位置后点击部署。</p><p class="keyboard-tip">方向键选择 · 回车部署 · U 进化 · P 暂停</p></div>
+        <div class="defense-tips"><span class="tips-label">你的守卫手册</span><p><b>击蛋召集</b> 旋转小刀碰到酒瓶或孵化蛋才会造成伤害。把同伴放在路线附近，让每次旋转都打中目标。</p><p><b>同级合成</b> 24 个阵位自由换位，同级守卫拖到一起进化。金币也可升级，等级继续成长。</p><div class="defense-skills"><span>Lv.4 寒霜</span><span>Lv.8 焰刃</span><span>Lv.12 雷霆</span></div><p class="keyboard-tip">方向键选择 · 回车部署 · U 进化 · P 暂停</p></div>
       </aside>
     </div>
   </section>
