@@ -5,7 +5,7 @@
   const TAU = Math.PI * 2;
   const FONT = '"Avenir Next", "PingFang SC", sans-serif';
   const MONO = '"SFMono-Regular", Consolas, monospace';
-  const PATH = [{ x: 38, y: -35 }, { x: 38, y: 315 }, { x: 352, y: 315 }, { x: 352, y: 690 }];
+  const PATH = [{ x: 38, y: -35 }, { x: 38, y: 315 }, { x: 352, y: 315 }, { x: 352, y: 345 }];
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const number = (n, fallback = 0) => Number.isFinite(n) ? n : fallback;
 
@@ -35,9 +35,9 @@
     line(ctx, x, y + 2 * scale, x + scale, y - 4 * scale, '#91a386', 1);
     line(ctx, x + 3 * scale, y + 2 * scale, x + 5 * scale, y - scale, '#a8b598', 1);
   }
-  function chevron(ctx, x, y, direction) {
+  function chevron(ctx, x, y, direction, color = '#b3a98b') {
     ctx.save(); ctx.translate(x, y); ctx.rotate(direction);
-    line(ctx, -4, -3, 0, 1, '#b3a98b', 1.5); line(ctx, 0, 1, 4, -3, '#b3a98b', 1.5); ctx.restore();
+    line(ctx, -4, -3, 0, 1, color, 1.5); line(ctx, 0, 1, 4, -3, color, 1.5); ctx.restore();
   }
 
   function terrain(ctx, game) {
@@ -52,7 +52,12 @@
     roadPath(ctx, path); ctx.strokeStyle = '#e9e1cb'; ctx.lineWidth = 48; ctx.stroke();
     for (let y = 38; y < 290; y += 62) chevron(ctx, 38, y, 0);
     for (let x = 96; x < 325; x += 64) chevron(ctx, x, 315, -Math.PI / 2);
-    for (let y = 373; y < 580; y += 62) chevron(ctx, 352, y, 0);
+    // The hatching lane has its own color and travels upward. Keeping a gap
+    // below the gate makes it distinct from the downward enemy route.
+    ctx.fillStyle = '#b8cbb6'; ctx.fillRect(321, 375, 62, 275);
+    ctx.fillStyle = '#d4e0cc'; ctx.fillRect(324, 378, 56, 272);
+    ctx.fillStyle = '#e4ebda'; ctx.fillRect(329, 382, 46, 268);
+    for (let y = 400; y < 635; y += 51) chevron(ctx, 352, y, Math.PI, '#92ad8e');
     for (const [x, y, s] of [[90, 49, 1], [311, 118, .8], [309, 262, .8], [88, 280, .8], [150, 79, .7], [293, 79, .8], [13, 381, .8], [39, 464, 1], [30, 539, .9], [110, 557, .8], [229, 539, .7], [302, 570, .8], [220, 609, 1]]) grass(ctx, x, y, s);
     // Small geometric flower beds give direction and scale without blocking play.
     for (const [x, y] of [[321, 53], [28, 423], [279, 577]]) {
@@ -66,14 +71,17 @@
     text(ctx, '布阵 · 合成 · 守住', 92, 38, 11, '#536957', '600');
     line(ctx, 92, 53, 284, 53, '#b8c4ac');
     text(ctx, 'FEITIAN DEFENSE', 92, 66, 8, '#667863', '500', 'left', MONO);
-    // The visible gate is at the bottom of the route; collision remains in the
-    // engine, just outside the canvas. Its amber stripes make the goal obvious.
-    ctx.fillStyle = '#3f6559'; ctx.fillRect(320, 607, 64, 8);
-    for (let i = 0; i < 5; i++) polygon(ctx, [[324 + i * 12, 607], [330 + i * 12, 607], [325 + i * 12, 615], [319 + i * 12, 615]], '#e7c480');
-    ctx.fillStyle = '#264a3f'; ctx.fillRect(318, 602, 6, 20); ctx.fillRect(380, 602, 6, 20);
-    text(ctx, '防线', 352, 636, 11, '#365346', '600', 'center');
-    text(ctx, '相同人物合成进化', 91, 595, 11, '#5b705c');
-    text(ctx, '拖动换位，迎战酒潮', 91, 613, 10, '#6c7a65');
+    ctx.fillStyle = '#3f6559'; ctx.fillRect(320, 340, 64, 8);
+    for (let i = 0; i < 5; i++) polygon(ctx, [[324 + i * 12, 340], [330 + i * 12, 340], [325 + i * 12, 348], [319 + i * 12, 348]], '#e7c480');
+    ctx.fillStyle = '#264a3f'; ctx.fillRect(318, 335, 6, 20); ctx.fillRect(380, 335, 6, 20);
+    text(ctx, '防线', 352, 363, 10, '#365346', '600', 'center');
+    // A low source arch suggests that eggs continue emerging from below.
+    ellipse(ctx, 352, 644, 27, 10, '#b8cbb6', '#94ad8a');
+    ellipse(ctx, 352, 642, 21, 5, '#95b28f');
+    text(ctx, '靠右击蛋，召集同伴', 91, 579, 11, '#4d6853', '600');
+    text(ctx, '靠左迎敌，守住防线', 91, 598, 11, '#5b705c');
+    if (number(game.reserve) > 0) text(ctx, `待入场 ${Math.floor(game.reserve)} · 腾出空位后加入`, 91, 626, 10, '#7d6434');
+    else text(ctx, '拖动换位 · 同阶合成', 91, 626, 10, '#6c7a65');
   }
 
   function selectedUnit(game, options) {
@@ -88,7 +96,7 @@
     ctx.strokeRect(x - 31, y - 30, 62, 60);
     if (hovered) { ctx.fillStyle = canMerge || !unit ? '#95b98c30' : '#d4553820'; ctx.fillRect(x - 30, y - 29, 60, 58); }
     if (!unit) {
-      line(ctx, x - 6, y, x + 6, y, '#a5b299', 1.4); line(ctx, x, y - 6, x, y + 6, '#a5b299', 1.4);
+      ellipse(ctx, x, y, 2, 2, '#a8b79d');
       text(ctx, String(number(slot.id, 0) + 1).padStart(2, '0'), x - 24, y + 21, 7, '#86957c', '400', 'left', MONO);
     }
     if (selected || canMerge) {
@@ -227,6 +235,40 @@
     if (isBoss) text(ctx, '◆', e.x, barY - 18, 10, '#a77728', '700', 'center');
   }
 
+  function eggPath(ctx) {
+    ctx.beginPath(); ctx.moveTo(0, -23);
+    ctx.bezierCurveTo(9, -23, 18, -7, 18, 5);
+    ctx.bezierCurveTo(18, 23, -18, 23, -18, 5);
+    ctx.bezierCurveTo(-18, -7, -9, -23, 0, -23); ctx.closePath();
+  }
+  function supply(ctx, egg, game, options) {
+    if (!Number.isFinite(egg.x) || !Number.isFinite(egg.y) || egg.y < 370 || egg.y > 680) return;
+    const ratio = clamp(number(egg.hp) / Math.max(1, number(egg.maxHp, egg.hp)), 0, 1);
+    const hit = clamp(number(egg.hit) / .18, 0, 1);
+    const sway = options.reducedMotion ? 0 : Math.sin(number(game.elapsed) * 2.5 + number(egg.id)) * .025;
+    ellipse(ctx, egg.x + 1, egg.y + 20, 23, 7, '#526e4324');
+    ellipse(ctx, egg.x, egg.y + 18, 21, 6, '#b5cd9f', '#9bb58a');
+    ctx.save(); ctx.translate(egg.x, egg.y); ctx.rotate(sway);
+    eggPath(ctx); ctx.fillStyle = '#fff9e9'; ctx.fill();
+    ctx.strokeStyle = '#b7a683'; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.save(); eggPath(ctx); ctx.clip();
+    ellipse(ctx, -7, -9, 5, 10, '#ffffffb8');
+    ellipse(ctx, 12, 9, 4, 16, '#e0cd9b45');
+    if (ratio < .76) {
+      ctx.beginPath(); ctx.moveTo(-11, -18); ctx.lineTo(-5, -11); ctx.lineTo(-9, -6); ctx.lineTo(-3, -2);
+      ctx.strokeStyle = '#a78e61'; ctx.lineWidth = 1.1; ctx.stroke();
+    }
+    if (ratio < .4) {
+      ctx.beginPath(); ctx.moveTo(17, 3); ctx.lineTo(10, 8); ctx.lineTo(13, 13); ctx.lineTo(4, 17); ctx.lineTo(1, 22);
+      ctx.strokeStyle = '#a78e61'; ctx.lineWidth = 1.3; ctx.stroke();
+    }
+    if (hit > 0) { ctx.fillStyle = `rgba(255,255,255,${hit * .65})`; ctx.fillRect(-20, -25, 40, 50); }
+    ctx.restore();
+    const hp = String(Math.max(0, Math.ceil(number(egg.hp))));
+    text(ctx, hp, 0, 4, hp.length > 3 ? 10 : 14, '#35513d', '700', 'center', MONO);
+    ctx.restore();
+  }
+
   function effect(ctx, e, options) {
     const t = clamp(number(e.age) / Math.max(.001, number(e.duration, .55)), 0, 1);
     if (t >= 1 || !Number.isFinite(e.x) || !Number.isFinite(e.y)) return;
@@ -240,6 +282,21 @@
       for (let i = 0; i < 8; i++) {
         const a = i * TAU / 8, r = 17 + motion * 32, x = e.x + Math.cos(a) * r, y = e.y - 3 + Math.sin(a) * r;
         polygon(ctx, [[x, y - 4], [x + 2, y], [x, y + 4], [x - 2, y]], i % 2 ? '#f6d56f' : ORANGE);
+      }
+    } else if (e.type === 'hatch') {
+      ellipse(ctx, e.x, e.y, 16 + motion * 22, 21 + motion * 18, '#f6dd8438', '#d4b35c', 1.5);
+      for (let i = 0; i < 6; i++) {
+        const a = i * TAU / 6 + .4, r = 15 + motion * 30;
+        const x = e.x + Math.cos(a) * r, y = e.y + Math.sin(a) * r + motion * motion * 18;
+        ctx.save(); ctx.translate(x, y); ctx.rotate(a + motion * 2);
+        polygon(ctx, [[-5, -5], [1, -8], [5, -3], [2, 0], [5, 4], [-2, 6]], '#fff9e9', '#baa77d', 1);
+        ctx.restore();
+      }
+      text(ctx, e.reserve ? '待入场 +1' : '同伴 +1', e.x - 18, e.y - 30 - motion * 15, 12, '#42683c', '700', 'right');
+    } else if (e.type === 'supplyHit') {
+      for (let i = 0; i < 5; i++) {
+        const a = i * TAU / 5, r = 12 + motion * 13;
+        line(ctx, e.x + Math.cos(a) * r, e.y + Math.sin(a) * r, e.x + Math.cos(a) * (r + 4), e.y + Math.sin(a) * (r + 4), '#c5a857', 1.6);
       }
     } else if (e.type === 'kill' || e.type === 'hit') {
       for (let i = 0; i < 6; i++) {
@@ -275,11 +332,13 @@
       for (const unit of units) portrait(ctx, unit, options, unit.x, unit.y, options.drag?.moved && options.drag.fromSlot === unit.slot ? .22 : 1);
       // The route is separate from build slots, so depth order can remain stable.
       for (const e of game.enemies || []) enemy(ctx, e, game, options);
+      for (const egg of game.supplies || []) supply(ctx, egg, game, options);
       for (const b of game.bullets || []) {
         if (!Number.isFinite(b.x) || !Number.isFinite(b.y)) continue;
         const radius = 2.2 + Math.min(10, number(b.level)) * .15;
-        ellipse(ctx, b.x, b.y, radius + 2, radius + 2, '#f6d77135');
-        ellipse(ctx, b.x, b.y, radius, radius, b.color || '#d45538', '#fff3c5', .8);
+        const toSupply = b.targetType === 'supply';
+        ellipse(ctx, b.x, b.y, radius + 2, radius + 2, toSupply ? '#8fb98135' : '#f6d77135');
+        ellipse(ctx, b.x, b.y, radius, radius, toSupply ? '#608c52' : b.color || '#d45538', '#fff3c5', .8);
       }
       for (const e of game.effects || []) effect(ctx, e, options);
       if (options.drag?.moved) {

@@ -2,7 +2,8 @@
   'use strict';
 
   const WIDTH = 400, HEIGHT = 650, STEP_MS = 1000 / 60, MAX_DELTA = 250;
-  const PATH = Object.freeze([{ x: 38, y: -35 }, { x: 38, y: 315 }, { x: 352, y: 315 }, { x: 352, y: 690 }].map(Object.freeze));
+  const PATH = Object.freeze([{ x: 38, y: -35 }, { x: 38, y: 315 }, { x: 352, y: 315 }, { x: 352, y: 345 }].map(Object.freeze));
+  const SUPPLY_LANE = Object.freeze({ x: 352, startY: 690, stopY: 390, spacing: 52, capacity: 6 });
   const SLOTS = Object.freeze([
     [115, 160], [195, 160], [275, 160], [115, 240], [195, 240], [275, 240],
     [105, 390], [185, 390], [265, 390], [105, 470], [185, 470], [265, 470],
@@ -38,11 +39,12 @@
 
     reset() {
       this.status = 'ready'; this.isPaused = false; this.score = 0; this.wave = 0;
-      this.gold = 60; this.lives = 12; this.maxLives = 12; this.kills = 0; this.spawnCost = 20;
+      this.gold = 60; this.lives = 12; this.maxLives = 12; this.kills = 0; this.reserve = 0; this.hatched = 0;
       this.maxLevel = 0; this.elapsed = 0; this.accumulator = 0; this.nextWaveIn = 0;
-      this.units = []; this.enemies = []; this.bullets = []; this.effects = [];
+      this.units = []; this.enemies = []; this.supplies = []; this.bullets = []; this.effects = [];
       this.spawnQueue = []; this.spawnTimer = 0; this.waveActive = false; this.completed = false;
-      this.sequence = 0; this.changeTimer = 0; this._makeUnit(0); this._notify();
+      this.sequence = 0; this.changeTimer = 0; this.supplySequence = 0;
+      this._makeUnit(8); this._spawnSupply(); this._notify();
       return true;
     }
 
@@ -59,13 +61,13 @@
     getState() {
       return { status: this.status, isPaused: this.isPaused, score: this.score, wave: this.wave, gold: this.gold,
         lives: this.lives, maxLives: this.maxLives, kills: this.kills, unitCount: this.units.length,
-        maxLevel: this.maxLevel, spawnCost: this.spawnCost, nextWaveIn: this.nextWaveIn,
+        maxLevel: this.maxLevel, reserve: this.reserve, hatched: this.hatched, supplyCount: this.supplies.length, nextWaveIn: this.nextWaveIn,
         remaining: this.enemies.length + this.spawnQueue.length, elapsed: this.elapsed };
     }
 
     place(slot) {
-      if (!this._canAct() || !this._validSlot(slot) || this._unitAt(slot) || this.gold < this.spawnCost) return false;
-      this.gold -= this.spawnCost; const unit = this._makeUnit(slot);
+      if (!this._canAct() || !this._validSlot(slot) || this._unitAt(slot) || this.reserve < 1) return false;
+      this.reserve--; const unit = this._makeUnit(slot);
       this._effect('spawn', unit, { level: 0 }); this._event('spawn', { unitId: unit.id, slot, level: 0 }); this._notify(); return true;
     }
 
@@ -116,6 +118,45 @@
       this._event(type, { unitId: unit.id, slot: unit.slot, level: unit.level });
     }
 
+    _spawnSupply() {
+      // Eggs remain available until broken. A full lane waits instead of
+      // expiring rewards or allowing offscreen queues to grow indefinitely.
+      const first = this.supplySequence++ === 0;
+      const maxHp = first ? 24 : Math.round(54 + Math.min(this.supplySequence, 24) * 12 + Math.max(0, this.wave - 1) * 10);
+      this.supplies.push({ id: ++this.sequence, x: SUPPLY_LANE.x, y: SUPPLY_LANE.startY,
+        hp: maxHp, maxHp, hit: 0, speed: 36 + Math.min(6, this.wave * 0.35) });
+    }
+
+    _advanceSupplies(dt) {
+      this.supplies.sort((a, b) => a.y - b.y || a.id - b.id);
+      for (let index = 0; index < this.supplies.length; index++) {
+        const supply = this.supplies[index];
+        const stop = index ? this.supplies[index - 1].y + SUPPLY_LANE.spacing : SUPPLY_LANE.stopY;
+        supply.y = Math.max(stop, supply.y - supply.speed * dt);
+        supply.hit = Math.max(0, supply.hit - dt);
+      }
+      const last = this.supplies[this.supplies.length - 1];
+      if (this.supplies.length < SUPPLY_LANE.capacity && (!last || last.y <= SUPPLY_LANE.startY - SUPPLY_LANE.spacing)) this._spawnSupply();
+    }
+
+    _targetFor(unit, range) {
+      let chosen = null, bestDistance = range;
+      // Enemy ties win; beyond that the nearer object always decides whether
+      // a defender fights the bottle lane or helps hatch reinforcements.
+      for (const [type, objects] of [['enemy', this.enemies], ['supply', this.supplies]]) {
+        for (const object of objects) {
+          if (object.y > HEIGHT + 20) continue;
+          const distance = Math.hypot(object.x - unit.x, object.y - unit.y);
+          if (distance > range) continue;
+          const tiedEnemy = chosen?.type === 'enemy' && type === 'enemy' && Math.abs(distance - bestDistance) < 1e-8 && object.progress > chosen.object.progress;
+          if (!chosen || distance < bestDistance - 1e-8 || tiedEnemy) {
+            chosen = { type, object }; bestDistance = distance;
+          }
+        }
+      }
+      return chosen;
+    }
+
     _beginWave() {
       this.wave++; this.waveActive = true; this.nextWaveIn = 0;
       const count = Math.min(44, 6 + this.wave * 2);
@@ -128,10 +169,10 @@
 
     _spawnEnemy(entry) {
       const type = this.types.find(value => value.kind === entry.kind) || this.types[0];
-      const scaling = 1.23 ** Math.min(this.wave - 1, 100) * (1 + Math.max(0, this.wave - 20) * 0.08);
+      const scaling = 1.28 ** Math.min(this.wave - 1, 100) * (1 + Math.max(0, this.wave - 20) * 0.08);
       const maxHp = Math.round(type.hp * scaling * (entry.boss ? 4.2 : 1));
       const enemy = { id: ++this.sequence, kind: type.kind, name: type.name, tint: type.tint, x: PATH[0].x, y: PATH[0].y,
-        hp: maxHp, maxHp, progress: 0, hit: 0, boss: entry.boss, speed: type.speed * Math.min(1.85, 1 + (this.wave - 1) * 0.028),
+        hp: maxHp, maxHp, progress: 0, hit: 0, boss: entry.boss, speed: type.speed * 0.8 * Math.min(1.85, 1 + (this.wave - 1) * 0.028),
         reward: Math.round(type.reward * (1 + (this.wave - 1) * 0.055) * (entry.boss ? 4 : 1)),
         damage: entry.boss ? 3 : 1, slow: 0, slowTime: 0 };
       this.enemies.push(enemy);
@@ -152,6 +193,7 @@
       for (const effect of this.effects) effect.age += dt;
       this.effects = this.effects.filter(effect => effect.age < effect.duration);
       for (const unit of this.units) { unit.cooldown = Math.max(0, unit.cooldown - dt); unit.pulse = Math.max(0, unit.pulse - dt); }
+      this._advanceSupplies(dt);
       if (this.waveActive && this.spawnQueue.length) {
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 1e-8) {
@@ -165,32 +207,34 @@
         enemy.progress += enemy.speed * (1 - enemy.slow) * dt; this._positionEnemy(enemy);
         if (enemy.progress >= PATH_LENGTH) {
           this.enemies.splice(this.enemies.indexOf(enemy), 1); this.lives = Math.max(0, this.lives - enemy.damage);
-          this._effect('leak', { x: 352, y: 625 }); this._event('hit', { lives: this.lives, damage: enemy.damage, enemyId: enemy.id });
+          this._effect('leak', PATH[PATH.length - 1]); this._event('hit', { lives: this.lives, damage: enemy.damage, enemyId: enemy.id });
           if (this.lives === 0) { this._lose(); return; }
         }
       }
       for (const unit of this.units) {
         if (unit.cooldown > 0) continue;
         const stats = statsForLevel(unit.level);
-        // Prioritize the enemy nearest the exit, not array insertion order.
-        const target = this.enemies.filter(enemy => Math.hypot(enemy.x - unit.x, enemy.y - unit.y) <= stats.range)
-          .sort((a, b) => b.progress - a.progress)[0];
-        if (!target) continue;
-        this.bullets.push({ id: ++this.sequence, x: unit.x, y: unit.y, targetId: target.id, level: unit.level,
+        const selected = this._targetFor(unit, stats.range);
+        if (!selected) continue;
+        const target = selected.object;
+        this.bullets.push({ id: ++this.sequence, x: unit.x, y: unit.y, targetId: target.id, targetType: selected.type, level: unit.level,
           damage: stats.damage, splash: stats.splash, slow: stats.slow, speed: 360 + unit.level * 14, age: 0 });
         unit.cooldown = stats.cooldown; unit.pulse = Math.max(unit.pulse, 0.14);
-        this._event('shoot', { unitId: unit.id, level: unit.level, x: unit.x, y: unit.y, targetId: target.id });
+        this._event('shoot', { unitId: unit.id, level: unit.level, x: unit.x, y: unit.y, targetId: target.id, targetType: selected.type });
       }
       const remainingBullets = [];
       for (const bullet of this.bullets) {
         bullet.age += dt;
-        const target = this.enemies.find(enemy => enemy.id === bullet.targetId);
+        const objects = bullet.targetType === 'supply' ? this.supplies : this.enemies;
+        const target = objects.find(object => object.id === bullet.targetId);
         if (!target || bullet.age > 3) continue;
         const dx = target.x - bullet.x, dy = target.y - bullet.y, distance = Math.hypot(dx, dy), travel = bullet.speed * dt;
         if (distance <= travel + 6) {
-          const nearby = bullet.splash ? this.enemies.filter(enemy => enemy.id !== target.id && Math.hypot(enemy.x - target.x, enemy.y - target.y) <= bullet.splash) : [];
-          this._damage(target, bullet.damage, bullet.slow);
-          for (const enemy of nearby) this._damage(enemy, bullet.damage * 0.45, bullet.slow);
+          const nearby = bullet.splash ? objects.filter(object => object.id !== target.id && Math.hypot(object.x - target.x, object.y - target.y) <= bullet.splash) : [];
+          const damage = object => bullet.targetType === 'supply' ? this._damageSupply(object, object === target ? bullet.damage : bullet.damage * 0.45)
+            : this._damage(object, object === target ? bullet.damage : bullet.damage * 0.45, bullet.slow);
+          damage(target);
+          for (const object of nearby) damage(object);
         } else { bullet.x += dx / distance * travel; bullet.y += dy / distance * travel; remainingBullets.push(bullet); }
       }
       this.bullets = remainingBullets;
@@ -218,6 +262,24 @@
       this._event('kill', { enemyId: enemy.id, kind: enemy.kind, boss: enemy.boss, gold: enemy.reward, score: points });
     }
 
+    _damageSupply(supply, amount) {
+      if (!this.supplies.includes(supply)) return;
+      supply.hp = Math.max(0, supply.hp - amount); supply.hit = 0.18;
+      this._effect('supplyHit', supply, { duration: 0.18 });
+      this._event('supplyHit', { supplyId: supply.id, hp: supply.hp, maxHp: supply.maxHp });
+      if (supply.hp > 0) return;
+      this.supplies.splice(this.supplies.indexOf(supply), 1); this.hatched++;
+      const slot = SLOTS.filter(value => !this._unitAt(value.id)).sort((a, b) => Math.hypot(a.x - supply.x, a.y - supply.y) - Math.hypot(b.x - supply.x, b.y - supply.y) || a.id - b.id)[0];
+      let details;
+      if (slot) {
+        const unit = this._makeUnit(slot.id); unit.pulse = 0.6;
+        details = { supplyId: supply.id, unitId: unit.id, slot: slot.id, level: 0 };
+      } else {
+        this.reserve++; details = { supplyId: supply.id, reserve: true, level: 0 };
+      }
+      this._effect('hatch', supply, { ...details, duration: 0.8 }); this._event('hatch', details); this._notify();
+    }
+
     _lose() {
       if (this.completed) return;
       this.status = 'lost'; this.isPaused = false; this.completed = true; this.accumulator = 0;
@@ -227,6 +289,7 @@
 
   DefenseGame.WIDTH = WIDTH; DefenseGame.HEIGHT = HEIGHT; DefenseGame.SLOTS = SLOTS; DefenseGame.PATH = PATH;
   DefenseGame.PATH_LENGTH = PATH_LENGTH; DefenseGame.upgradeCost = upgradeCost; DefenseGame.statsForLevel = statsForLevel;
+  DefenseGame.SUPPLY_LANE = SUPPLY_LANE;
   root.DefenseGame = DefenseGame;
   if (typeof module !== 'undefined' && module.exports) module.exports = DefenseGame;
 })(typeof window !== 'undefined' ? window : globalThis);

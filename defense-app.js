@@ -5,7 +5,7 @@
     const $ = id => document.getElementById(id);
     const canvas = $('defense-canvas');
     if (!canvas) return null;
-    const BEST_KEY = 'feitian-defense-best-v1';
+    const BEST_KEY = 'feitian-defense-best-v2';
     const HIT_RADIUS = 34;
     let game = null, audio = null, state = null, context = null;
     let active = false, focused = true, manualPaused = false;
@@ -89,7 +89,7 @@
       if (notice && Date.now() < noticeUntil) return notice;
       if (next.status === 'ready') return '点击「开始守卫」，布置你的第一道防线';
       if (next.nextWaveIn > 0) return '下一波即将来袭 · 趁现在调整阵容';
-      return `第 ${next.wave} 波 · 剩余 ${next.remaining} 个入侵者 · 点击空位招募`;
+      return `第 ${next.wave} 波 · 剩余 ${next.remaining} 个入侵者 · 击碎孵化蛋获得同伴`;
     }
     function render(next) {
       state = next; saveBest(next.score);
@@ -102,7 +102,8 @@
       text('defense-gold', String(next.gold));
       text('defense-lives', `${next.lives}/${next.maxLives}`);
       text('defense-status', statusText(next) + (savedWarning ? ' · 本机记录暂未保存' : ''));
-      text('defense-selection', unit ? unit.level >= 10 ? '已选守卫 · 已进化至最高形态' : `已选守卫 · 拖到同形态守卫上合成` : `点击空位招募 · ${next.spawnCost} 金币`);
+      const reserveHint = next.reserve > 0 ? ` · 待上场 ${next.reserve} 位` : '';
+      text('defense-selection', (unit ? unit.level >= 10 ? '已选守卫 · 已进化至最高形态' : '已选守卫 · 拖到同形态守卫上合成' : next.reserve > 0 ? '点击空位让同伴上场' : '把守卫拖到右下方，击碎孵化蛋获得同伴') + reserveHint);
       text('defense-upgrade', unit ? unit.level >= 10 ? '已达最高形态' : `进化 · ${cost} 金币` : '选择守卫进化');
       prop('defense-upgrade', 'disabled', !unit || unit.level >= 10 || !Number.isFinite(cost) || next.gold < cost || paused || ended);
       text('defense-pause', paused ? '继续' : '暂停');
@@ -124,7 +125,7 @@
     function showNotice(message) { notice = message; noticeUntil = Date.now() + 1900; if (game) { render(game.getState()); draw(); } }
     function onEvent(event) {
       if (active && !blocked()) callAudio('play', event);
-      const messages = { merge: '合成成功，守卫进化了！', upgrade: '进化成功，火力升级！', hit: '有入侵者突破了防线！', clear: '这一波守住了！趁现在招募和进化', wave: `第 ${event.wave || game?.getState().wave || 1} 波来袭` };
+      const messages = { merge: '合成成功，守卫进化了！', upgrade: '进化成功，火力升级！', hit: '有入侵者突破了防线！', clear: '这一波守住了！趁现在移动和进化', hatch: event.reserve ? '孵化成功！阵位已满，同伴正在待命' : '孵化成功，新同伴加入防线！', wave: `第 ${event.wave || game?.getState().wave || 1} 波来袭` };
       if (messages[event.type]) { notice = messages[event.type]; noticeUntil = Date.now() + 1700; }
     }
     function preload() {
@@ -177,7 +178,7 @@
     function deploy(slot) {
       if (!canAct() || slot === null) return;
       selectedSlot = slot;
-      if (!unitAt(slot) && !game.place(slot)) showNotice(state.gold < state.spawnCost ? '金币不足，击退入侵者后再招募' : '这个位置暂时不能部署');
+      if (!unitAt(slot) && !game.place(slot)) showNotice(state.reserve > 0 ? '这个位置暂时不能部署' : '把守卫拖到右下方，击碎孵化蛋获得同伴');
       render(game.getState()); draw();
     }
     function upgrade() {

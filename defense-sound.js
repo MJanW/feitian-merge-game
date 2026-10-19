@@ -12,6 +12,8 @@
       this._voices = new Set();
       this._lastShot = -Infinity;
       this._lastKill = -Infinity;
+      this._lastSupplyHit = -Infinity;
+      this._lastHatch = -Infinity;
       this._generation = 0;
     }
 
@@ -22,6 +24,7 @@
         const Context = root.AudioContext || root.webkitAudioContext;
         if ((!this.context || this.context.state === 'closed') && Context) {
           this.context = new Context(); this._lastShot = -Infinity; this._lastKill = -Infinity;
+          this._lastSupplyHit = -Infinity; this._lastHatch = -Infinity;
         }
         context = this.context;
         if (!context || !this.enabled) return Promise.resolve(false);
@@ -77,6 +80,16 @@
           this._lastKill = now;
           this._note(780, 0, .07, .021, 1140);
           return this._note(1180, .03, .11, .012, 780);
+        case 'supplyHit':
+          if (now - this._lastSupplyHit < .09) return false;
+          this._lastSupplyHit = now;
+          return this._note(880, 0, .045, .014, 510, 'triangle');
+        case 'hatch':
+          if (now - this._lastHatch < .12) return false;
+          this._lastHatch = now;
+          this._note(523.25, 0, .12, .023, 659.25);
+          this._note(659.25, .065, .14, .022, 783.99);
+          return this._note(1046.5, .13, .22, .019, 880);
         case 'merge': case 'upgrade': {
           const pitch = 1 + level * .025;
           [392, 493.88, 587.33, 783.99].forEach((frequency, index) => this._note(frequency * pitch, index * .055, .16, .028));
