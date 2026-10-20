@@ -5,7 +5,7 @@
     const $ = id => document.getElementById(id);
     const canvas = $('defense-canvas');
     if (!canvas) return null;
-    const BEST_KEY = 'feitian-defense-best-v4';
+    const BEST_KEY = 'feitian-defense-best-v5';
     const HIT_RADIUS = 34;
     let game = null, audio = null, state = null, context = null;
     let active = false, focused = true, manualPaused = false;
@@ -13,8 +13,7 @@
     let frame = null, lastFrame = null, destroyed = false;
     let best = 0, savedWarning = false, notice = '', noticeUntil = 0;
     let evolutionVisible = false, evolutionFocus = null;
-    const routeNames = { ice: '寒霜', fire: '焰刃', lightning: '雷霆' };
-    const routeKeys = Object.keys(routeNames);
+    const routeSlots = [0, 1, 2];
     const images = [], enemyImages = {}, listeners = [];
     const reducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
     let soundEnabled = typeof window.GameSoundEnabled === 'boolean' ? window.GameSoundEnabled : read('photo-merge-sound', 'on') !== 'off';
@@ -42,12 +41,17 @@
       return { ...levels[photoIndex + 1], photoIndex, cycle: Math.floor(level / count), displayLevel: level + 1 };
     }
     function combatStats(unit) { return unit ? window.DefenseGame.statsForLevel(unit.level, unit.routes, unit.route) : null; }
-    function abilityName(stats) { return ({ ice: '寒霜', fire: '焰刃', lightning: '雷霆' })[stats?.ability] || '旋刃'; }
+    function abilityName(stats) { return stats?.specialName || '旋刃'; }
+    function routeInfo(route, level) { return window.DefenseGame.routeInfo(route, level); }
+    function stageName(level) { return level < 7 ? '元素觉醒' : level < 11 ? '属性进阶' : level < 15 ? '专属技能' : '奥义精修'; }
+    function nextStage(unit) {
+      const nextLevel = Math.floor((unit.level + 1) / 4 + 1) * 4;
+      return `Lv.${nextLevel} ${stageName(nextLevel - 1)}`;
+    }
     function chanceFor(unit) { return unit ? window.DefenseGame.evolutionChance(unit.level) : 0; }
     function percent(value) { return `${Math.round(value * 1000) / 10}%`; }
-    function routeSummary(unit) { return routeKeys.filter(route => unit?.routes?.[route] > 0).map(route => `${routeNames[route]} ${unit.routes[route]}`).join(' · '); }
     function routePath(unit) {
-      return window.DefenseGame.evolutionPath(unit).map(({ level, route }) => `${routeNames[route]}${level > unit.level ? '（休眠）' : ''}`).join('→') || '未分支';
+      return window.DefenseGame.evolutionPath(unit).map(({ level, route }) => routeInfo(route, level)?.name || route).join(' → ') || '等待 Lv.4 元素觉醒';
     }
     function blocked() { return !active || !focused || document.hidden || manualPaused || Boolean(document.querySelector('dialog[open]')); }
     function canAct() { return Boolean(game && state && state.status !== 'lost' && !state.isPaused && !state.pendingEvolution && !blocked()); }
@@ -116,18 +120,25 @@
       if (pending) {
         clearInput(); stopFrame();
         const unit = game?.units.find(candidate => candidate.id === pending.unitId);
-        const replacedRoute = unit?.routeChoices?.[pending.level];
-        text('defense-evolution-title', `Lv.${pending.level + 1} · 选择进化路线`);
-        text('defense-evolution-detail', (replacedRoute ? `此阶段曾选择${routeNames[replacedRoute]}。这次选择会替换该阶段能力，其他阶段保留。` : '保留已学能力。选择新路线，或再次选择已有路线来强化。') + '仅同级、完整路线相同可合成。');
-        for (const route of routeKeys) {
-          const rank = Math.max(0, (unit?.routes?.[route] || 0) - Number(replacedRoute === route));
-          text(`defense-route-${route}-rank`, replacedRoute === route ? `保留 ${rank + 1} 阶` : replacedRoute ? `替换为 ${rank + 1} 阶` : rank ? `强化 ${rank} → ${rank + 1}` : '首次觉醒');
-          prop(`defense-route-${route}`, 'disabled', !visible || !pending.choices.includes(route));
+        text('defense-evolution-title', `Lv.${pending.level + 1} · ${stageName(pending.level)}`);
+        text('defense-evolution-detail', `${unit ? routePath(unit) + '。' : ''}${pending.level < 7 ? '选择基础元素，开启你的进化路线。' : pending.level < 11 ? '沿当前元素解锁更高阶属性，已学能力保留。' : pending.level < 15 ? '选择专属技能，让这条路线形成独特打法。' : '精修已掌握的奥义，继续提升威力。'}仅同级、完整路线相同可合成。`);
+        for (const slot of routeSlots) {
+          const route = pending.choices[slot];
+          const info = route ? routeInfo(route, pending.level) : null;
+          prop(`defense-route-${slot}`, 'hidden', !info);
+          prop(`defense-route-${slot}`, 'disabled', !visible || !info);
+          attr(`defense-route-${slot}`, 'data-family', info?.family || 'normal');
+          attr(`defense-route-${slot}`, 'data-route', route || '');
+          text(`defense-route-${slot}-icon`, info?.icon || '✦');
+          text(`defense-route-${slot}-name`, info?.name || '');
+          text(`defense-route-${slot}-description`, info?.description || '');
+          text(`defense-route-${slot}-rank`, info ? pending.level < 15 ? stageName(pending.level) : `第 ${Math.floor((pending.level - 11) / 4)} 次精修` : '');
         }
       }
-      if (visible && !evolutionVisible) {
+      const choices = routeSlots.map(slot => $(`defense-route-${slot}`)).filter(button => button && !button.hidden && !button.disabled);
+      if (visible && (!evolutionVisible || !choices.includes(document.activeElement))) {
         if (!evolutionFocus) evolutionFocus = document.activeElement;
-        $('defense-route-ice')?.focus({ preventScroll: true });
+        choices[0]?.focus({ preventScroll: true });
       } else if (!visible && evolutionVisible && !pending && active && !blocked() && !next.isPaused) {
         const previous = evolutionFocus;
         (previous?.focus && !previous.disabled ? previous : canvas).focus({ preventScroll: true });
@@ -139,11 +150,10 @@
       state = next; saveBest(next.score);
       const paused = blocked() || next.isPaused, ended = next.status === 'lost';
       const unit = unitAt(selectedSlot);
-      const cost = unit ? window.DefenseGame.upgradeCost(unit.level) : null;
       text('defense-score', next.score.toLocaleString());
       text('defense-best', best.toLocaleString());
       text('defense-wave', String(next.wave));
-      text('defense-gold', String(next.gold));
+      text('defense-kills', String(next.kills));
       text('defense-lives', `${next.lives}/${next.maxLives}`);
       text('defense-status', statusText(next) + (savedWarning ? ' · 本机记录暂未保存' : ''));
       const reserveHint = next.reserve > 0 ? ` · 待命 ${next.reserve}` : '';
@@ -153,11 +163,9 @@
       text('defense-selection', selection);
       attr('defense-selection', 'title', selection);
       attr('defense-selection', 'aria-label', selection);
-      text('defense-unit-stats', unit ? `${stats.bladeCount} 把飞刃 · ${routeSummary(unit) || '每4级选择特殊路线'}` : '1级每刀1点伤害，进化持续增强');
+      text('defense-unit-stats', unit ? `${stats.bladeCount} 把飞刃 · 下次分支：${nextStage(unit)}` : 'Lv.4 元素 · Lv.8 属性 · Lv.12 技能 · 此后奥义精修');
       text('defense-reserve', `待命 ${next.reserve} 位`);
-      text('defense-upgrade', unit ? `进化 ${percent(chance)}` : '选择守卫');
-      text('defense-evolution-risk', unit ? `${Number.isFinite(cost) ? cost.toLocaleString() : '—'} 金币 · 合成成功 ${percent(chance)}，须同级同路线。失败扣币／耗拖入者并降1级，最低1级。` : '同级同路线才能合成。进化失败扣币；合成失败耗拖入者，均降1级（最低1级）。');
-      prop('defense-upgrade', 'disabled', !unit || !Number.isFinite(cost) || next.gold < cost || paused || ended || Boolean(next.pendingEvolution));
+      text('defense-evolution-risk', unit ? `合成成功 ${percent(chance)} · 须同级同路线。失败仅消耗拖入者，原守卫等级与路线保留。` : '同级同路线才能合成。失败消耗拖入者，原守卫等级与路线保留。');
       prop('defense-restart', 'disabled', Boolean(next.pendingEvolution));
       text('defense-pause', paused ? '继续' : '暂停');
       attr('defense-pause', 'aria-pressed', String(paused));
@@ -179,9 +187,10 @@
     function showNotice(message) { notice = message; noticeUntil = Date.now() + 1900; if (game) { render(game.getState()); draw(); } }
     function onEvent(event) {
       if (active && !blocked()) callAudio('play', event);
-      const messages = { merge: '合成成功，守卫进化了！', upgrade: '进化成功，火力升级！', hit: '有入侵者突破了防线！', clear: '这一波守住了！趁现在移动和进化', hatch: event.reserve ? '孵化成功！阵位已满，同伴正在待命' : '孵化成功，新同伴加入防线！', wave: `第 ${event.wave || game?.getState().wave || 1} 波来袭` };
-      if (event.type === 'evolveFail') messages.evolveFail = `${event.method === 'merge' ? '合成失败，拖入的守卫已消耗' : `进化失败，已消耗 ${event.cost} 金币`}；守卫回到 Lv.${event.level + 1}`;
-      if (event.type === 'route') messages.route = `${routeNames[event.route] || '特殊'}路线 ${event.rank} 阶！所选路线已生效`;
+      const messages = { merge: '合成成功，守卫进化了！', hit: '有入侵者突破了防线！', clear: '这一波守住了！趁现在移动和进化', hatch: event.reserve ? '孵化成功！阵位已满，同伴正在待命' : '孵化成功，新同伴加入防线！', wave: `第 ${event.wave || game?.getState().wave || 1} 波来袭` };
+      if (event.type === 'evolveFail') messages.evolveFail = `合成失败，拖入的守卫已消耗；原守卫保留 Lv.${event.level + 1} 与路线`;
+      if (event.type === 'route') messages.route = `${routeInfo(event.route, event.level)?.name || '特殊能力'}已觉醒！所选路线已生效`;
+      if (event.type === 'hatch' && Number.isInteger(event.level)) messages.hatch += ` · Lv.${event.level + 1}，继承击蛋者的已解锁路线`;
       if (messages[event.type]) { notice = messages[event.type]; noticeUntil = Date.now() + (event.type === 'evolveFail' ? 4200 : 1700); }
     }
     function preload() {
@@ -243,11 +252,6 @@
       if (!canAct() || slot === null) return;
       selectedSlot = slot;
       if (!unitAt(slot) && !game.place(slot)) showNotice(state.reserve > 0 ? '这个位置暂时不能部署' : '把守卫拖到右下方，击碎孵化蛋获得同伴');
-      render(game.getState()); draw();
-    }
-    function upgrade() {
-      if (!canAct() || selectedSlot === null || !unitAt(selectedSlot)) return;
-      if (!game.upgrade(selectedSlot)) showNotice('金币不足，击退入侵者后再进化');
       render(game.getState()); draw();
     }
     function chooseRoute(route) {
@@ -322,7 +326,7 @@
     listen(document, 'keydown', event => {
       if (active && state?.pendingEvolution) {
         if (!evolutionVisible || blocked() || event.metaKey || event.ctrlKey || event.altKey) return;
-        const choices = routeKeys.map(route => $(`defense-route-${route}`)).filter(button => button && !button.disabled);
+        const choices = routeSlots.map(slot => $(`defense-route-${slot}`)).filter(button => button && !button.hidden && !button.disabled);
         const current = choices.indexOf(document.activeElement);
         if (event.key === 'Tab' || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
           event.preventDefault();
@@ -339,7 +343,6 @@
       if (!canAct()) return;
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key)) { event.preventDefault(); clearInput(); selectDirection(key); render(game.getState()); draw(); }
       else if (key === 'Enter' || key === ' ') { event.preventDefault(); if (!event.repeat) deploy(selectedSlot ?? 0); }
-      else if (key === 'u') { event.preventDefault(); if (!event.repeat) upgrade(); }
     });
     function togglePause() {
       if (!active || !game || state.status !== 'playing') return;
@@ -350,8 +353,10 @@
       if (!active || !ensureGame() || state.status !== 'ready' || state.pendingEvolution) return;
       focused = true; manualPaused = false; game.start(); syncPause(); canvas.focus({ preventScroll: true });
     });
-    listen($('defense-upgrade'), 'click', upgrade);
-    for (const route of routeKeys) listen($(`defense-route-${route}`), 'click', () => chooseRoute(route));
+    for (const slot of routeSlots) listen($(`defense-route-${slot}`), 'click', () => {
+      const button = $(`defense-route-${slot}`), route = state?.pendingEvolution?.choices[slot];
+      if (route && button && !button.hidden && !button.disabled) chooseRoute(route);
+    });
     listen($('defense-pause'), 'click', togglePause);
     listen($('defense-restart'), 'click', () => reset());
     listen($('defense-retry'), 'click', () => reset(false));

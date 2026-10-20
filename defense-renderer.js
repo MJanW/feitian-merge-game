@@ -144,6 +144,96 @@
     const valid = Array.isArray(frame) && frame.length === 4 && frame.every(Number.isFinite) && frame[0] >= 0 && frame[1] >= 0 && frame[2] > 0 && frame[3] > 0 && frame[0] + frame[2] <= image.naturalWidth && frame[1] + frame[3] <= image.naturalHeight;
     return valid ? frame : [0, 0, image.naturalWidth, image.naturalHeight];
   }
+  function attributeIdentity(unit) {
+    const definitions = (engine()?.evolutionPath?.(unit) || [])
+      .filter(step => step.level <= unit.level)
+      .map(step => engine()?.routeInfo?.(step.route, step.level))
+      .filter(Boolean);
+    return {
+      branch: definitions.find(info => info.tier === 2),
+      skill: definitions.find(info => info.tier === 3),
+      active: definitions.at(-1),
+    };
+  }
+  function snowflake(ctx, x, y, r, color) {
+    for (let i = 0; i < 3; i++) {
+      const a = i * Math.PI / 3, dx = Math.cos(a) * r, dy = Math.sin(a) * r;
+      line(ctx, x - dx, y - dy, x + dx, y + dy, color, 1.2);
+    }
+  }
+  // Advanced silhouettes remain bounded regardless of level. Each branch has
+  // geometry of its own, while the original portrait and blade hitboxes stay intact.
+  function advancedAttributes(ctx, unit, identity, options, elapsed) {
+    const branch = identity.branch;
+    if (!branch) return;
+    const phase = options.reducedMotion ? 0 : number(elapsed) * 1.4 + number(unit.phase);
+    const color = branch.color || ABILITY[branch.family] || '#d1e8ed';
+    ctx.save();
+    if (branch.id === 'glacier') {
+      for (let i = 0; i < 5; i++) {
+        const x = (i - 2) * 12, rise = i % 2 ? 20 : 12;
+        polygon(ctx, [[x - 7, 18], [x - 4, 3 - rise], [x + 1, -4 - rise], [x + 7, 18]], '#8ed4f0b8', '#277493', 1.2);
+        line(ctx, x + 1, -2 - rise, x + 2, 15, '#eefcff', 1.2);
+      }
+    } else if (branch.id === 'blizzard') {
+      for (let i = 0; i < 3; i++) {
+        const a = phase + i * TAU / 3;
+        ctx.beginPath(); ctx.ellipse(0, -10, 32, 23, -.35, a, a + 1.8);
+        ctx.strokeStyle = '#d8ffffce'; ctx.lineWidth = 2; ctx.stroke();
+        snowflake(ctx, Math.cos(a) * 31, -10 + Math.sin(a) * 23, 4.5, '#f2ffff');
+      }
+    } else if (branch.id === 'magma') {
+      ellipse(ctx, 0, 13, 30, 10, '#733b35cc', '#ed7844', 2.2);
+      for (const side of [-1, 1]) {
+        polygon(ctx, [[side * 17, 12], [side * 29, 6], [side * 26, -17], [side * 20, -25], [side * 22, -4]], '#653d3cdd', '#ea7845', 1.5);
+        line(ctx, side * 24, -15, side * 20, -5, '#ffd37c', 2);
+        line(ctx, side * 20, -5, side * 25, 3, '#ff9c4b', 2);
+      }
+      for (let i = 0; i < 3; i++) ellipse(ctx, (i - 1) * 17, 12 + Math.sin(phase + i) * 2, 3, 1.5, '#ffce72');
+    } else if (branch.id === 'solar') {
+      ellipse(ctx, 0, -13, 28, 28, '#ffdd6426', '#ffe4a4', 2.2);
+      for (let i = 0; i < 8; i++) {
+        const a = i * TAU / 8 + phase * .14, x = Math.cos(a), y = Math.sin(a);
+        line(ctx, x * 29, -13 + y * 29, x * 35, -13 + y * 35, '#fff3bd', 2.5);
+      }
+    } else if (branch.id === 'storm') {
+      for (let i = 0; i < 3; i++) {
+        const y = -26 + i * 15, drift = Math.sin(phase + i) * 2;
+        ctx.beginPath(); ctx.moveTo(-31, y + 5); ctx.bezierCurveTo(-13, y - 6, 19, y + 11, 30, y - 5 + drift);
+        ctx.strokeStyle = '#c9f6e0c9'; ctx.lineWidth = 3 - i * .5; ctx.stroke();
+        line(ctx, 26, y - 4 + drift, 30, y - 5 + drift, '#f7ffe8', 2);
+      }
+    } else if (branch.id === 'plasma') {
+      for (const angle of [-.5, .5]) {
+        ctx.save(); ctx.translate(0, -12); ctx.rotate(angle);
+        ellipse(ctx, 0, 0, 32, 14, null, '#e1bcff', 2.2);
+        const a = phase + angle * 3;
+        ellipse(ctx, Math.cos(a) * 32, Math.sin(a) * 14, 3.3, 3.3, '#faf1ff', '#9866c6', 1);
+        ctx.restore();
+      }
+    }
+    if (identity.skill) {
+      const skill = identity.skill, mark = skill.icon || '✦';
+      // A compact crest names the learned skill without growing an opaque
+      // backdrop over the face. Its outline also survives reduced motion.
+      polygon(ctx, [[0, -47], [9, -39], [6, -30], [-6, -30], [-9, -39]], '#fff9e4', skill.color || color, 1.7);
+      text(ctx, mark, 0, -38, 10, '#435954', '800', 'center');
+    }
+    if (number(identity.active?.tier) >= 4) {
+      const id = identity.active.id;
+      ctx.save(); ctx.translate(0, 16);
+      if (id === 'echo') {
+        ellipse(ctx, -3, -2, 30, 8, null, color, 1.3);
+        ellipse(ctx, 3, 2, 30, 8, null, '#fff9df', 1.3);
+      } else if (id === 'dominion') {
+        polygon(ctx, [[-30, 0], [-15, -9], [15, -9], [30, 0], [15, 9], [-15, 9]], null, color, 1.8);
+      } else {
+        for (const side of [-1, 1]) polygon(ctx, [[side * 18, 5], [side * 25, -6], [side * 24, 1], [side * 31, -5], [side * 26, 8]], '#fff5b4', color, 1);
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
   // Ambient attributes stay tied to simulation time. Pausing or choosing a route
   // therefore freezes the whole model; reduced motion keeps the shape language.
   function attributes(ctx, unit, stats, options, elapsed) {
@@ -194,10 +284,11 @@
   function portrait(ctx, unit, options, x = unit.x, y = unit.y, opacity = 1, elapsed = 0) {
     const info = form(unit, options), image = getImage(options.images, info, unit.level);
     const stats = engine()?.statsForLevel?.(unit.level, unit.routes, unit.route) || {}, ability = stats.ability || 'normal';
+    const identity = attributeIdentity(unit);
     const pulse = options.reducedMotion ? 0 : clamp(number(unit.pulse) / .6, 0, 1);
     ctx.save(); ctx.globalAlpha *= opacity; ctx.translate(x, y + 15);
     ellipse(ctx, 1, 2, 21, 6, '#345d3555', '#d9e5a650', 1);
-    ctx.save(); ctx.translate(0, -15); attributes(ctx, unit, stats, options, elapsed); ctx.restore();
+    ctx.save(); ctx.translate(0, -15); attributes(ctx, unit, stats, options, elapsed); advancedAttributes(ctx, unit, identity, options, elapsed); ctx.restore();
     const spring = 1 + Math.sin(pulse * Math.PI) * .08;
     ctx.scale(1 / spring, spring);
     if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
@@ -216,9 +307,11 @@
     text(ctx, label, x, y + 27, 8, '#fffce6', '800', 'center', MONO);
     if (ability !== 'normal') {
       const rank = Math.max(1, number(stats.ranks?.[ability], number(unit.routes?.[ability], 1)));
-      const badge = `${ROUTE_MARK[ability] || '✦'}${rank}`, badgeWidth = Math.max(23, badge.length * 5.5 + 8);
-      round(ctx, x + 10, y - 27, badgeWidth, 15, 6, ABILITY[ability], '#406441', 1.2);
-      text(ctx, badge, x + 10 + badgeWidth / 2, y - 19, 9, '#254e4b', '800', 'center');
+      const advanced = identity.active && identity.active.tier >= 2;
+      const badge = advanced ? Array.from(identity.active.name || '进阶').slice(0, 5).join('') : `${ROUTE_MARK[ability] || '✦'}${rank}`;
+      const badgeWidth = Math.max(23, Array.from(badge).length * (advanced ? 8 : 5.5) + 8);
+      round(ctx, x + 5, y - 27, badgeWidth, 15, 6, identity.active?.color || ABILITY[ability], '#406441', 1.2);
+      text(ctx, badge, x + 5 + badgeWidth / 2, y - 19, advanced ? 8 : 9, '#254e4b', '800', 'center');
       // Retained routes remain visible even when the latest choice changes
       // the primary blade color. The badge number is that route's rank.
       let marker = 0;
@@ -238,7 +331,8 @@
   function orbit(ctx, unit, game, options) {
     const blades = engine()?.bladesFor?.(unit, number(game.elapsed)) || [];
     const stats = engine()?.statsForLevel?.(unit.level, unit.routes, unit.route) || {};
-    const ability = stats.ability || 'normal', color = ABILITY[ability] || ABILITY.normal;
+    const ability = stats.ability || 'normal', identity = attributeIdentity(unit);
+    const color = identity.active?.color || ABILITY[ability] || ABILITY.normal;
     for (const blade of blades) {
       if (![blade.x, blade.y, blade.innerX, blade.innerY, blade.outerX, blade.outerY].every(Number.isFinite)) continue;
       const radius = Math.hypot(blade.x - unit.x, blade.y - unit.y), angle = Math.atan2(blade.y - unit.y, blade.x - unit.x);
@@ -448,6 +542,65 @@
       for (let i = 1; i < 6; i++) { const t = i / 6, offset = (i % 2 ? 1 : -1) * 5; ctx.lineTo(e.fromX + dx * t - dy / length * offset, e.fromY + dy * t + dx / length * offset); }
       ctx.lineTo(e.x, e.y); ctx.strokeStyle = '#e6a83b'; ctx.lineWidth = 5; ctx.stroke();
       ctx.strokeStyle = '#fff8b8'; ctx.lineWidth = 2.2; ctx.stroke();
+    } else if (e.type === 'field') {
+      const r = clamp(number(e.radius, 38), 6, 160), tint = ABILITY[e.ability] || '#d8eccc';
+      ellipse(ctx, e.x, e.y, r, r, tint + '20', tint, 1.7);
+      ctx.save(); ctx.setLineDash([4, 5]);
+      ellipse(ctx, e.x, e.y, r * .8, r * .8, null, tint, 1.2);
+      ctx.restore();
+      for (let i = 0; i < 4; i++) {
+        const a = i * TAU / 4 + .5;
+        snowflake(ctx, e.x + Math.cos(a) * r * .6, e.y + Math.sin(a) * r * .6, 3, '#f3ffec');
+      }
+    } else if (e.type === 'skill') {
+      const r = clamp(number(e.radius, 38), 6, 95) * (.45 + motion * .55);
+      const skill = e.skill, tint = ABILITY[e.ability] || '#e7eddf';
+      ctx.save(); ctx.translate(e.x, e.y);
+      if (skill === 'shatter' || skill === 'hail') {
+        for (let i = 0; i < 6; i++) {
+          const a = i * TAU / 6, x = Math.cos(a) * r, y = Math.sin(a) * r;
+          if (skill === 'hail') {
+            line(ctx, x - 4, y - 13, x, y, '#d6fbff', 1.8);
+            ellipse(ctx, x, y, 4, 4, '#e9fdff', '#438ea9', 1);
+          } else polygon(ctx, [[x - 3, y + 4], [x, y - 8], [x + 4, y + 3]], '#e5fbff', '#52a6bb', 1);
+        }
+      } else if (skill === 'permafrost' || skill === 'whiteout') {
+        ellipse(ctx, 0, 0, r, r, '#c0f5ff1c', '#c8faff', 2);
+        for (let i = 0; i < 5; i++) {
+          const a = i * TAU / 5 + (skill === 'whiteout' ? motion * 2 : 0);
+          snowflake(ctx, Math.cos(a) * r * .68, Math.sin(a) * r * .68, skill === 'permafrost' ? 6 : 3, '#ecffff');
+        }
+      } else if (skill === 'eruption' || skill === 'slag') {
+        ellipse(ctx, 0, 3, r, r * .6, '#7e3d282f', '#f79148', 2);
+        for (let i = 0; i < 5; i++) {
+          const x = (i - 2) * r * .35, y = Math.sin(i * 2) * r * .25;
+          if (skill === 'eruption') polygon(ctx, [[x - 5, y + 6], [x, y - 14 - r * .25], [x + 7, y + 5]], '#ffb657b3', '#ee7853', 1);
+          else ellipse(ctx, x, y, 5 + motion * 3, 3 + motion * 2, '#ffc572a6', '#bf5c3b', 1);
+        }
+      } else if (skill === 'flare' || skill === 'nova') {
+        ellipse(ctx, 0, 0, r, r, '#ffe59920', '#ffdf88', 2.5);
+        if (skill === 'nova') ellipse(ctx, 0, 0, r * .6, r * .6, null, '#fff5d5', 3);
+        else for (let i = 0; i < 8; i++) {
+          const a = i * TAU / 8;
+          line(ctx, Math.cos(a) * r * .55, Math.sin(a) * r * .55, Math.cos(a) * r * 1.15, Math.sin(a) * r * 1.15, '#fff0bc', 2);
+        }
+      } else if (skill === 'cyclone') {
+        for (let i = 0; i < 3; i++) {
+          const a = i * TAU / 3 + motion * 3;
+          ctx.beginPath(); ctx.arc(0, 0, r * (.5 + i * .2), a, a + Math.PI);
+          ctx.strokeStyle = '#d1f8df'; ctx.lineWidth = 2.5; ctx.stroke();
+        }
+      } else if (skill === 'thunderhead' || skill === 'arc') {
+        for (let i = 0; i < (skill === 'thunderhead' ? 3 : 1); i++) {
+          const x = (i - (skill === 'thunderhead' ? 1 : 0)) * r * .5;
+          polygon(ctx, [[x + 5, -r], [x - 9, 0], [x, -3], [x - 5, r], [x + 12, -8], [x + 3, -4]], '#fff1af', '#ba8a35', 1);
+        }
+      } else {
+        ellipse(ctx, 0, 0, r, r, null, skill === 'pulse' ? '#debaff' : tint, 2.4);
+        ellipse(ctx, 0, 0, r * .65, r * .65, null, '#fff6d9', 1.6);
+        for (let i = 0; i < 4; i++) ellipse(ctx, Math.cos(i * TAU / 4) * r, Math.sin(i * TAU / 4) * r, 3, 3, '#fff9ee');
+      }
+      ctx.restore();
     } else if (e.type === 'score' || e.type === 'damage') {
       text(ctx, e.text || `${e.type === 'score' ? '+' : '−'}${Math.ceil(number(e.value, number(e.amount)))}`, e.x, e.y - 20 - motion * 25, 13, e.type === 'score' ? '#3a6f4a' : ORANGE, '700', 'center', MONO);
     } else if (e.type === 'evolveFail') {
@@ -459,7 +612,7 @@
       }
       const labelY = e.y - 44 - motion * 8;
       round(ctx, e.x - 28, labelY - 8, 56, 16, 5, '#e8ebdbed', '#8b9580', .8);
-      text(ctx, number(e.lostLevel) > 0 ? '降 1 级' : '进化未成', e.x, labelY, 9, '#617157', '700', 'center');
+      text(ctx, '等级保留', e.x, labelY, 9, '#617157', '700', 'center');
     } else if (e.type === 'merge' || e.type === 'upgrade') {
       ellipse(ctx, e.x, e.y - 3, 18 + motion * 28, 18 + motion * 28, null, '#d5a443', 2 * fade + .7);
       for (let i = 0; i < 8; i++) {

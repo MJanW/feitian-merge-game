@@ -8,7 +8,7 @@
   <title>合成飞天</title>
   <link rel="icon" href="assets/photo-10.png" type="image/png">
   <link rel="stylesheet" href="styles.css?v=20261019-defense1">
-  <link rel="stylesheet" href="defense.css?v=20261019-paths1">
+  <link rel="stylesheet" href="defense.css?v=20261021-evolutiontree1">
   <script defer src="vendor/matter.min.js"></script>
   <script defer src="levels.js?v=20261017-size10"></script>
   <script defer src="sound.js?v=20261016-finale300"></script>
@@ -27,10 +27,10 @@
   <script defer src="jump-app.js?v=20261017-softjump1"></script>
   <script defer src="defense-forms.js?v=20261019-paths1"></script>
   <script defer src="defense-enemies.js?v=20261019-paths1"></script>
-  <script defer src="defense-game.js?v=20261019-paths1"></script>
-  <script defer src="defense-renderer.js?v=20261019-paths1"></script>
+  <script defer src="defense-game.js?v=20261021-evolutiontree1"></script>
+  <script defer src="defense-renderer.js?v=20261021-evolutiontree1"></script>
   <script defer src="defense-sound.js?v=20261019-paths1"></script>
-  <script defer src="defense-app.js?v=20261019-paths1"></script>
+  <script defer src="defense-app.js?v=20261021-evolutiontree1"></script>
   <script defer src="modes.js?v=20261019-defense1"></script>
 </head>
 <body>
@@ -138,14 +138,14 @@
     <div class="defense-layout">
       <section class="defense-play" aria-label="守卫飞天战场">
         <div class="defense-board">
-          <canvas id="defense-canvas" width="400" height="650" tabindex="0" aria-label="飞刃守卫战场：身边的小刀旋转攻击酒瓶和孵化蛋。拖动守卫布阵，同级且完整进化路线相同才能合成。方向键选择阵位，回车部署待命守卫，U 进化，P 暂停。" aria-describedby="defense-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
+          <canvas id="defense-canvas" width="400" height="650" tabindex="0" aria-label="飞刃守卫战场：身边的小刀旋转攻击酒瓶和孵化蛋。拖动守卫布阵，同级且完整进化路线相同才能合成。方向键选择阵位，回车部署待命守卫，P 暂停。" aria-describedby="defense-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
           <div id="defense-intro" class="defense-intro">
             <div class="defense-intro-card">
               <span class="defense-eyebrow">第四周目 · 无尽守卫</span>
               <div class="defense-emblem" aria-hidden="true">✦</div>
               <h2>小刀转起来，<br>同伴多起来。</h2>
               <p>左边酒瓶来袭，右边同伴待醒。<br>把守卫放在哪里，由你决定。</p>
-              <ol><li><span>1</span>靠右击碎孵化蛋，召集新同伴</li><li><span>2</span>同级同路线合成；失败消耗资源并降一级</li><li><span>3</span>每4级选择寒霜、焰刃或雷霆路线</li></ol>
+              <ol><li><span>1</span>靠右击蛋，召集低2级、继承路线的同伴</li><li><span>2</span>同级同路线合成；失败保留原守卫等级</li><li><span>3</span>元素觉醒 → 高阶属性 → 专属技能</li></ol>
               <button id="defense-start" class="primary-button" type="button">出发，守住防线 <span aria-hidden="true">▶</span></button>
             </div>
           </div>
@@ -154,11 +154,11 @@
             <div class="defense-evolution-card">
               <span class="defense-eyebrow">SPECIAL EVOLUTION · 战场已冻结</span>
               <h2 id="defense-evolution-title">选择进化路线</h2>
-              <p id="defense-evolution-detail">保留已学能力，可强化或组合。仅同级、完整路线相同可合成。</p>
+              <p id="defense-evolution-detail">沿当前路线解锁更高阶能力。仅同级、完整路线相同可合成。</p>
               <div class="defense-route-choices">
-                <button id="defense-route-ice" class="defense-route defense-route-ice" type="button"><span class="defense-route-icon" aria-hidden="true">❄</span><span><strong>寒霜 <small id="defense-route-ice-rank">首次觉醒</small></strong><span>刀刃减速，强化后减速更强</span></span></button>
-                <button id="defense-route-fire" class="defense-route defense-route-fire" type="button"><span class="defense-route-icon" aria-hidden="true">✹</span><span><strong>焰刃 <small id="defense-route-fire-rank">首次觉醒</small></strong><span>范围灼烧，强化后伤害更高</span></span></button>
-                <button id="defense-route-lightning" class="defense-route defense-route-lightning" type="button"><span class="defense-route-icon" aria-hidden="true">ϟ</span><span><strong>雷霆 <small id="defense-route-lightning-rank">首次觉醒</small></strong><span>连锁闪电，强化后命中更多目标</span></span></button>
+                <button id="defense-route-0" class="defense-route" data-family="ice" type="button"><span id="defense-route-0-icon" class="defense-route-icon" aria-hidden="true">❄</span><span class="defense-route-copy"><strong><span id="defense-route-0-name">冰霜</span><small id="defense-route-0-rank">元素觉醒</small></strong><span id="defense-route-0-description">刀刃附带减速，开启冰系进化</span></span></button>
+                <button id="defense-route-1" class="defense-route" data-family="fire" type="button"><span id="defense-route-1-icon" class="defense-route-icon" aria-hidden="true">✹</span><span class="defense-route-copy"><strong><span id="defense-route-1-name">火焰</span><small id="defense-route-1-rank">元素觉醒</small></strong><span id="defense-route-1-description">刀刃附带溅射，开启火系进化</span></span></button>
+                <button id="defense-route-2" class="defense-route" data-family="lightning" type="button"><span id="defense-route-2-icon" class="defense-route-icon" aria-hidden="true">ϟ</span><span class="defense-route-copy"><strong><span id="defense-route-2-name">雷电</span><small id="defense-route-2-rank">元素觉醒</small></strong><span id="defense-route-2-description">刀刃附带连锁，开启雷系进化</span></span></button>
               </div>
             </div>
           </div>
@@ -173,16 +173,16 @@
         <div class="defense-hud" aria-label="战场信息">
           <div class="defense-stat"><span><i aria-hidden="true">⚑</i> 波次</span><strong id="defense-wave">0</strong></div>
           <div class="defense-stat"><span><i aria-hidden="true">♥</i> 防线</span><strong id="defense-lives">12/12</strong></div>
-          <div class="defense-stat"><span><i aria-hidden="true">●</i> 金币</span><strong id="defense-gold">60</strong></div>
+          <div class="defense-stat"><span><i aria-hidden="true">⚔</i> 击退</span><strong id="defense-kills">0</strong></div>
           <div class="defense-stat"><span><i aria-hidden="true">✦</i> 得分</span><strong id="defense-score">0</strong></div>
         </div>
         <p class="defense-record">本机最高 <strong id="defense-best">0</strong><span id="defense-reserve">待命 0 位</span></p>
         <div class="defense-tools">
-          <div class="defense-selection-row"><div class="defense-selection-copy"><p id="defense-selection" tabindex="0">选择一位守卫</p><p id="defense-unit-stats">Lv.1 每次命中造成 1 点伤害</p></div><button id="defense-upgrade" class="primary-button" type="button" aria-describedby="defense-evolution-risk" disabled>进化</button></div>
-          <p id="defense-evolution-risk" class="defense-evolution-risk">选择守卫查看进化成功率。失败会消耗资源并降一级，最低保留1级。</p>
+          <div class="defense-selection-row"><div class="defense-selection-copy"><p id="defense-selection" tabindex="0">选择一位守卫</p><p id="defense-unit-stats">Lv.1 每次命中造成 1 点伤害</p></div></div>
+          <p id="defense-evolution-risk" class="defense-evolution-risk">选择守卫查看合成成功率。失败仅消耗拖入者，原守卫等级与路线保留。</p>
           <div class="defense-controls" role="group" aria-label="守卫飞天操作"><button id="defense-pause" class="secondary-button" type="button" aria-pressed="false">暂停</button><button id="defense-restart" class="secondary-button" type="button">重开</button><button id="defense-sound" class="secondary-button" type="button" aria-pressed="true">音效开</button></div>
         </div>
-        <div class="defense-tips"><span class="tips-label">你的守卫手册</span><p><b>击蛋召集</b> 旋转小刀碰到酒瓶或孵化蛋才会造成伤害。把同伴放在路线附近，让每次旋转都打中目标。</p><p><b>冒险进化</b> 24个阵位自由移动，仅同级且完整进化路线相同才能合成。等级越高，成功率越低（95%至55%）；失败消耗金币或拖入者，并降一级。降级保留路线身份，低于门槛的能力与特效休眠。</p><div class="defense-skills"><span>每4级选择路线</span><span>同路线可强化</span><span>跨路线不能合成</span></div><p class="keyboard-tip">方向键选择 · 回车部署 · U 进化 · P 暂停</p></div>
+        <div class="defense-tips"><span class="tips-label">你的守卫手册</span><p><b>击蛋召集</b> 把守卫放到孵化蛋附近，用旋转飞刃召集同伴。新同伴比击蛋者低2级（最低1级），并继承对应等级的进化路线。</p><p><b>同路进化</b> 24个阵位自由移动，仅同级且完整路线相同才能合成。成功率随等级降低（95%至55%）；失败消耗拖入者，原守卫等级与路线保留。</p><p><b>越战越强</b> Lv.4 选择三种基础元素，Lv.8 解锁高阶属性，Lv.12 选择专属技能；此后每4级精修奥义。中后期酒潮会更密、更强。</p><div class="defense-skills"><span>元素觉醒</span><span>属性进阶</span><span>专属技能</span></div><p class="keyboard-tip">方向键选择 · 回车部署 · P 暂停</p></div>
       </aside>
     </div>
   </section>
