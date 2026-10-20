@@ -38,7 +38,7 @@
       // A delayed SDK load must remain recoverable without pooling a failed
       // initialization or constructing a second GoTrue client for another mode.
       if (typeof factory !== 'function') return this._unloadedTransport;
-      const key = [this.config.url, this.config.publishableKey, this.config.authMode, factory, global.fetch, this.timeoutMs, this.fetchTimeoutMs];
+      const key = [this.config.url, this.config.publishableKey, this.config.authMode, this.config.gatewayUrl || '', factory, global.fetch, this.timeoutMs, this.fetchTimeoutMs];
       let entry = transports.find(candidate => candidate.key.every((value, index) => value === key[index]));
       if (!entry) { entry = { key, state: newTransport() }; transports.push(entry); }
       this._transport = entry.state;
@@ -82,11 +82,36 @@
         for (const [signal, listener] of listeners) signal.removeEventListener('abort', listener);
       }
     }
+    gatewayInput(input, init) {
+      if (!this.config.gatewayUrl) return input;
+      const gateway = new global.URL(this.config.gatewayUrl);
+      if (gateway.protocol !== 'https:' || gateway.username || gateway.password || gateway.search || gateway.hash || gateway.pathname !== '/') {
+        throw new Error('排行榜入口配置无效，请联系游戏维护者。');
+      }
+      const original = new global.URL(typeof input === 'string' ? input : input?.url || String(input));
+      const project = new global.URL(this.config.url);
+      if (original.origin !== project.origin || original.username || original.password) return input;
+      const method = (init.method || input?.method || 'GET').toUpperCase();
+      const path = original.pathname;
+      const allowed = method === 'POST' && (path === '/auth/v1/signup' ||
+        path === '/auth/v1/token' && original.searchParams.get('grant_type') === 'refresh_token' ||
+        Object.values(rpcNames).some(names => Object.values(names).some(name => path === '/rest/v1/rpc/' + name))) ||
+        method === 'GET' && path === '/auth/v1/user';
+      if (!allowed) return input;
+      const destination = gateway.origin + path + original.search;
+      // Keep createClient on the original project URL: its auth storage key and
+      // the pending-score project binding must survive a gateway change.
+      return typeof global.Request === 'function' && input instanceof global.Request ? new global.Request(destination, input) : destination;
+    }
     fetchWithTimeout(input, init = {}) {
       const url = typeof input === 'string' ? input : input?.url || String(input);
       const authSignal = url.startsWith(this.config.url.replace(/\/$/, '') + '/auth/v1/') ? this.sessionOperation?.signal : null;
       return this.bounded(async operation => {
-        const response = await global.fetch(input, { ...init, ...(operation.signal ? { signal: operation.signal } : {}) });
+        const routedInput = this.gatewayInput(input, init);
+        // Supplying an init object can reset a Request's referrer settings.
+        const requestPolicy = routedInput !== input && typeof global.Request === 'function' && routedInput instanceof global.Request ?
+          { referrer: routedInput.referrer, referrerPolicy: routedInput.referrerPolicy } : {};
+        const response = await global.fetch(routedInput, { ...requestPolicy, ...init, ...(operation.signal ? { signal: operation.signal } : {}) });
         // Supabase responses are small JSON payloads. Drain a clone so the timer
         // also covers a stalled response body, not only arrival of its headers.
         if (response.body) await response.clone().arrayBuffer();
