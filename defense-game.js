@@ -295,7 +295,11 @@
       // Eggs remain available until broken. A full lane waits instead of
       // expiring rewards or allowing offscreen queues to grow indefinitely.
       const first = this.supplySequence++ === 0;
-      const maxHp = first ? 2 : Math.round(safe(2 + Math.min(6, this.supplySequence * 0.12) + Math.max(0, this.wave - 8) * 0.25));
+      // Preserve opening recruitment, then toughen shells with both production
+      // and waves so high-level/AoE defenders cannot endlessly one-shot eggs.
+      const extra = Math.max(0, this.supplySequence - 40), late = Math.max(0, this.wave - 5);
+      const maxHp = first ? 2 : Math.round(safe(2 + Math.min(6, this.supplySequence * 0.12)
+        + extra * 0.25 + extra * extra * 0.002 + late * late * 0.5));
       this.supplies.push({ id: ++this.sequence, x: SUPPLY_LANE.x, y: SUPPLY_LANE.startY,
         hp: maxHp, maxHp, hit: 0, speed: 65 + Math.min(25, this.wave * 0.6) });
     }
