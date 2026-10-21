@@ -13,6 +13,7 @@
     let frame = null, lastFrame = null, destroyed = false;
     let best = 0, savedWarning = false, notice = '', noticeUntil = 0;
     let evolutionVisible = false, evolutionFocus = null;
+    let discardChoice = null;
     const routeSlots = [0, 1, 2];
     const images = [], enemyImages = {}, listeners = [];
     const reducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
@@ -55,9 +56,34 @@
     }
     function blocked() { return !active || !focused || document.hidden || manualPaused || Boolean(document.querySelector('dialog[open]')); }
     function canAct() { return Boolean(game && state && state.status !== 'lost' && !state.isPaused && !state.pendingEvolution && !blocked()); }
+    function overTrash(point) {
+      const rect = $('defense-trash')?.getBoundingClientRect();
+      return Boolean(rect && rect.width > 0 && rect.height > 0 && Number.isFinite(point?.clientX) && Number.isFinite(point?.clientY) &&
+        point.clientX >= rect.left && point.clientX <= rect.left + rect.width && point.clientY >= rect.top && point.clientY <= rect.top + rect.height);
+    }
+    function discardReason(unit) {
+      if (!unit) return '先选中一名守卫，或把不要的棋子拖进垃圾筐';
+      if (unit.isGolden) return '黄金战士不能丢弃，可以用普通棋子投喂它';
+      if (game.units.length <= 1 && state.reserve <= 0) return '至少保留一名守卫击蛋召集同伴';
+      return '当前无法丢弃，请继续游戏后再试';
+    }
+    function renderTrash() {
+      const unit = pointer?.unitId != null ? unitAt(pointer.slot) : unitAt(selectedSlot);
+      const dragging = Boolean(pointer?.moved && pointer.unitId != null);
+      const over = dragging && overTrash(pointer.latest);
+      const eligible = Boolean(canAct() && unit && game.canDiscard(unit.slot, unit.id));
+      const mode = over ? eligible ? 'over' : 'blocked' : dragging && eligible ? 'ready' : 'idle';
+      attr('defense-trash', 'data-state', mode);
+      prop('defense-trash', 'disabled', !canAct());
+      text('defense-trash-label', mode === 'over' ? '松手丢弃' : mode === 'blocked' ? '不能丢弃' : '垃圾筐');
+      const hint = unit && !eligible ? discardReason(unit) : '把普通棋子拖入垃圾筐，松手丢弃；也可以选中后点击垃圾筐';
+      attr('defense-trash', 'title', hint);
+      attr('defense-trash', 'aria-label', `垃圾筐。${hint}`);
+    }
     function clearInput() {
       const previous = pointer; pointer = null; hoverSlot = null;
       try { if (previous && canvas.hasPointerCapture?.(previous.id)) canvas.releasePointerCapture(previous.id); } catch { /* Capture may already have ended. */ }
+      renderTrash();
     }
     function stopFrame() {
       if (frame !== null) window.cancelAnimationFrame?.(frame);
@@ -65,6 +91,7 @@
     }
     function draw() {
       if (!game || !context || !active || destroyed) return;
+      renderTrash();
       window.DefenseRenderer?.draw?.(context, game, {
         images, enemyImages, goldenImage, formForLevel, levels: window.GameLevels?.levels || [], selectedSlot, hoverSlot,
         drag: pointer?.moved && pointer.unitId != null ? { id: pointer.id, fromSlot: pointer.slot, x: pointer.x, y: pointer.y, moved: true } : null,
@@ -167,6 +194,7 @@
       text('defense-unit-stats', golden ? `${stats.bladeCount} 把黄金飞剑 · 每次升阶攻击 ×3` : unit ? `${stats.bladeCount} 把飞刃 · 下次分支：${nextStage(unit)}` : 'Lv.4 元素 · Lv.8 属性 · Lv.12 技能 · 此后奥义精修');
       text('defense-reserve', `待命 ${next.reserve} 位`);
       text('defense-evolution-risk', golden ? '拖入任意普通守卫投喂，按显示等级累计进度。投喂必定生效，超出进度会保留。' : unit ? `合成成功 ${percent(chance)} · 同级同元素，保留接收方技能。失败仅消耗拖入者，原守卫等级与路线保留。` : '同级同元素即可合成，保留接收方技能。失败仅消耗拖入者。');
+      attr('defense-evolution-risk', 'title', $('defense-evolution-risk')?.textContent || '');
       attr('defense-tools', 'data-golden', String(Boolean(golden)));
       prop('defense-golden-progress', 'hidden', !golden);
       if (golden) {
@@ -189,6 +217,7 @@
         text('defense-result-detail', `${next.score.toLocaleString()} 分 · 第 ${next.wave} 波 · 击退 ${next.kills} 个入侵者` + (savedWarning ? ' · 本机记录保存失败' : ` · 本机最高 ${best.toLocaleString()}`));
       }
       renderEvolution(next);
+      renderTrash();
       requestFrame();
     }
     function completed(next) {
@@ -206,6 +235,7 @@
         messages.golden = '隐藏进化！黄金战士降临，拖入任意普通守卫为它升阶';
       }
       if (event.type === 'feed') messages.feed = event.rank > event.previousRank ? `黄金战士升至 ${event.rank} 阶！攻击随升阶提升，余量已保留` : `投喂成功 +${event.gained} 级 · 升阶进度 ${event.progress}/${event.required}`;
+      if (event.type === 'discard') messages.discard = `已丢弃 Lv.${event.level + 1} 守卫，腾出一个阵位`;
       if (event.type === 'hatch' && Number.isInteger(event.level)) messages.hatch += ` · Lv.${event.level + 1}` + (Object.keys(event.routeChoices || {}).length ? '，继承击蛋者的已解锁路线' : '，尚未觉醒元素');
       if (messages[event.type]) { notice = messages[event.type]; noticeUntil = Date.now() + (event.type === 'golden' ? 6000 : event.type === 'evolveFail' || event.type === 'feed' ? 4200 : 1700); }
     }
@@ -294,15 +324,24 @@
       clearInput(); stopFrame();
       if (game.chooseEvolution(route)) { render(game.getState()); draw(); requestFrame(); }
     }
+    function discardUnit(slot, id) {
+      const unit = unitAt(slot);
+      if (!canAct() || unit?.id !== id) return false;
+      if (!game.discard(slot, id)) { showNotice(discardReason(unit)); return false; }
+      selectedSlot = null;
+      render(game.getState()); draw();
+      return true;
+    }
     function finishPointer(event) {
       if (!pointer || pointer.id !== event.pointerId) return;
-      const held = pointer, destination = slotAt(position(event));
+      const held = pointer, destination = slotAt(position(event)), trash = overTrash(event);
       const allowed = canAct(); clearInput();
       if (!allowed) { draw(); return; }
       event.preventDefault();
       if (held.moved && held.unitId != null) {
         const source = unitAt(held.slot);
-        if (destination !== null && destination !== held.slot && source?.id === held.unitId) {
+        if (trash && source?.id === held.unitId) discardUnit(held.slot, held.unitId);
+        else if (destination !== null && destination !== held.slot && source?.id === held.unitId) {
           if (game.move(held.slot, destination)) selectedSlot = destination;
           else {
             const target = unitAt(destination);
@@ -324,7 +363,7 @@
       const point = position(event), slot = slotAt(point);
       if (slot === null) return;
       event.preventDefault(); selectedSlot = slot; hoverSlot = slot;
-      pointer = { id: event.pointerId, slot, unitId: unitAt(slot)?.id ?? null, clientX: event.clientX, clientY: event.clientY, ...point, moved: false };
+      pointer = { id: event.pointerId, slot, unitId: unitAt(slot)?.id ?? null, clientX: event.clientX, clientY: event.clientY, latest: { clientX: event.clientX, clientY: event.clientY }, ...point, moved: false };
       try { canvas.setPointerCapture(event.pointerId); } catch { /* Window listeners handle release if capture is unavailable. */ }
       canvas.focus({ preventScroll: true }); render(game.getState()); draw();
     });
@@ -333,6 +372,7 @@
       const point = position(event); hoverSlot = slotAt(point);
       if (pointer && point) {
         event.preventDefault(); pointer.x = point.x; pointer.y = point.y;
+        pointer.latest = { clientX: event.clientX, clientY: event.clientY };
         pointer.moved ||= Math.hypot(event.clientX - pointer.clientX, event.clientY - pointer.clientY) > 7;
       }
       draw();
@@ -397,6 +437,31 @@
     listen($('defense-pause'), 'click', togglePause);
     listen($('defense-restart'), 'click', () => reset());
     listen($('defense-retry'), 'click', () => reset(false));
+    listen($('defense-trash'), 'click', () => {
+      if (!canAct() || pointer) return;
+      const unit = unitAt(selectedSlot);
+      if (!unit || !game.canDiscard(unit.slot, unit.id)) { showNotice(discardReason(unit)); return; }
+      discardChoice = { slot: unit.slot, id: unit.id };
+      text('defense-discard-detail', `已选中 Lv.${unit.level + 1} ${abilityName(combatStats(unit))}。`);
+      clearInput(); $('defense-discard-dialog')?.showModal(); syncPause();
+      $('defense-discard-cancel')?.focus({ preventScroll: true });
+    });
+    const cancelDiscard = () => $('defense-discard-dialog')?.close();
+    listen($('defense-discard-cancel'), 'click', cancelDiscard);
+    listen($('defense-discard-close'), 'click', cancelDiscard);
+    listen($('defense-discard-confirm'), 'click', () => {
+      if (!discardChoice || !active || document.hidden || !focused || state?.pendingEvolution || state?.status === 'lost') return;
+      const choice = discardChoice;
+      // The round was running when this dialog opened. Explicit confirmation
+      // resumes it, including after returning from a temporarily hidden tab.
+      manualPaused = false;
+      $('defense-discard-dialog')?.close(); syncPause();
+      discardUnit(choice.slot, choice.id);
+    });
+    listen($('defense-discard-dialog'), 'close', () => {
+      discardChoice = null;
+      if (active && !document.hidden && focused) canvas.focus({ preventScroll: true });
+    });
     listen($('defense-guide-open'), 'click', () => {
       if (!active || state?.pendingEvolution) return;
       clearInput(); $('defense-guide-dialog')?.showModal(); syncPause();
@@ -414,6 +479,7 @@
     listen(window, 'feitian-modechange', event => {
       const wasActive = active; active = event.detail?.mode === 'defense';
       clearInput(); stopFrame();
+      if (!active && discardChoice) cancelDiscard();
       if (!active && wasActive && state?.status === 'playing') manualPaused = true;
       if (active && !ensureGame()) return;
       soundUI(); if (active) resize(); syncPause();
@@ -429,6 +495,7 @@
       get game() { return game; },
       destroy() {
         destroyed = true; clearInput(); stopFrame(); callAudio('destroy');
+        if (discardChoice) cancelDiscard();
         if (game) game.pause(true);
         for (const [target, type, listener, options] of listeners) target?.removeEventListener?.(type, listener, options);
         for (const image of [...images, goldenImage, ...Object.values(enemyImages)]) if (image) image.onload = image.onerror = null;

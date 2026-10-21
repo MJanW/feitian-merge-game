@@ -297,6 +297,22 @@
       this._notify(); return true;
     }
 
+    canDiscard(slot, expectedUnitId) {
+      if (!this._canAct() || !this._validSlot(slot)) return false;
+      const unit = this._unitAt(slot);
+      if (!unit || unit.isGolden || (arguments.length > 1 && unit.id !== expectedUnitId)) return false;
+      return this.units.length > 1 || this.reserve > 0;
+    }
+
+    discard(slot, expectedUnitId) {
+      const allowed = arguments.length > 1 ? this.canDiscard(slot, expectedUnitId) : this.canDiscard(slot);
+      if (!allowed) return false;
+      const unit = this._unitAt(slot);
+      this.units.splice(this.units.indexOf(unit), 1);
+      this._event('discard', { unitId: unit.id, slot, level: unit.level });
+      this._notify(); return true;
+    }
+
     upgrade() { return false; }
 
     step(milliseconds) {
