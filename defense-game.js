@@ -143,10 +143,13 @@
   const enemyStatsForWave = (kindOrType, wave, boss = false) => {
     const type = typeof kindOrType === 'object' ? kindOrType : FALLBACK_TYPES.find(value => value.kind === kindOrType) || FALLBACK_TYPES[0];
     const age = Math.max(0, levelNumber(wave) - 1), late = Math.max(0, age - 4);
-    const scaling = safe(1 + age * 0.13 + late * late * 0.16 + late * 0.4);
+    // Keep waves 1–10 intact, then grow linearly alongside defender damage.
+    // Stacking quadratic HP and fast-rising armor created a wall around wave 20.
+    const early = Math.min(5, late), endless = Math.max(0, late - 5);
+    const scaling = safe(1 + age * 0.13 + early * early * 0.16 + early * 0.4 + endless * 1.8);
     return { maxHp: Math.max(1, Math.round(safe(type.hp * scaling * (boss ? 4.2 : 1)))),
       speed: type.speed * 0.7 * Math.min(2.3, 1 + age * 0.032),
-      armor: Math.min(0.5, late * 0.018 + (boss && late ? 0.06 : 0)), reward: 0, damage: boss ? 3 : 1 };
+      armor: Math.min(0.3, early * 0.018 + endless * 0.006 + (boss && late ? 0.06 : 0)), reward: 0, damage: boss ? 3 : 1 };
   };
   const bladesFor = (unit, time) => {
     const stats = statsForLevel(unit.level, unit.routes, unit.route), phase = Number.isFinite(unit.phase) ? unit.phase : (unit.id || 0) * 2.399963229728653;
