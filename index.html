@@ -8,7 +8,7 @@
   <title>合成飞天</title>
   <link rel="icon" href="assets/photo-10.png" type="image/png">
   <link rel="stylesheet" href="styles.css?v=20261019-defense1">
-  <link rel="stylesheet" href="defense.css?v=20261021-evolutiontree1">
+  <link rel="stylesheet" href="defense.css?v=20261021-elements1">
   <script defer src="vendor/matter.min.js"></script>
   <script defer src="levels.js?v=20261017-size10"></script>
   <script defer src="sound.js?v=20261016-finale300"></script>
@@ -25,12 +25,12 @@
   <script defer src="jump-sound.js?v=20261017-classic1"></script>
   <script defer src="jump-leaderboard.js?v=20261017-jumpboard1"></script>
   <script defer src="jump-app.js?v=20261017-softjump1"></script>
-  <script defer src="defense-forms.js?v=20261019-paths1"></script>
+  <script defer src="defense-forms.js?v=20261021-elements1"></script>
   <script defer src="defense-enemies.js?v=20261019-paths1"></script>
-  <script defer src="defense-game.js?v=20261021-latewave1"></script>
-  <script defer src="defense-renderer.js?v=20261021-evolutiontree1"></script>
-  <script defer src="defense-sound.js?v=20261019-paths1"></script>
-  <script defer src="defense-app.js?v=20261021-evolutiontree1"></script>
+  <script defer src="defense-game.js?v=20261021-elements1"></script>
+  <script defer src="defense-renderer.js?v=20261021-elements1"></script>
+  <script defer src="defense-sound.js?v=20261021-elements1"></script>
+  <script defer src="defense-app.js?v=20261021-elements1"></script>
   <script defer src="modes.js?v=20261019-defense1"></script>
 </head>
 <body>
@@ -138,14 +138,14 @@
     <div class="defense-layout">
       <section class="defense-play" aria-label="守卫飞天战场">
         <div class="defense-board">
-          <canvas id="defense-canvas" width="400" height="650" tabindex="0" aria-label="飞刃守卫战场：身边的小刀旋转攻击酒瓶和孵化蛋。拖动守卫布阵，同级且完整进化路线相同才能合成。方向键选择阵位，回车部署待命守卫，P 暂停。" aria-describedby="defense-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
+          <canvas id="defense-canvas" width="400" height="650" tabindex="0" aria-label="飞刃守卫战场：飞剑旋转攻击酒瓶和孵化蛋。同级、同元素守卫可合成，保留接收方技能；普通守卫拖到黄金战士上可投喂。方向键选择阵位，回车部署待命守卫，P 暂停。" aria-describedby="defense-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
           <div id="defense-intro" class="defense-intro">
             <div class="defense-intro-card">
               <span class="defense-eyebrow">第四周目 · 无尽守卫</span>
               <div class="defense-emblem" aria-hidden="true">✦</div>
-              <h2>小刀转起来，<br>同伴多起来。</h2>
+              <h2>五系聚成阵，<br>飞剑守四方。</h2>
               <p>左边酒瓶来袭，右边同伴待醒。<br>把守卫放在哪里，由你决定。</p>
-              <ol><li><span>1</span>靠右击蛋，召集低2级、继承路线的同伴</li><li><span>2</span>同级同路线合成；失败保留原守卫等级</li><li><span>3</span>元素觉醒 → 高阶属性 → 专属技能</li></ol>
+              <ol><li><span>1</span>靠右击蛋，召集低2级、继承路线的同伴</li><li><span>2</span>同级同元素合成，保留接收方技能</li><li><span>3</span>不同元素接力攻击，触发额外反应</li></ol>
               <button id="defense-start" class="primary-button" type="button">出发，守住防线 <span aria-hidden="true">▶</span></button>
             </div>
           </div>
@@ -154,7 +154,7 @@
             <div class="defense-evolution-card">
               <span class="defense-eyebrow">SPECIAL EVOLUTION · 战场已冻结</span>
               <h2 id="defense-evolution-title">选择进化路线</h2>
-              <p id="defense-evolution-detail">沿当前路线解锁更高阶能力。仅同级、完整路线相同可合成。</p>
+              <p id="defense-evolution-detail">沿当前元素解锁高阶能力。同级、同元素即可合成，保留接收方技能。</p>
               <div class="defense-route-choices">
                 <button id="defense-route-0" class="defense-route" data-family="ice" type="button"><span id="defense-route-0-icon" class="defense-route-icon" aria-hidden="true">❄</span><span class="defense-route-copy"><strong><span id="defense-route-0-name">冰霜</span><small id="defense-route-0-rank">元素觉醒</small></strong><span id="defense-route-0-description">刀刃附带减速，开启冰系进化</span></span></button>
                 <button id="defense-route-1" class="defense-route" data-family="fire" type="button"><span id="defense-route-1-icon" class="defense-route-icon" aria-hidden="true">✹</span><span class="defense-route-copy"><strong><span id="defense-route-1-name">火焰</span><small id="defense-route-1-rank">元素觉醒</small></strong><span id="defense-route-1-description">刀刃附带溅射，开启火系进化</span></span></button>
@@ -177,15 +177,25 @@
           <div class="defense-stat"><span><i aria-hidden="true">✦</i> 得分</span><strong id="defense-score">0</strong></div>
         </div>
         <p class="defense-record">本机最高 <strong id="defense-best">0</strong><span id="defense-reserve">待命 0 位</span></p>
-        <div class="defense-tools">
+        <div id="defense-tools" class="defense-tools" data-golden="false">
           <div class="defense-selection-row"><div class="defense-selection-copy"><p id="defense-selection" tabindex="0">选择一位守卫</p><p id="defense-unit-stats">Lv.1 每次命中造成 1 点伤害</p></div></div>
+          <div id="defense-golden-progress" class="defense-golden-progress" hidden><label id="defense-golden-progress-label" for="defense-golden-meter">拖入普通守卫投喂</label><progress id="defense-golden-meter" max="10" value="0" aria-label="黄金战士升阶进度"></progress></div>
           <p id="defense-evolution-risk" class="defense-evolution-risk">选择守卫查看合成成功率。失败仅消耗拖入者，原守卫等级与路线保留。</p>
-          <div class="defense-controls" role="group" aria-label="守卫飞天操作"><button id="defense-pause" class="secondary-button" type="button" aria-pressed="false">暂停</button><button id="defense-restart" class="secondary-button" type="button">重开</button><button id="defense-sound" class="secondary-button" type="button" aria-pressed="true">音效开</button></div>
+          <div class="defense-controls" role="group" aria-label="守卫飞天操作"><button id="defense-pause" class="secondary-button" type="button" aria-pressed="false">暂停</button><button id="defense-restart" class="secondary-button" type="button">重开</button><button id="defense-sound" class="secondary-button" type="button" aria-pressed="true">音效开</button><button id="defense-guide-open" class="secondary-button" type="button" aria-haspopup="dialog">图鉴</button></div>
         </div>
-        <div class="defense-tips"><span class="tips-label">你的守卫手册</span><p><b>击蛋召集</b> 把守卫放到孵化蛋附近，用旋转飞刃召集同伴。新同伴比击蛋者低2级（最低1级），并继承对应等级的进化路线。</p><p><b>同路进化</b> 24个阵位自由移动，仅同级且完整路线相同才能合成。成功率随等级降低（95%至55%）；失败消耗拖入者，原守卫等级与路线保留。</p><p><b>越战越强</b> Lv.4 选择三种基础元素，Lv.8 解锁高阶属性，Lv.12 选择专属技能；此后每4级精修奥义。中后期酒潮会更密、更强。</p><div class="defense-skills"><span>元素觉醒</span><span>属性进阶</span><span>专属技能</span></div><p class="keyboard-tip">方向键选择 · 回车部署 · P 暂停</p></div>
+        <div class="defense-tips"><span class="tips-label">你的守卫手册</span><p><b>击蛋召集</b> 靠右击蛋召集低2级的同伴，最低1级，继承已解锁路线。</p><p><b>同元素进化</b> 同级、同元素即可合成，技能可以不同，保留接收方技能。失败消耗拖入者，原守卫等级不变。</p><p><b>元素接力</b> 冰、火、雷、土、草，每次随机三选一；不同元素连续击中同一酒瓶，会产生反应。打开图鉴查看效果。</p><div class="defense-skills"><span>随机觉醒</span><span>元素反应</span><span>隐藏战士</span></div><p class="keyboard-tip">方向键选择 · 回车部署 · P 暂停</p></div>
       </aside>
     </div>
   </section>
+  <dialog id="defense-guide-dialog" class="defense-guide-dialog" aria-labelledby="defense-guide-title">
+    <div class="dialog-header"><h2 id="defense-guide-title">守卫图鉴</h2><button id="defense-guide-close" class="icon-button" type="button" aria-label="关闭守卫图鉴" autofocus><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="defense-guide-body">
+      <p class="defense-guide-intro">查看图鉴时，战场会暂停。</p>
+      <h3>同元素，能合成</h3><p>同等级、同基础元素的守卫，无论高阶属性和技能是否一致，都可以合成。把材料拖到想保留的守卫上，接收方继续沿自己的技能进化。失败只消耗材料，接收方不降级。</p>
+      <h3>五种元素，十种反应</h3><p>不同元素在短时间内接力击中同一只酒瓶，不分先后，都能触发对应反应。</p><ul id="defense-reactions" class="defense-reactions"></ul>
+      <h3>隐藏进化 · 黄金战士</h3><p>第26波起，两名15级及以上、符合合成规则的守卫合成时，有5%概率觉醒黄金战士，每局只出现一次。</p><p>把任意普通守卫拖到黄金战士上，按其显示等级积累进度。每次升阶需要10、20、40、80、160…级材料，溢出进度保留。黄金1阶基础攻击30，之后每升一阶乘3。</p>
+    </div>
+  </dialog>
   <dialog id="jump-lb-dialog" class="leaderboard-dialog jump-lb-dialog" aria-labelledby="jump-lb-title">
     <div class="dialog-header"><h2 id="jump-lb-title">跳跃飞天排行榜</h2><button class="icon-button" id="jump-lb-close" type="button" aria-label="关闭跳跃排行榜" autofocus><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
     <div class="leaderboard-info"><p>历史前 20 名，每位玩家只保留最高分；同分先到优先。</p><p id="jump-lb-rules">与合成模式共用昵称和浏览器身份，成绩分开排名。换设备或清除浏览器数据会成为新玩家。</p><p id="jump-lb-status" role="status">正在连接跳跃共享榜…</p><p id="jump-lb-pending" role="status" hidden></p></div>

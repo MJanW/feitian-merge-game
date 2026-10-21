@@ -15,6 +15,8 @@
       this._lastSupplyHit = -Infinity;
       this._lastHatch = -Infinity;
       this._lastSpecial = -Infinity;
+      this._lastReaction = -Infinity;
+      this._lastFeed = -Infinity;
       this._generation = 0;
     }
 
@@ -27,6 +29,7 @@
           this.context = new Context(); this._lastShot = -Infinity; this._lastKill = -Infinity;
           this._lastSupplyHit = -Infinity; this._lastHatch = -Infinity;
           this._lastSpecial = -Infinity;
+          this._lastReaction = -Infinity; this._lastFeed = -Infinity;
         }
         context = this.context;
         if (!context || !this.enabled) return Promise.resolve(false);
@@ -114,9 +117,35 @@
           return true;
         }
         case 'route': {
-          const tones = { ice: [784, 1175, 1568], fire: [196, 392, 588], lightning: [440, 880, 1320] };
-          (tones[event.route] || tones.ice).forEach((frequency, index) => this._note(frequency, index * .075, .19, .028, frequency * 1.05, event.route === 'lightning' ? 'triangle' : 'sine'));
+          const family = root.DefenseGame?.routeInfo?.(event.route)?.family || event.route;
+          const tones = { ice: [784, 1175, 1568], fire: [196, 392, 588], lightning: [440, 880, 1320], earth: [147, 220, 294], grass: [523, 659, 988] };
+          (tones[family] || tones.ice).forEach((frequency, index) => this._note(frequency, index * .075, .19, .028, frequency * 1.05, family === 'lightning' || family === 'earth' ? 'triangle' : 'sine'));
           return true;
+        }
+        case 'reaction': {
+          if (now - this._lastReaction < .18) return false;
+          this._lastReaction = now;
+          const key = Array.isArray(event.elements) ? [...event.elements].sort().join('_') : event.reaction;
+          const tones = { fire_ice: [660, 1120], fire_lightning: [147, 780], earth_fire: [130, 392], fire_grass: [330, 660], ice_lightning: [880, 1320], earth_ice: [220, 1046], grass_ice: [740, 988], earth_lightning: [196, 831], grass_lightning: [587, 1175], earth_grass: [262, 523] };
+          const [low, high] = tones[key] || [440, 880];
+          this._note(low, 0, .1, .023, low * .65, 'triangle');
+          return this._note(high, .025, .13, .018, high * 1.15, 'sine');
+        }
+        case 'golden':
+          // Clear transient impacts so this once-per-run reveal stays audible.
+          this.pause();
+          [262, 392, 523, 659, 1046].forEach((frequency, index) => this._note(frequency, index * .09, .3, .03, frequency * 1.005, index < 2 ? 'triangle' : 'sine'));
+          return true;
+        case 'feed': {
+          const evolved = Number(event.rank) > Number(event.previousRank);
+          if (!evolved && now - this._lastFeed < .12) return false;
+          this._lastFeed = now;
+          if (evolved) {
+            [392, 587, 784, 1175].forEach((frequency, index) => this._note(frequency, index * .065, .24, .025));
+            return true;
+          }
+          this._note(523, 0, .09, .02, 784);
+          return this._note(1046, .04, .12, .016, 1175);
         }
         case 'evolveFail':
           this._note(260, 0, .11, .025, 160, 'triangle');

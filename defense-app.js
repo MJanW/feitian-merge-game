@@ -7,7 +7,7 @@
     if (!canvas) return null;
     const BEST_KEY = 'feitian-defense-best-v5';
     const HIT_RADIUS = 34;
-    let game = null, audio = null, state = null, context = null;
+    let game = null, audio = null, state = null, context = null, goldenImage = null;
     let active = false, focused = true, manualPaused = false;
     let selectedSlot = null, hoverSlot = null, pointer = null;
     let frame = null, lastFrame = null, destroyed = false;
@@ -40,7 +40,7 @@
       const count = Math.max(1, levels.length - 1), photoIndex = level % count;
       return { ...levels[photoIndex + 1], photoIndex, cycle: Math.floor(level / count), displayLevel: level + 1 };
     }
-    function combatStats(unit) { return unit ? window.DefenseGame.statsForLevel(unit.level, unit.routes, unit.route) : null; }
+    function combatStats(unit) { return unit ? window.DefenseGame.statsForUnit(unit) : null; }
     function abilityName(stats) { return stats?.specialName || '旋刃'; }
     function routeInfo(route, level) { return window.DefenseGame.routeInfo(route, level); }
     function stageName(level) { return level < 7 ? '元素觉醒' : level < 11 ? '属性进阶' : level < 15 ? '专属技能' : '奥义精修'; }
@@ -66,7 +66,7 @@
     function draw() {
       if (!game || !context || !active || destroyed) return;
       window.DefenseRenderer?.draw?.(context, game, {
-        images, enemyImages, formForLevel, levels: window.GameLevels?.levels || [], selectedSlot, hoverSlot,
+        images, enemyImages, goldenImage, formForLevel, levels: window.GameLevels?.levels || [], selectedSlot, hoverSlot,
         drag: pointer?.moved && pointer.unitId != null ? { id: pointer.id, fromSlot: pointer.slot, x: pointer.x, y: pointer.y, moved: true } : null,
         reducedMotion,
       });
@@ -121,7 +121,7 @@
         clearInput(); stopFrame();
         const unit = game?.units.find(candidate => candidate.id === pending.unitId);
         text('defense-evolution-title', `Lv.${pending.level + 1} · ${stageName(pending.level)}`);
-        text('defense-evolution-detail', `${unit ? routePath(unit) + '。' : ''}${pending.level < 7 ? '选择基础元素，开启你的进化路线。' : pending.level < 11 ? '沿当前元素解锁更高阶属性，已学能力保留。' : pending.level < 15 ? '选择专属技能，让这条路线形成独特打法。' : '精修已掌握的奥义，继续提升威力。'}仅同级、完整路线相同可合成。`);
+        text('defense-evolution-detail', `${unit ? routePath(unit) + '。' : ''}${pending.level < 7 ? '从本次随机出现的三种元素中选一种，后续沿同元素进化。' : pending.level < 11 ? '沿当前元素解锁更高阶属性，已学能力保留。' : pending.level < 15 ? '选择当前元素的专属技能，让守卫形成独特打法。' : '精修已掌握的奥义，继续提升威力。'}同级、同元素即可合成，保留接收方技能。`);
         for (const slot of routeSlots) {
           const route = pending.choices[slot];
           const info = route ? routeInfo(route, pending.level) : null;
@@ -159,14 +159,25 @@
       const reserveHint = next.reserve > 0 ? ` · 待命 ${next.reserve}` : '';
       const stats = combatStats(unit);
       const chance = chanceFor(unit);
-      const selection = (unit ? `Lv.${unit.level + 1} ${abilityName(stats)} · 伤害 ${stats.damage.toLocaleString()} · 路线：${routePath(unit)}` : next.reserve > 0 ? '点击空位让同伴上场' : '拖近酒瓶迎敌 · 拖近孵化蛋召集') + reserveHint;
+      const golden = unit?.isGolden ? window.DefenseGame.goldenProgress(unit) : null;
+      const selection = (golden ? `黄金战士 · ${golden.rank} 阶 · 伤害 ${stats.damage.toLocaleString()}` : unit ? `Lv.${unit.level + 1} ${abilityName(stats)} · 伤害 ${stats.damage.toLocaleString()} · 路线：${routePath(unit)}` : next.reserve > 0 ? '点击空位让同伴上场' : '拖近酒瓶迎敌 · 拖近孵化蛋召集') + reserveHint;
       text('defense-selection', selection);
       attr('defense-selection', 'title', selection);
       attr('defense-selection', 'aria-label', selection);
-      text('defense-unit-stats', unit ? `${stats.bladeCount} 把飞刃 · 下次分支：${nextStage(unit)}` : 'Lv.4 元素 · Lv.8 属性 · Lv.12 技能 · 此后奥义精修');
+      text('defense-unit-stats', golden ? `${stats.bladeCount} 把黄金飞剑 · 每次升阶攻击 ×3` : unit ? `${stats.bladeCount} 把飞刃 · 下次分支：${nextStage(unit)}` : 'Lv.4 元素 · Lv.8 属性 · Lv.12 技能 · 此后奥义精修');
       text('defense-reserve', `待命 ${next.reserve} 位`);
-      text('defense-evolution-risk', unit ? `合成成功 ${percent(chance)} · 须同级同路线。失败仅消耗拖入者，原守卫等级与路线保留。` : '同级同路线才能合成。失败消耗拖入者，原守卫等级与路线保留。');
+      text('defense-evolution-risk', golden ? '拖入任意普通守卫投喂，按显示等级累计进度。投喂必定生效，超出进度会保留。' : unit ? `合成成功 ${percent(chance)} · 同级同元素，保留接收方技能。失败仅消耗拖入者，原守卫等级与路线保留。` : '同级同元素即可合成，保留接收方技能。失败仅消耗拖入者。');
+      attr('defense-tools', 'data-golden', String(Boolean(golden)));
+      prop('defense-golden-progress', 'hidden', !golden);
+      if (golden) {
+        const progressLabel = `${golden.progress.toLocaleString()} / ${golden.required.toLocaleString()} 级 · 拖入普通守卫投喂`;
+        text('defense-golden-progress-label', progressLabel);
+        prop('defense-golden-meter', 'max', golden.required);
+        prop('defense-golden-meter', 'value', golden.progress);
+        attr('defense-golden-meter', 'aria-valuetext', `黄金战士 ${golden.rank} 阶，已投喂 ${golden.progress} 级，升阶需要 ${golden.required} 级`);
+      }
       prop('defense-restart', 'disabled', Boolean(next.pendingEvolution));
+      prop('defense-guide-open', 'disabled', Boolean(next.pendingEvolution));
       text('defense-pause', paused ? '继续' : '暂停');
       attr('defense-pause', 'aria-pressed', String(paused));
       prop('defense-pause', 'disabled', next.status !== 'playing');
@@ -190,8 +201,13 @@
       const messages = { merge: '合成成功，守卫进化了！', hit: '有入侵者突破了防线！', clear: '这一波守住了！趁现在移动和进化', hatch: event.reserve ? '孵化成功！阵位已满，同伴正在待命' : '孵化成功，新同伴加入防线！', wave: `第 ${event.wave || game?.getState().wave || 1} 波来袭` };
       if (event.type === 'evolveFail') messages.evolveFail = `合成失败，拖入的守卫已消耗；原守卫保留 Lv.${event.level + 1} 与路线`;
       if (event.type === 'route') messages.route = `${routeInfo(event.route, event.level)?.name || '特殊能力'}已觉醒！所选路线已生效`;
-      if (event.type === 'hatch' && Number.isInteger(event.level)) messages.hatch += ` · Lv.${event.level + 1}，继承击蛋者的已解锁路线`;
-      if (messages[event.type]) { notice = messages[event.type]; noticeUntil = Date.now() + (event.type === 'evolveFail' ? 4200 : 1700); }
+      if (event.type === 'golden') {
+        selectedSlot = event.slot;
+        messages.golden = '隐藏进化！黄金战士降临，拖入任意普通守卫为它升阶';
+      }
+      if (event.type === 'feed') messages.feed = event.rank > event.previousRank ? `黄金战士升至 ${event.rank} 阶！攻击随升阶提升，余量已保留` : `投喂成功 +${event.gained} 级 · 升阶进度 ${event.progress}/${event.required}`;
+      if (event.type === 'hatch' && Number.isInteger(event.level)) messages.hatch += ` · Lv.${event.level + 1}` + (Object.keys(event.routeChoices || {}).length ? '，继承击蛋者的已解锁路线' : '，尚未觉醒元素');
+      if (messages[event.type]) { notice = messages[event.type]; noticeUntil = Date.now() + (event.type === 'golden' ? 6000 : event.type === 'evolveFail' || event.type === 'feed' ? 4200 : 1700); }
     }
     function preload() {
       if (typeof window.Image !== 'function') return;
@@ -204,12 +220,31 @@
         image.onerror = () => { images[i] = null; if (!destroyed) draw(); };
         images[i] = image; image.src = forms[i].image;
       }
+      if (window.DefenseForms?.goldenPortrait?.image) {
+        const image = new window.Image();
+        image.onload = () => { if (!destroyed) draw(); };
+        image.onerror = () => { goldenImage = null; if (!destroyed) draw(); };
+        goldenImage = image; image.src = window.DefenseForms.goldenPortrait.image;
+      }
       for (const type of window.DefenseEnemies?.types || []) {
         if (!type.image) continue;
         const image = new window.Image();
         image.onload = () => { if (!destroyed) draw(); };
         image.onerror = () => { delete enemyImages[type.kind]; if (!destroyed) draw(); };
         enemyImages[type.kind] = image; image.src = type.image;
+      }
+    }
+    function renderGuide() {
+      const list = $('defense-reactions');
+      if (!list) return;
+      list.replaceChildren();
+      for (const reaction of window.DefenseGame.REACTIONS || []) {
+        const item = document.createElement('li');
+        const heading = document.createElement('strong');
+        heading.textContent = `${reaction.elements.map(element => routeInfo(element)?.name || element).join(' + ')} · ${reaction.name}`;
+        const description = document.createElement('span');
+        description.textContent = reaction.description;
+        item.append(heading, description); list.append(item);
       }
     }
     function ensureGame() {
@@ -221,7 +256,7 @@
         try { if (typeof window.DefenseAudio === 'function') audio = new window.DefenseAudio({ enabled: soundEnabled }); } catch { /* Audio failure must not block play. */ }
         callAudio('setEnabled', soundEnabled);
         game = new window.DefenseGame({ onChange: render, onEvent, onComplete: completed });
-        render(game.getState()); resize(); preload();
+        render(game.getState()); resize(); preload(); renderGuide();
         return true;
       } catch (error) {
         text('defense-status', error.message || '四周目启动失败，请刷新后重试');
@@ -271,9 +306,11 @@
           if (game.move(held.slot, destination)) selectedSlot = destination;
           else {
             const target = unitAt(destination);
-            showNotice(target && source.level === target.level && !window.DefenseGame.canMerge(source, target)
-              ? '进化路线不同，无法合成；双方守卫均已保留'
-              : '只能合成相同等级、相同路线的守卫，或拖到空位移动');
+            showNotice(source.isGolden || target?.isGolden
+              ? '把普通守卫拖到黄金战士上即可投喂；黄金战士可拖到空位移动'
+              : target && source.level === target.level && !window.DefenseGame.canMerge(source, target)
+                ? '基础元素不同，无法合成；双方守卫均已保留'
+                : '只能合成同级、同元素的守卫，技能可以不同；或拖到空位移动');
           }
         }
       } else if (!held.moved && destination === held.slot) deploy(destination);
@@ -360,6 +397,11 @@
     listen($('defense-pause'), 'click', togglePause);
     listen($('defense-restart'), 'click', () => reset());
     listen($('defense-retry'), 'click', () => reset(false));
+    listen($('defense-guide-open'), 'click', () => {
+      if (!active || state?.pendingEvolution) return;
+      clearInput(); $('defense-guide-dialog')?.showModal(); syncPause();
+    });
+    listen($('defense-guide-close'), 'click', () => $('defense-guide-dialog')?.close());
     listen($('defense-sound'), 'click', () => {
       soundEnabled = !soundEnabled; window.GameSoundEnabled = soundEnabled;
       write('photo-merge-sound', soundEnabled ? 'on' : 'off'); callAudio('setEnabled', soundEnabled); soundUI();
@@ -389,7 +431,7 @@
         destroyed = true; clearInput(); stopFrame(); callAudio('destroy');
         if (game) game.pause(true);
         for (const [target, type, listener, options] of listeners) target?.removeEventListener?.(type, listener, options);
-        for (const image of [...images, ...Object.values(enemyImages)]) if (image) image.onload = image.onerror = null;
+        for (const image of [...images, goldenImage, ...Object.values(enemyImages)]) if (image) image.onload = image.onerror = null;
       },
     };
   }

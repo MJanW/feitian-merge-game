@@ -42,7 +42,14 @@
 #defense-panel #defense-selection { color: #3c592e; font-size: 11px; font-weight: 700; line-height: 1.6; white-space: nowrap; overflow-x: auto; scrollbar-width: thin; }
 #defense-panel #defense-unit-stats { margin-top: 5px; color: var(--d-muted); font-size: 10px; line-height: 1.5; }
 #defense-panel .defense-evolution-risk { margin: 0 0 12px; color: #866545; font-size: 10px; line-height: 1.65; }
-#defense-panel .defense-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+#defense-panel .defense-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+#defense-panel .defense-golden-progress { margin: 0 0 10px; padding: 9px 10px; border: 1px solid #ddc277; border-radius: 9px; background: #faf0c9; }
+#defense-panel .defense-golden-progress label { display: block; margin-bottom: 5px; color: #82601e; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+#defense-panel .defense-golden-progress progress { display: block; width: 100%; height: 7px; border: 0; border-radius: 5px; overflow: hidden; background: #e4d7a6; color: #c39428; accent-color: #c39428; }
+#defense-panel .defense-golden-progress progress::-webkit-progress-bar { border-radius: 5px; background: #e4d7a6; }
+#defense-panel .defense-golden-progress progress::-webkit-progress-value { border-radius: 5px; background: linear-gradient(90deg, #b38624, #f1cd5e); }
+#defense-panel .defense-golden-progress progress::-moz-progress-bar { border-radius: 5px; background: #c39428; }
+#defense-panel .defense-golden-progress[hidden] { display: none; }
 #defense-panel button { min-height: 44px; border: 2px solid #526b3d; border-radius: 12px; font-weight: 700; transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease; }
 #defense-panel .primary-button { background: #f6cf61; border-color: #9b7836; color: #4f4727; box-shadow: inset 0 2px 0 #ffe7a6, 0 4px 0 #b18b43; }
 #defense-panel .primary-button:hover { background: #ffdc76; }
@@ -91,6 +98,8 @@
 #defense-panel .defense-route[data-family="ice"] { color: #326c78; border-color: #6b9da1; background: #e0f2ed; box-shadow: 0 3px 0 #a8ccc1, inset 0 2px 0 #f5fffb; }
 #defense-panel .defense-route[data-family="fire"] { color: #9c572e; border-color: #bd9160; background: #ffead0; box-shadow: 0 3px 0 #dcc097, inset 0 2px 0 #fff7e4; }
 #defense-panel .defense-route[data-family="lightning"] { color: #786325; border-color: #b4a04e; background: #f7f0b9; box-shadow: 0 3px 0 #d2c87d, inset 0 2px 0 #fffbd9; }
+#defense-panel .defense-route[data-family="earth"] { color: #79593c; border-color: #ac8d6f; background: #efe1cd; box-shadow: 0 3px 0 #cfb99c, inset 0 2px 0 #fff5e6; }
+#defense-panel .defense-route[data-family="grass"] { color: #476a32; border-color: #83a465; background: #e5efcf; box-shadow: 0 3px 0 #b4c990, inset 0 2px 0 #f5ffe6; }
 #defense-panel .defense-route[data-route="echo"] { color: #806027; border-color: #b69d59; background: #f6e9bf; box-shadow: 0 3px 0 #d7c38a, inset 0 2px 0 #fff9df; }
 #defense-panel .defense-route[data-route="dominion"] { color: #3a745d; border-color: #76a78b; background: #deefda; box-shadow: 0 3px 0 #adceb0, inset 0 2px 0 #f4ffed; }
 #defense-panel .defense-route[data-route="overdrive"] { color: #954d4a; border-color: #bf8981; background: #f8ded3; box-shadow: 0 3px 0 #dfb6aa, inset 0 2px 0 #fff1e8; }
@@ -98,6 +107,19 @@
 #defense-panel .defense-route-copy { min-width: 0; overflow-wrap: anywhere; }
 #defense-panel .defense-route:hover { filter: brightness(1.035); }
 #defense-panel .defense-route:focus-visible { outline: 3px solid #304c38; outline-offset: 3px; }
+.defense-guide-dialog { width: min(640px, calc(100vw - 28px)); max-height: calc(100dvh - 40px); padding: 0; border: 2px solid #7d8957; border-radius: 18px; background: #fff8df; color: #364f30; box-shadow: 0 10px 50px #213a3655; }
+.defense-guide-dialog::backdrop { background: #243e337d; }
+.defense-guide-dialog .dialog-header { padding: 17px 20px; border-bottom: 1px solid #d3d5ae; }
+.defense-guide-dialog h2 { font: 800 21px/1.3 var(--font); }
+.defense-guide-body { padding: 0 20px 20px; overflow-wrap: anywhere; font-size: 12px; line-height: 1.8; }
+.defense-guide-body h3 { margin: 23px 0 7px; font-size: 15px; color: #3a562f; }
+.defense-guide-body p { color: #6a7653; }
+.defense-guide-body p + p { margin-top: 8px; }
+.defense-guide-body .defense-guide-intro { margin-top: 14px; font-size: 10px; color: #8a8c64; }
+.defense-reactions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 13px 0 0; padding: 0; list-style: none; }
+.defense-reactions li { padding: 10px; border: 1px solid #d8d9b5; border-radius: 9px; background: #f6f3db; }
+.defense-reactions strong { display: block; color: #4f653a; font-size: 11px; }
+.defense-reactions span { display: block; margin-top: 4px; color: #737c59; font-size: 11px; }
 @media (min-width: 780px) and (max-height: 780px) {
   #defense-panel .defense-head { margin-bottom: 14px; }
   #defense-panel .defense-head h1 { font-size: 39px; }
@@ -118,15 +140,20 @@
   #defense-panel .defense-play { grid-column: 1; grid-row: 2; width: 100%; height: 100%; justify-content: center; gap: 5px; }
   #defense-panel .defense-board { width: min(100%, calc((var(--panel-height) - var(--safe-bottom) - 196px) * .6153846154 + 6px)); flex-shrink: 0; border-radius: 15px; }
   #defense-panel .defense-status { min-height: 13px; max-height: 13px; font-size: 9px; line-height: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #defense-panel .defense-tools { grid-column: 1; grid-row: 3; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: 17px 27px 44px; gap: 3px 6px; width: 100%; height: 97px; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+  #defense-panel .defense-tools { grid-column: 1; grid-row: 3; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: 17px 27px 44px; gap: 3px 6px; width: 100%; height: 97px; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
   #defense-panel .defense-selection-row, #defense-panel .defense-controls, #defense-panel .defense-selection-copy { display: contents; }
   #defense-panel #defense-selection { grid-column: 1 / -1; grid-row: 1; font-size: 9px; line-height: 15px; white-space: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
   #defense-panel #defense-unit-stats { display: none; }
   #defense-panel .defense-evolution-risk { grid-column: 1 / -1; grid-row: 2; margin: 0; font-size: 9px; line-height: 13px; }
+  #defense-panel .defense-tools[data-golden="true"] .defense-evolution-risk { display: none; }
+  #defense-panel .defense-golden-progress { grid-column: 1 / -1; grid-row: 2; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; }
+  #defense-panel .defense-golden-progress label { margin-bottom: 3px; font-size: 9px; line-height: 14px; white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
+  #defense-panel .defense-golden-progress progress { height: 5px; }
   #defense-panel .defense-controls button { grid-row: 3; height: 44px; min-width: 0; padding: 4px; font-size: 10px; border-radius: 10px; }
   #defense-panel #defense-pause { grid-column: 1; }
   #defense-panel #defense-restart { grid-column: 2; }
   #defense-panel #defense-sound { grid-column: 3; }
+  #defense-panel #defense-guide-open { grid-column: 4; }
   #defense-panel .defense-intro { padding: 15px; }
   #defense-panel .defense-intro-card { padding: 19px 15px; border-radius: 18px; }
   #defense-panel .defense-intro h2 { font-size: 25px; }
@@ -135,6 +162,10 @@
   #defense-panel .defense-intro li { gap: 6px; font-size: 9px; }
   #defense-panel .defense-evolution { position: fixed; inset: calc(var(--modebar-height) + var(--safe-top) + 8px) calc(8px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(8px + var(--safe-left)); padding: 12px; border-radius: 18px; }
   #defense-panel .defense-evolution-card { max-width: 380px; }
+  .defense-guide-dialog { max-height: calc(100dvh - 28px); }
+  .defense-guide-dialog .dialog-header { padding: 14px; }
+  .defense-guide-body { padding: 0 14px 18px; font-size: 11px; }
+  .defense-reactions { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 779px) and (max-height: 740px) and (orientation: portrait) {
   #defense-panel .defense-emblem { display: none; }

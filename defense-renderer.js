@@ -1,18 +1,20 @@
 (function (root) {
   'use strict';
   const catalog = typeof module !== 'undefined' && module.exports ? require('./defense-enemies.js') : root.DefenseEnemies;
+  const forms = typeof module !== 'undefined' && module.exports ? require('./defense-forms.js') : root.DefenseForms;
   const INK = '#294329', PAPER = '#fff8dc', ORANGE = '#e98235';
   const engine = () => root.DefenseGame;
-  const ABILITY = { normal: '#e7eddf', ice: '#9de6f2', fire: '#ffb44d', lightning: '#f7e76a' };
-  const ROUTE_MARK = { ice: '❄', fire: '炎', lightning: 'ϟ' };
-  const ROUTES = ['ice', 'fire', 'lightning'];
-  const ROUTE_INK = { ice: '#368eac', fire: '#bd532d', lightning: '#897130' };
+  const ABILITY = { normal: '#e7eddf', ice: '#9de6f2', fire: '#ffb44d', lightning: '#f7e76a', earth: '#deb77d', grass: '#b0ed80', golden: '#ffe18a' };
+  const ROUTE_MARK = { ice: '❄', fire: '炎', lightning: 'ϟ', earth: '岩', grass: '叶' };
+  const ROUTES = ['ice', 'fire', 'lightning', 'earth', 'grass'];
+  const ROUTE_INK = { ice: '#368eac', fire: '#bd532d', lightning: '#897130', earth: '#8d6644', grass: '#438742' };
   const TAU = Math.PI * 2;
   const FONT = '"Avenir Next", "PingFang SC", sans-serif';
   const MONO = '"SFMono-Regular", Consolas, monospace';
   const PATH = [{ x: 32, y: -35 }, { x: 32, y: 315 }, { x: 366, y: 315 }, { x: 366, y: 345 }];
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const number = (n, fallback = 0) => Number.isFinite(n) ? n : fallback;
+  const statsFor = unit => engine()?.statsForUnit?.(unit) || engine()?.statsForLevel?.(unit.level, unit.routes, unit.route) || {};
 
   function line(ctx, x1, y1, x2, y2, color, width = 1) {
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
@@ -36,6 +38,11 @@
     ctx.font = `800 12px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.strokeStyle = '#495236'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
     const label = `−${Number.isInteger(value) ? value : Math.round(value * 10) / 10}`;
+    ctx.strokeText(label, x, y); ctx.fillStyle = color; ctx.fillText(label, x, y);
+  }
+  function effectLabel(ctx, label, x, y, color, size = 10) {
+    ctx.font = `800 ${size}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.strokeStyle = '#4e5039'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
     ctx.strokeText(label, x, y); ctx.fillStyle = color; ctx.fillText(label, x, y);
   }
   function roadPath(ctx, path) {
@@ -104,7 +111,7 @@
     text(ctx, '飞刃守卫 · 无限进化', 185, 28, 12, '#fff7d3', '800', 'center');
     round(ctx, 63, 580, 229, 48, 12, '#5c843d', '#3d6b34', 2);
     text(ctx, '左侧迎敌  ·  右侧击蛋', 177, 594, 11, '#fff9da', '700', 'center');
-    text(ctx, number(game.reserve) > 0 ? `待命 ${Math.floor(game.reserve)} 位 · 点击空位部署` : '拖动换位 · 同级同路径合成', 177, 614, 10, '#e7edbd', '600', 'center');
+    text(ctx, number(game.reserve) > 0 ? `待命 ${Math.floor(game.reserve)} 位 · 点击空位部署` : '拖动换位 · 同级同元素合成', 177, 614, 10, '#e7edbd', '600', 'center');
     ellipse(ctx, 366, 646, 23, 9, '#314e2d');
     ellipse(ctx, 366, 642, 23, 7, '#bc9b62', '#5b6235', 2);
     ellipse(ctx, 366, 641, 17, 4, '#496c38');
@@ -113,11 +120,11 @@
   function selectedUnit(game, options) {
     return (game.units || []).find(unit => unit.slot === options.selectedSlot);
   }
-  function cell(ctx, slot, unit, selected, canMerge, hovered, incompatible) {
+  function cell(ctx, slot, unit, selected, canMerge, hovered, incompatible, feedable) {
     const { x, y } = slot;
     const base = (Math.round(x / 70) + Math.round(y / 70)) % 2 ? '#acd269' : '#9fc85b';
     const rejected = hovered && incompatible;
-    round(ctx, x - 32, y - 32, 64, 64, 7, selected ? '#dfe88b' : rejected ? '#d5a67e' : hovered ? '#c4de7a' : base, selected ? '#ffeb81' : rejected ? '#a84339' : canMerge ? '#fcf3bc' : '#759c4690', selected || canMerge || rejected ? 3 : 1.2);
+    round(ctx, x - 32, y - 32, 64, 64, 7, selected ? '#dfe88b' : rejected ? '#d5a67e' : feedable ? '#e4d07b' : hovered ? '#c4de7a' : base, feedable ? '#b97b21' : selected ? '#ffeb81' : rejected ? '#a84339' : canMerge ? '#fcf3bc' : '#759c4690', selected || canMerge || rejected || feedable ? 3 : 1.2);
     if (unit) ellipse(ctx, x, y + 13, 24, 8, '#6d983c66');
     else {
       line(ctx, x - 4, y + 1, x + 4, y + 1, '#6a963f66', 1.6);
@@ -135,6 +142,7 @@
     return typeof images.get === 'function' ? images.get(index) || images.get(info?.image) : images[index];
   }
   function form(unit, options) {
+    if (unit.isGolden) return forms?.goldenPortrait || { image: 'assets/defense/golden-warrior.png' };
     if (typeof options.formForLevel === 'function') return options.formForLevel(unit.level) || {};
     const levels = Array.isArray(options.levels) ? options.levels : options.levels?.levels || [];
     const count = Math.max(1, levels.length - 1), photoIndex = unit.level % count;
@@ -211,6 +219,41 @@
         ellipse(ctx, Math.cos(a) * 32, Math.sin(a) * 14, 3.3, 3.3, '#faf1ff', '#9866c6', 1);
         ctx.restore();
       }
+    } else if (branch.family === 'earth') {
+      for (const side of [-1, 1]) {
+        if (branch.id === 'bastion') {
+          polygon(ctx, [[side * 16, 17], [side * 30, 11], [side * 32, -20], [side * 23, -28], [side * 17, -17]], '#957557dd', '#e2c698', 1.5);
+          line(ctx, side * 23, -16, side * 24, 10, '#f9dfab', 1.4);
+        } else if (branch.id === 'quake') {
+          polygon(ctx, [[side * 16, 16], [side * 30, 13], [side * 34, -3], [side * 23, -12]], '#a67a4bd9', '#664e38', 1.5);
+          line(ctx, side * 29, -2, side * 22, 3, '#f2c47a', 2);
+          line(ctx, side * 22, 3, side * 28, 10, '#f2c47a', 2);
+        } else {
+          polygon(ctx, [[side * 20, 15], [side * 33, -6], [side * 28, -32], [side * 19, -14]], '#e6c481ba', '#93724b', 1.2);
+          line(ctx, side * 28, -28, side * 25, 8, '#fff3bd', 1.5);
+        }
+      }
+    } else if (branch.family === 'grass') {
+      for (const side of [-1, 1]) {
+        ctx.beginPath(); ctx.moveTo(side * 16, 18); ctx.bezierCurveTo(side * 35, 0, side * 14, -17, side * 28, -33);
+        ctx.strokeStyle = '#477c3d'; ctx.lineWidth = 3; ctx.stroke();
+        for (let i = 0; i < 3; i++) {
+          const y = 8 - i * 16, x = side * (24 + Math.sin(phase + i) * 2);
+          if (branch.id === 'thorn') polygon(ctx, [[x, y], [x + side * 10, y - 7], [x + side * 3, y + 5]], '#7ca94c', '#38623a', 1);
+          else if (branch.id === 'bloom') {
+            for (let j = 0; j < 4; j++) ellipse(ctx, x + Math.cos(j * TAU / 4) * 3, y + Math.sin(j * TAU / 4) * 3, 2.7, 2.7, '#f5e6b3');
+            ellipse(ctx, x, y, 2, 2, '#debe54');
+          } else polygon(ctx, [[x, y + 4], [x + side * 11, y - 2], [x + side * 9, y - 10], [x + side * 2, y - 7]], '#98d367c9', '#4b8a45', 1);
+        }
+      }
+    } else if (['rime', 'inferno', 'surge'].includes(branch.id)) {
+      for (let i = 0; i < 4; i++) {
+        const a = phase * .25 + i * TAU / 4;
+        const x = Math.cos(a) * 29, y = -13 + Math.sin(a) * 27;
+        if (branch.id === 'rime') snowflake(ctx, x, y, 6, '#e6fdff');
+        else if (branch.id === 'inferno') polygon(ctx, [[x - 4, y + 7], [x, y - 9], [x + 5, y + 5]], '#ffce73', '#d56b37', 1);
+        else polygon(ctx, [[x + 2, y - 9], [x - 5, y + 1], [x, y], [x - 2, y + 8], [x + 5, y - 3]], '#fff5ad', '#ba9448', 1);
+      }
     }
     if (identity.skill) {
       const skill = identity.skill, mark = skill.icon || '✦';
@@ -277,18 +320,66 @@
           ctx.strokeStyle = '#fff4ab'; ctx.lineWidth = 1.7; ctx.stroke();
           polygon(ctx, [[side * 12, 9], [side * 18, 12], [side * 14, 14], [side * 21, 17], [side * 10, 15], [side * 14, 12]], '#fff6b0', ink, .6);
         }
+      } else if (route === 'earth') {
+        for (const side of [-1, 1]) {
+          const drift = options.reducedMotion ? 0 : Math.sin(phase + side) * 1.5;
+          polygon(ctx, [[side * 18, 17], [side * 28, 13], [side * 31, -10 + drift], [side * 22, -20 + drift], [side * 17, -10]], '#b68f65c9', ink, 1.4);
+          line(ctx, side * 21, -10 + drift, side * 27, -4 + drift, '#f6db9e', 1.4);
+          polygon(ctx, [[side * 25, -26 + drift], [side * 28, -31 + drift], [side * 34, -27 + drift], [side * 31, -22 + drift]], '#dfbd85', ink, 1);
+        }
+      } else if (route === 'grass') {
+        for (const side of [-1, 1]) {
+          const drift = options.reducedMotion ? 0 : Math.sin(phase + side) * 1.6;
+          ctx.beginPath(); ctx.moveTo(side * 17, 17); ctx.quadraticCurveTo(side * 31, -2, side * 23, -28 + drift);
+          ctx.strokeStyle = ink; ctx.lineWidth = 2.4; ctx.stroke();
+          for (let i = 0; i < 3; i++) {
+            const y = 8 - i * 12 + drift, x = side * 24;
+            polygon(ctx, [[x, y + 3], [x + side * 9, y], [x + side * 12, y - 9], [x + side * 3, y - 6]], '#9cdb75bf', ink, 1);
+            line(ctx, x, y + 2, x + side * 9, y - 6, '#deffc3', .8);
+          }
+        }
       }
       ctx.restore();
     }
   }
+  function goldenAttributes(ctx, unit, options, elapsed) {
+    const phase = options.reducedMotion ? 0 : number(elapsed) * .65;
+    const rank = clamp(number(unit.goldenRank, 1), 1, 6);
+    // Open, segmented aureole: the face remains completely unobscured. All
+    // decoration stays within a cell-sized silhouette even after many feeds.
+    ctx.save(); ctx.translate(0, -11);
+    for (let i = 0; i < 6; i++) {
+      const a = phase + i * TAU / 6;
+      ctx.beginPath(); ctx.arc(0, -2, 29, a, a + .7);
+      ctx.strokeStyle = '#966129'; ctx.lineWidth = 4; ctx.stroke();
+      ctx.strokeStyle = i % 2 ? '#fff8d7' : '#f6cd67'; ctx.lineWidth = 2; ctx.stroke();
+      const x = Math.cos(a + .35) * 34, y = -2 + Math.sin(a + .35) * 34;
+      polygon(ctx, [[x, y - 2.5], [x + 1.7, y], [x, y + 2.5], [x - 1.7, y]], '#fff8cf', '#be8d37', .6);
+    }
+    for (const side of [-1, 1]) {
+      polygon(ctx, [[side * 12, 17], [side * 22, 5], [side * 31, -3], [side * 25, 18]], '#d3a944b0', '#815a28', 1.3);
+      line(ctx, side * 17, 15, side * 27, 3, '#fff2bc', 1.3);
+      const rise = options.reducedMotion ? .6 : (phase * .7 + (side + 1) * .35) % 1;
+      const y = 10 - rise * 37;
+      line(ctx, side * 30 - 2, y, side * 30 + 2, y, '#fff6cb', 1.3);
+      line(ctx, side * 30, y - 3, side * 30, y + 3, '#fff6cb', 1.3);
+    }
+    polygon(ctx, [[-11, -32], [-13, -42], [-5, -37], [0, -46], [5, -37], [13, -42], [11, -32]], '#f4d474', '#85622d', 1.3);
+    polygon(ctx, [[0, -40], [2.5, -36], [0, -32], [-2.5, -36]], '#fffcef', '#ba8b37', .6);
+    for (let i = 0; i < rank; i++) ellipse(ctx, (i - (rank - 1) / 2) * 5, 27, 1.25, 1.25, '#fff5b5');
+    ctx.restore();
+  }
   function portrait(ctx, unit, options, x = unit.x, y = unit.y, opacity = 1, elapsed = 0) {
-    const info = form(unit, options), image = getImage(options.images, info, unit.level);
-    const stats = engine()?.statsForLevel?.(unit.level, unit.routes, unit.route) || {}, ability = stats.ability || 'normal';
+    const info = form(unit, options), image = unit.isGolden ? options.goldenImage : getImage(options.images, info, unit.level);
+    const stats = statsFor(unit), ability = unit.isGolden ? 'golden' : stats.ability || 'normal';
     const identity = attributeIdentity(unit);
     const pulse = options.reducedMotion ? 0 : clamp(number(unit.pulse) / .6, 0, 1);
     ctx.save(); ctx.globalAlpha *= opacity; ctx.translate(x, y + 15);
     ellipse(ctx, 1, 2, 21, 6, '#345d3555', '#d9e5a650', 1);
-    ctx.save(); ctx.translate(0, -15); attributes(ctx, unit, stats, options, elapsed); advancedAttributes(ctx, unit, identity, options, elapsed); ctx.restore();
+    ctx.save(); ctx.translate(0, -15);
+    if (unit.isGolden) goldenAttributes(ctx, unit, options, elapsed);
+    else { attributes(ctx, unit, stats, options, elapsed); advancedAttributes(ctx, unit, identity, options, elapsed); }
+    ctx.restore();
     const spring = 1 + Math.sin(pulse * Math.PI) * .08;
     ctx.scale(1 / spring, spring);
     if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
@@ -296,16 +387,22 @@
       const w = source[2] * scale, h = source[3] * scale;
       ctx.drawImage(image, ...source, -w / 2, -h, w, h);
     } else {
-      round(ctx, -11, -29, 22, 29, 6, info.color || '#dbb071', '#4c613c', 1.5);
+      round(ctx, -11, -29, 22, 29, 6, unit.isGolden ? '#e1b851' : info.color || '#dbb071', '#4c613c', 1.5);
       ellipse(ctx, 0, -34, 10, 10, '#f2cdad', '#735e3b', 1.5);
       line(ctx, -16, -22, 16, -22, '#50725d', 4);
     }
     ctx.restore();
     ctx.save(); ctx.globalAlpha *= opacity;
-    const label = `Lv.${unit.level + 1}`, width = Math.max(32, label.length * 5.1 + 10);
+    const label = unit.isGolden ? `黄金 ${Math.min(999, Math.max(1, Math.floor(number(unit.goldenRank, 1))))}${unit.goldenRank > 999 ? '+' : ''}` : `Lv.${unit.level + 1}`;
+    const width = Math.max(32, label.length * 5.1 + 10);
     round(ctx, x - width / 2, y + 19, width, 15, 5, ability === 'normal' ? '#365e35' : '#354c43', ability === 'normal' ? '#d6e59b' : ABILITY[ability], 1.4);
     text(ctx, label, x, y + 27, 8, '#fffce6', '800', 'center', MONO);
-    if (ability !== 'normal') {
+    if (unit.isGolden) {
+      const progress = engine()?.goldenProgress?.(unit) || { progress: 0, required: 10 };
+      const ratio = clamp(number(progress.progress) / Math.max(1, number(progress.required, 10)), 0, 1);
+      round(ctx, x - 22, y + 35, 44, 4, 2, '#755524', '#fff0bb', .7);
+      if (ratio > 0) { ctx.fillStyle = '#ffde77'; ctx.fillRect(x - 21, y + 36, 42 * ratio, 2); }
+    } else if (ability !== 'normal') {
       const rank = Math.max(1, number(stats.ranks?.[ability], number(unit.routes?.[ability], 1)));
       const advanced = identity.active && identity.active.tier >= 2;
       const badge = advanced ? Array.from(identity.active.name || '进阶').slice(0, 5).join('') : `${ROUTE_MARK[ability] || '✦'}${rank}`;
@@ -315,7 +412,7 @@
       // Retained routes remain visible even when the latest choice changes
       // the primary blade color. The badge number is that route's rank.
       let marker = 0;
-      for (const route of ['ice', 'fire', 'lightning']) {
+      for (const route of ROUTES) {
         if (route !== ability && number(stats.ranks?.[route]) > 0) ellipse(ctx, x - 20 + marker++ * 8, y - 22, 3, 3, ABILITY[route], '#406441', 1);
       }
     }
@@ -330,9 +427,9 @@
   }
   function orbit(ctx, unit, game, options) {
     const blades = engine()?.bladesFor?.(unit, number(game.elapsed)) || [];
-    const stats = engine()?.statsForLevel?.(unit.level, unit.routes, unit.route) || {};
-    const ability = stats.ability || 'normal', identity = attributeIdentity(unit);
-    const color = identity.active?.color || ABILITY[ability] || ABILITY.normal;
+    const stats = statsFor(unit);
+    const ability = unit.isGolden ? 'golden' : stats.ability || 'normal', identity = attributeIdentity(unit);
+    const color = unit.isGolden ? ABILITY.golden : identity.active?.color || ABILITY[ability] || ABILITY.normal;
     for (const blade of blades) {
       if (![blade.x, blade.y, blade.innerX, blade.innerY, blade.outerX, blade.outerY].every(Number.isFinite)) continue;
       const radius = Math.hypot(blade.x - unit.x, blade.y - unit.y), angle = Math.atan2(blade.y - unit.y, blade.x - unit.x);
@@ -344,10 +441,17 @@
       }
       const dx = blade.outerX - blade.innerX, dy = blade.outerY - blade.innerY, length = Math.max(1, Math.hypot(dx, dy));
       const nx = -dy / length, ny = dx / length, bx = blade.innerX + dx * .25, by = blade.innerY + dy * .25;
-      line(ctx, blade.innerX, blade.innerY, bx, by, '#665439', 5.3);
-      line(ctx, bx + nx * 5, by + ny * 5, bx - nx * 5, by - ny * 5, '#4d613d', 2.5);
-      polygon(ctx, [[bx + nx * 3.5, by + ny * 3.5], [blade.outerX, blade.outerY], [bx - nx * 3.5, by - ny * 3.5]], color, '#355046', 1.4);
-      line(ctx, bx, by, blade.outerX, blade.outerY, '#fffef0', 1.2);
+      const metal = unit.isGolden ? '#c69b45' : '#8a9c9a', darkMetal = unit.isGolden ? '#815b2b' : '#3b5857';
+      // Faceted blade and wrapped grip share the exact collision endpoints.
+      line(ctx, blade.innerX, blade.innerY, bx, by, darkMetal, 5);
+      for (const f of [.06, .13, .2]) line(ctx, blade.innerX + dx * f - nx * 2, blade.innerY + dy * f - ny * 2, blade.innerX + dx * f + nx * 2, blade.innerY + dy * f + ny * 2, metal, 1);
+      ellipse(ctx, blade.innerX, blade.innerY, 2.7, 2.7, color, darkMetal, 1);
+      polygon(ctx, [[bx + nx * 5.8 - dx * .03, by + ny * 5.8 - dy * .03], [bx + nx * 6.7 + dx * .04, by + ny * 6.7 + dy * .04], [bx, by + dy * .02], [bx - nx * 6.7 + dx * .04, by - ny * 6.7 + dy * .04], [bx - nx * 5.8 - dx * .03, by - ny * 5.8 - dy * .03]], metal, darkMetal, .9);
+      polygon(ctx, [[bx + nx * 3, by + ny * 3], [bx + dx * .42 + nx * 2.4, by + dy * .42 + ny * 2.4], [blade.outerX, blade.outerY], [bx - nx * 3, by - ny * 3]], color, darkMetal, 1);
+      polygon(ctx, [[bx, by], [blade.outerX, blade.outerY], [bx - nx * 3, by - ny * 3]], '#fbfff0d9');
+      line(ctx, bx, by, blade.outerX, blade.outerY, '#ffffff', 1);
+      line(ctx, bx + dx * .12, by + dy * .12, bx + dx * .34, by + dy * .34, metal, 1);
+      ellipse(ctx, bx, by, 2, 2, unit.isGolden ? '#fff7ce' : color, darkMetal, .7);
       if (ability === 'ice') {
         polygon(ctx, [[bx + nx * 4, by + ny * 4], [bx + nx * 7 + dx * .2, by + ny * 7 + dy * .2], [bx + dx * .4, by + dy * .4]], '#dffcff', '#368eac', .7);
       } else if (ability === 'fire') {
@@ -356,6 +460,10 @@
         const ex = blade.outerX, ey = blade.outerY;
         line(ctx, ex, ey, ex + nx * 4 - dx * .1, ey + ny * 4 - dy * .1, '#ffed8a', 2);
         line(ctx, ex + nx * 4 - dx * .1, ey + ny * 4 - dy * .1, ex + nx * 6 + dx * .1, ey + ny * 6 + dy * .1, '#fff8c8', 1.5);
+      } else if (ability === 'earth') {
+        polygon(ctx, [[bx + nx * 4, by + ny * 4], [bx + nx * 6 + dx * .18, by + ny * 6 + dy * .18], [bx + dx * .3, by + dy * .3]], '#d5bc8a', '#87674c', .8);
+      } else if (ability === 'grass') {
+        polygon(ctx, [[bx + nx * 2, by + ny * 2], [bx + nx * 7 + dx * .17, by + ny * 7 + dy * .17], [bx + nx * 3 + dx * .28, by + ny * 3 + dy * .28]], '#c1f095', '#527c3f', .8);
       }
     }
   }
@@ -510,13 +618,94 @@
     ctx.restore();
   }
 
+  function reactionEffect(ctx, e, motion, fade) {
+    const key = Array.isArray(e.elements) ? [...e.elements].sort().join('_') : e.reaction;
+    const color = e.color || '#fff0bd', r = clamp(number(e.radius, 40), 10, 74) * (.3 + motion * .5);
+    ctx.save(); ctx.translate(e.x, e.y);
+    if (key === 'fire_ice') {
+      for (let i = 0; i < 4; i++) {
+        const x = (i - 1.5) * r * .4;
+        ctx.beginPath(); ctx.moveTo(x, 10); ctx.bezierCurveTo(x + 8, -3, x - 8, -12, x + 3, -r);
+        ctx.strokeStyle = i % 2 ? '#ffcf94' : '#e4fdff'; ctx.lineWidth = 2.5; ctx.stroke();
+      }
+    } else if (key === 'fire_lightning') {
+      ellipse(ctx, 0, 0, r, r, '#ffd16f20', '#ffc16c', 2.5);
+      polygon(ctx, Array.from({ length: 12 }, (_, i) => { const a = i * TAU / 12, reach = r * (i % 2 ? .42 : 1.2); return [Math.cos(a) * reach, Math.sin(a) * reach]; }), '#fff0a950', '#fff5ca', 1.5);
+    } else if (key === 'earth_fire') {
+      ellipse(ctx, 0, 6, r, r * .6, '#78482b50', '#ffb76b', 1.7);
+      for (let i = 0; i < 4; i++) {
+        const a = i * TAU / 4;
+        line(ctx, 0, 4, Math.cos(a + .2) * r * .55, 4 + Math.sin(a + .2) * r * .4, '#ffe0a0', 2);
+        line(ctx, Math.cos(a + .2) * r * .55, 4 + Math.sin(a + .2) * r * .4, Math.cos(a) * r, 4 + Math.sin(a) * r * .6, '#f7a35a', 2);
+      }
+    } else if (key === 'fire_grass') {
+      for (let i = 0; i < 5; i++) {
+        const a = i * TAU / 5, x = Math.cos(a) * r * .8, y = Math.sin(a) * r * .8;
+        polygon(ctx, [[x - 3, y + 5], [x - 5, y - 2], [x + 2, y - 12], [x + 5, y + 3]], '#efb263b0', '#ffe8a2', 1);
+        line(ctx, x, y + 3, x + 1, y - 6, '#e5f49d', 1);
+      }
+    } else if (key === 'ice_lightning') {
+      snowflake(ctx, 0, 0, r, '#dbfaff');
+      for (const side of [-1, 1]) polygon(ctx, [[side * 7, -r], [side * 15, -2], [side * 8, -5], [side * 13, r]], '#fff3b4', '#acc7fb', 1);
+    } else if (key === 'earth_ice') {
+      for (let i = 0; i < 5; i++) {
+        const a = i * TAU / 5, x = Math.cos(a) * r, y = Math.sin(a) * r;
+        polygon(ctx, [[x - 5, y + 5], [x - 3, y - 7], [x + 4, y - 10], [x + 6, y + 3]], '#d5f0eac9', '#9bbaaf', 1);
+        line(ctx, x - 1, y + 3, x + 2, y - 6, '#fffce7', 1);
+      }
+    } else if (key === 'grass_ice') {
+      for (let i = 0; i < 4; i++) {
+        const a = i * TAU / 4;
+        ctx.save(); ctx.rotate(a); polygon(ctx, [[0, 2], [-7, -r * .55], [0, -r], [7, -r * .55]], '#a9e7b775', '#e0fff3', 1.2); ctx.restore();
+      }
+      snowflake(ctx, 0, 0, 8, '#f5fffd');
+    } else if (key === 'earth_lightning') {
+      for (let i = 0; i < 3; i++) {
+        const a = i * TAU / 3, x = Math.cos(a) * r, y = Math.sin(a) * r;
+        polygon(ctx, [[x - 4, y - 6], [x + 6, y - 3], [x + 4, y + 5], [x - 6, y + 3]], '#b6a7c3', '#ffe8c2', 1);
+        line(ctx, 0, 0, x * .5 + 4, y * .5 - 3, '#e9d8ff', 2); line(ctx, x * .5 + 4, y * .5 - 3, x, y, '#e9d8ff', 2);
+      }
+    } else if (key === 'grass_lightning') {
+      ellipse(ctx, 0, 0, r, r * .65, null, '#d6f599', 2);
+      for (let i = 0; i < 4; i++) {
+        const a = i * TAU / 4, x = Math.cos(a) * r, y = Math.sin(a) * r * .65;
+        polygon(ctx, [[x, y - 7], [x - 4, y + 1], [x, y], [x - 2, y + 7], [x + 5, y - 2]], '#fff3ac', '#a4cb65', .8);
+      }
+    } else if (key === 'earth_grass') {
+      for (let i = 0; i < 3; i++) {
+        const a = i * TAU / 3;
+        ctx.save(); ctx.rotate(a); ctx.beginPath(); ctx.moveTo(-r, 7); ctx.bezierCurveTo(-r * .5, -r, r * .5, r, r, -7);
+        ctx.strokeStyle = '#c9b17b'; ctx.lineWidth = 4; ctx.stroke(); ctx.strokeStyle = '#84b85c'; ctx.lineWidth = 2; ctx.stroke();
+        polygon(ctx, [[0, 0], [6, -10], [14, -11], [10, -3]], '#c8ec9c', '#598b48', 1); ctx.restore();
+      }
+    } else ellipse(ctx, 0, 0, r, r, null, color, 2);
+    ctx.restore();
+    const label = `${e.name || '元素反应'}${number(e.multiplier) > 1 ? ` ×${e.multiplier}` : ''}`;
+    ctx.globalAlpha = Math.max(ctx.globalAlpha, fade * .8);
+    effectLabel(ctx, label, e.x, e.y - 28 - motion * 14, '#fff8db');
+  }
+
   function effect(ctx, e, options) {
     const t = clamp(number(e.age) / Math.max(.001, number(e.duration, .55)), 0, 1);
     if (t >= 1 || !Number.isFinite(e.x) || !Number.isFinite(e.y)) return;
     const fade = 1 - t, motion = options.reducedMotion ? .35 : t;
     ctx.save(); ctx.globalAlpha *= fade;
     const color = e.color || e.tint || (e.type === 'leak' ? ORANGE : '#d7ad4a');
-    if (e.type === 'slash') {
+    if (e.type === 'reaction') {
+      reactionEffect(ctx, e, motion, fade);
+    } else if (e.type === 'golden' || e.type === 'feed') {
+      const awakening = e.type === 'golden', evolved = awakening || number(e.rank) > number(e.previousRank, e.rank);
+      const r = 15 + motion * (awakening ? 43 : evolved ? 30 : 15);
+      ellipse(ctx, e.x, e.y - 9, r, r, null, '#fff2b4', evolved ? 3 : 1.5);
+      if (evolved) {
+        ellipse(ctx, e.x, e.y - 9, r * .75, r * .75, null, '#dba643', 1.4);
+        for (let i = 0; i < 8; i++) {
+          const a = i * TAU / 8, x = e.x + Math.cos(a) * r, y = e.y - 9 + Math.sin(a) * r;
+          polygon(ctx, [[x, y - 5], [x + 2, y], [x, y + 5], [x - 2, y]], i % 2 ? '#fff6d2' : '#ebc96c');
+        }
+      }
+      effectLabel(ctx, awakening ? '黄金觉醒' : evolved ? '黄金进阶' : `投喂 +${Math.max(0, Math.floor(number(e.gained)))}`, e.x, e.y - 48 - motion * 10, '#fff6ce', 11);
+    } else if (e.type === 'slash') {
       ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(number(e.angle));
       const strikeColor = ABILITY[e.ability] || '#fff6c1';
       ctx.beginPath(); ctx.arc(0, 0, 10 + motion * 15, -1.15, 1.05);
@@ -583,6 +772,29 @@
         else for (let i = 0; i < 8; i++) {
           const a = i * TAU / 8;
           line(ctx, Math.cos(a) * r * .55, Math.sin(a) * r * .55, Math.cos(a) * r * 1.15, Math.sin(a) * r * 1.15, '#fff0bc', 2);
+        }
+      } else if (['fault', 'meteor', 'fortress', 'erosion'].includes(skill)) {
+        if (skill === 'fortress') polygon(ctx, [[-r, 5], [-r, -r * .5], [0, -r], [r, -r * .5], [r, 5], [0, r * .6]], '#debf8b25', '#ead0a1', 2.4);
+        else if (skill === 'fault') {
+          for (let i = 0; i < 4; i++) {
+            const a = i * TAU / 4; ctx.save(); ctx.rotate(a);
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(7, -r * .35); ctx.lineTo(2, -r * .55); ctx.lineTo(7, -r);
+            ctx.strokeStyle = '#ecd09d'; ctx.lineWidth = 3; ctx.stroke(); ctx.restore();
+          }
+        } else for (let i = 0; i < 5; i++) {
+          const a = i * TAU / 5, x = Math.cos(a) * r * .65, y = Math.sin(a) * r * .65;
+          if (skill === 'meteor') line(ctx, x - 8, y - 15, x, y, '#e1c590', 2.4);
+          polygon(ctx, [[x - 4, y - 3], [x + 2, y - 6], [x + 6, y + 2], [x - 3, y + 5]], skill === 'meteor' ? '#b18c69' : '#ddc397', '#f3dfba', 1);
+        }
+      } else if (['root', 'venom', 'harvest', 'seedstorm'].includes(skill)) {
+        if (skill === 'root') {
+          for (let i = 0; i < 3; i++) { ctx.save(); ctx.rotate(i * TAU / 3); ctx.beginPath(); ctx.moveTo(-r, 7); ctx.quadraticCurveTo(-r * .2, -r, r, -5); ctx.strokeStyle = '#b4db8c'; ctx.lineWidth = 2.4; ctx.stroke(); ctx.restore(); }
+        } else if (skill === 'venom') {
+          for (let i = 0; i < 5; i++) { const a = i * TAU / 5; ellipse(ctx, Math.cos(a) * r * .7, Math.sin(a) * r * .7, 3 + i * .6, 4 + i * .6, '#bde68e50', '#d9f4a8', 1.2); }
+        } else if (skill === 'harvest') {
+          for (let i = 0; i < 6; i++) { ctx.save(); ctx.rotate(i * TAU / 6); polygon(ctx, [[0, 0], [-6, -r * .65], [0, -r], [6, -r * .65]], '#f2e4ab70', '#eaffce', 1); ctx.restore(); }
+        } else {
+          for (let i = 0; i < 7; i++) { const a = i * TAU / 7; ellipse(ctx, Math.cos(a) * r, Math.sin(a) * r, 2, 3, '#e3f6b5', '#8db35f', 1); line(ctx, Math.cos(a) * r * .5, Math.sin(a) * r * .5, Math.cos(a) * r * .85, Math.sin(a) * r * .85, '#d4f3a3', 1.3); }
         }
       } else if (skill === 'cyclone') {
         for (let i = 0; i < 3; i++) {
@@ -655,7 +867,7 @@
       const units = game.units || [], slots = game.slots || [];
       const active = options.drag?.moved ? units.find(unit => unit.slot === options.drag.fromSlot) : selectedUnit(game, options);
       if (active) {
-        const range = number(engine()?.statsForLevel?.(active.level, active.routes, active.route)?.orbitRadius, number(active.range, 52));
+        const range = number(statsFor(active).orbitRadius, number(active.range, 52));
         ctx.save(); ctx.setLineDash([4, 5]);
         ellipse(ctx, active.x, active.y, range, range, '#386c4e08', '#577b4d50');
         ctx.restore();
@@ -665,8 +877,9 @@
         const unit = units.find(u => u.slot === index);
         const candidate = active && unit && active.id !== unit.id;
         const mergeable = candidate && Boolean(engine()?.canMerge?.(active, unit));
-        const incompatible = candidate && active.level === unit.level && !mergeable;
-        cell(ctx, { ...slot, id: index }, unit, index === active?.slot, mergeable, index === options.hoverSlot, incompatible);
+        const feedable = candidate && Boolean(engine()?.canFeed?.(active, unit));
+        const incompatible = candidate && active.level === unit.level && !mergeable && !feedable;
+        cell(ctx, { ...slot, id: index }, unit, index === active?.slot, mergeable, index === options.hoverSlot, incompatible, feedable);
       }
       for (const unit of units) portrait(ctx, unit, options, unit.x, unit.y, options.drag?.moved && options.drag.fromSlot === unit.slot ? .22 : 1, game.elapsed);
       // The route is separate from build slots, so depth order can remain stable.
@@ -680,7 +893,13 @@
         orbit(ctx, unit, game, options);
         ctx.restore();
       }
-      for (const e of game.effects || []) effect(ctx, e, options);
+      // A dense blade volley must not bury the one-time reveal or feed result.
+      // Retain a small priority budget while bounding the total canvas work.
+      const allEffects = game.effects || [];
+      const reveals = allEffects.filter(e => e.type === 'golden' || e.type === 'feed').slice(-8);
+      const reactions = allEffects.filter(e => e.type === 'reaction').slice(-24);
+      const ordinary = allEffects.filter(e => !['golden', 'feed', 'reaction'].includes(e.type)).slice(-(96 - reveals.length - reactions.length));
+      for (const e of [...ordinary, ...reactions, ...reveals]) effect(ctx, e, options);
       if (options.drag?.moved) {
         const u = units.find(unit => unit.slot === options.drag.fromSlot);
         if (u && Number.isFinite(options.drag.x) && Number.isFinite(options.drag.y)) {
@@ -691,9 +910,13 @@
       // A rejected drop label stays above portraits, attribute effects and the
       // dragged preview, so players can see why the same-level units differ.
       const hovered = units.find(unit => unit.slot === options.hoverSlot);
-      if (active && hovered && active.id !== hovered.id && active.level === hovered.level && !engine()?.canMerge?.(active, hovered)) {
+      if (active && hovered && engine()?.canFeed?.(active, hovered)) {
+        round(ctx, hovered.x - 29, hovered.y - 51, 58, 15, 4, '#fff0b9', '#b58530', 1);
+        text(ctx, `投喂 +${active.level + 1}`, hovered.x, hovered.y - 43, 8, '#694923', '800', 'center');
+      }
+      if (active && hovered && active.id !== hovered.id && active.level === hovered.level && !engine()?.canMerge?.(active, hovered) && !engine()?.canFeed?.(active, hovered)) {
         round(ctx, hovered.x - 29, hovered.y - 44, 58, 15, 4, '#a84339', '#fff1d7', .8);
-        text(ctx, '× 路径不同', hovered.x, hovered.y - 36, 8, '#fff8df', '800', 'center');
+        text(ctx, active.isGolden ? '拖入角色投喂' : '× 元素不同', hovered.x, hovered.y - 36, 8, '#fff8df', '800', 'center');
       }
       // Bottle bodies overlap in a dense queue. Draw all health labels in a
       // final pass so the following bottle (or its flash) cannot cover them.

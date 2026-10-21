@@ -19,15 +19,36 @@
   const safe = value => Math.min(SAFE_LIMIT, Math.max(0, Number.isFinite(value) ? value : SAFE_LIMIT));
   const levelNumber = level => Number.isSafeInteger(level) && level >= 0 ? level : 0;
   const noop = () => {};
-  const BASE_ROUTES = Object.freeze(['ice', 'fire', 'lightning']);
-  const ADVANCED = Object.freeze({ ice: ['glacier', 'blizzard'], fire: ['magma', 'solar'], lightning: ['storm', 'plasma'] });
-  const SKILLS = Object.freeze({ glacier: ['shatter', 'permafrost'], blizzard: ['whiteout', 'hail'],
-    magma: ['eruption', 'slag'], solar: ['flare', 'nova'], storm: ['thunderhead', 'cyclone'], plasma: ['pulse', 'arc'] });
+  const BASE_ROUTES = Object.freeze(['ice', 'fire', 'lightning', 'earth', 'grass']);
+  const ADVANCED = Object.freeze({ ice: ['glacier', 'blizzard', 'rime'], fire: ['magma', 'solar', 'inferno'], lightning: ['storm', 'plasma', 'surge'],
+    earth: ['bastion', 'quake', 'crystal'], grass: ['vine', 'thorn', 'bloom'] });
+  const SKILLS = Object.freeze({ ice: ['shatter', 'permafrost', 'whiteout', 'hail'], fire: ['eruption', 'slag', 'flare', 'nova'],
+    lightning: ['thunderhead', 'cyclone', 'pulse', 'arc'], earth: ['fault', 'meteor', 'fortress', 'erosion'], grass: ['root', 'venom', 'harvest', 'seedstorm'] });
   const ENHANCEMENTS = Object.freeze(['echo', 'dominion', 'overdrive']);
   const CATALOG = {
-    ice: ['冰霜', '飞刃减速敌人，后续可选择寒晶或暴雪。', '冰', '#78d0e0', 'ice', 1],
-    fire: ['火焰', '飞刃产生溅射，后续可选择熔岩或曜炎。', '火', '#f29a55', 'fire', 1],
-    lightning: ['雷电', '飞刃连锁附近敌人，后续可选择风暴或磁暴。', '雷', '#b69af5', 'lightning', 1],
+    ice: ['冰霜', '飞刃减速敌人；后续仅出现冰元素进化。', '冰', '#78d0e0', 'ice', 1],
+    fire: ['火焰', '飞刃产生溅射；后续仅出现火元素进化。', '火', '#f29a55', 'fire', 1],
+    lightning: ['雷电', '飞刃连锁附近敌人；后续仅出现雷元素进化。', '雷', '#b69af5', 'lightning', 1],
+    earth: ['大地', '飞刃侵蚀护甲；后续仅出现土元素进化。', '土', '#cba16d', 'earth', 1],
+    grass: ['草木', '飞刃施加持续毒伤；后续仅出现草元素进化。', '草', '#81c875', 'grass', 1],
+    golden: ['黄金战士', '吞噬任意普通伙伴积累等级，每阶攻击变为原来的三倍。', '金', '#ffd76a', 'golden', 0],
+    rime: ['凛风', '飞刃转速提高，冰霜减速持续更久。', '凛', '#b1effa', 'ice', 2],
+    inferno: ['烈狱', '飞刃持续灼烧目标，并强化火焰溅射。', '狱', '#ff9063', 'fire', 2],
+    surge: ['雷涌', '飞刃转速提高，连锁能穿透部分护甲。', '涌', '#aaadff', 'lightning', 2],
+    bastion: ['岩垒', '重型飞刃提高直击伤害并减速敌人。', '垒', '#c8ac7d', 'earth', 2],
+    quake: ['地震', '飞刃震荡周围敌人，造成范围伤害。', '震', '#c59560', 'earth', 2],
+    crystal: ['晶岩', '飞刃穿甲并追加碎晶伤害。', '岩', '#edcf9e', 'earth', 2],
+    vine: ['藤蔓', '毒伤与减速持续牵制敌人。', '藤', '#69bb84', 'grass', 2],
+    thorn: ['荆棘', '提高直击与穿甲能力，毒伤更强。', '棘', '#a6c866', 'grass', 2],
+    bloom: ['繁花', '花粉扩散到附近目标，造成范围毒伤。', '花', '#b7dc8a', 'grass', 2],
+    fault: ['断层', '重击侵蚀护甲并震荡周围目标。', '断', '#d9b780', 'earth', 3],
+    meteor: ['陨星', '落星追加重击，并扩大震荡范围。', '陨', '#f2bd77', 'earth', 3],
+    fortress: ['山岳', '周期释放减速领域，削弱闯入的敌人。', '岳', '#cfbb91', 'earth', 3],
+    erosion: ['风化', '飞刃穿透大部分护甲，并持续破甲。', '砂', '#ecd4aa', 'earth', 3],
+    root: ['缠根', '命中短暂束缚敌人，并深度减速。', '根', '#7bcd91', 'grass', 3],
+    venom: ['剧毒', '大幅提高持续毒伤与毒素持续时间。', '毒', '#b4df69', 'grass', 3],
+    harvest: ['收割', '对低生命目标造成额外伤害，花粉溅射。', '穗', '#cfe989', 'grass', 3],
+    seedstorm: ['飞种', '种子连锁附近目标，传播毒素。', '种', '#a2dca4', 'grass', 3],
     glacier: ['寒晶', '加深减速，并对已减速的敌人造成额外伤害。', '晶', '#75d9ed', 'ice', 2],
     blizzard: ['暴雪', '飞刃掀起冰雪范围攻击，减速周围敌人。', '雪', '#c0edf5', 'ice', 2],
     magma: ['熔岩', '扩大火焰溅射，并留下持续灼烧。', '熔', '#ee7042', 'fire', 2],
@@ -53,7 +74,7 @@
   const ROUTES = Object.freeze(Object.keys(CATALOG));
   const routeInfo = (id, level) => {
     const entry = Object.prototype.hasOwnProperty.call(CATALOG, id) ? CATALOG[id] : null;
-    if (!entry) return { id: 'normal', name: '环刃', description: '合成同级、同路径的伙伴来进化。', icon: '刃', color: '#b5a58d', family: 'normal', tier: 0 };
+    if (!entry) return { id: 'normal', name: '环刃', description: '合成同级、同元素的伙伴来进化，保留目标技能。', icon: '刃', color: '#b5a58d', family: 'normal', tier: 0 };
     return { id, name: entry[0], description: entry[1], icon: entry[2], color: entry[3], family: entry[4],
       tier: entry[5] === 4 && Number.isSafeInteger(level) ? Math.max(4, Math.floor((level + 1) / 4)) : entry[5] };
   };
@@ -67,7 +88,7 @@
     for (const { level, route } of entries) {
       if (level !== 3 + path.length * 4) break;
       const choices = level === 3 ? BASE_ROUTES : level === 7 ? ADVANCED[path[0]?.route] :
-        level === 11 ? SKILLS[path[1]?.route] : ENHANCEMENTS;
+        level === 11 ? SKILLS[path[0]?.route] : ENHANCEMENTS;
       if (!choices?.includes(route)) break;
       path.push({ level, route });
     }
@@ -77,15 +98,24 @@
     if (!Number.isSafeInteger(level) || level < 3 || level >= SAFE_LIMIT || (level + 1) % 4 !== 0) return [];
     const path = evolutionPath(unit).filter(entry => entry.level < level);
     if (path.length !== (level - 3) / 4) return [];
-    return [...(level === 3 ? BASE_ROUTES : level === 7 ? ADVANCED[path[0]?.route] : level === 11 ? SKILLS[path[1]?.route] : ENHANCEMENTS)];
+    return [...(level === 3 ? BASE_ROUTES : level === 7 ? ADVANCED[path[0]?.route] : level === 11 ? SKILLS[path[0]?.route] : ENHANCEMENTS)];
+  };
+  const elementFor = unit => unit?.isGolden ? 'golden' : evolutionPath(unit)[0]?.route || BASE_ROUTES.find(id => unit?.routes?.[id] > 0) || 'normal';
+  const validPath = unit => {
+    const path = evolutionPath(unit), raw = Object.keys(unit.routeChoices || {});
+    return path.length === raw.length && path.every(entry => entry.level <= unit.level);
   };
   const canMerge = (source, target) => {
-    if (!source || !target || source === target || source.id === target.id ||
+    if (!source || !target || source === target || source.id === target.id || source.isGolden || target.isGolden ||
       !Number.isSafeInteger(source.level) || source.level < 0 || source.level >= SAFE_LIMIT || source.level !== target.level) return false;
-    const sourcePath = evolutionPath(source), targetPath = evolutionPath(target);
-    if (sourcePath.length !== Object.keys(source.routeChoices || {}).length || targetPath.length !== Object.keys(target.routeChoices || {}).length) return false;
-    return sourcePath.length === targetPath.length && sourcePath.every((entry, index) =>
-      entry.level === targetPath[index].level && entry.route === targetPath[index].route);
+    return validPath(source) && validPath(target) && elementFor(source) === elementFor(target);
+  };
+  const canFeed = (source, target) => Boolean(source && target && source !== target && source.id !== target.id &&
+    !source.isGolden && target.isGolden && Number.isSafeInteger(source.level) && source.level >= 0 && source.level < SAFE_LIMIT);
+  const goldenProgress = unit => {
+    if (!unit?.isGolden) return null;
+    const rank = Math.max(1, levelNumber(unit.goldenRank));
+    return { rank, progress: safe(unit.goldenFeed || 0), required: safe(10 * Math.pow(2, Math.min(50, rank - 1))) };
   };
   const routeRanks = routes => Object.fromEntries(ROUTES.map(route => [route, Number.isSafeInteger(routes?.[route]) && routes[route] > 0 ? routes[route] : 0]));
   const evolutionChance = level => Math.max(0.55, 0.95 - levelNumber(level) * 0.03);
@@ -93,7 +123,7 @@
     const n = levelNumber(level), ranks = routeRanks(routes);
     const family = BASE_ROUTES.find(route => ranks[route]) || 'normal';
     const advanced = (ADVANCED[family] || []).find(route => ranks[route]) || null;
-    const skill = (SKILLS[advanced] || []).find(route => ranks[route]) || null;
+    const skill = (SKILLS[family] || []).find(route => ranks[route]) || null;
     const latest = ranks[activeRoute] ? activeRoute : skill || advanced || family;
     const orbitRadius = 52 + Math.min(16, n);
     const stats = { damage: safe(n + 1), range: orbitRadius, orbitRadius, bladeCount: Math.min(4, 1 + Math.floor(n / 4)),
@@ -101,8 +131,8 @@
       slow: ranks.ice ? 0.25 : 0, slowDuration: 0.8,
       splash: ranks.fire ? 35 : 0, splashDamage: ranks.fire ? 0.45 : 0,
       chain: ranks.lightning ? 2 : 0, chainDamage: ranks.lightning ? 0.48 : 0, chainRange: 90,
-      armorPierce: 0, burn: 0, burnDuration: 0, freeze: 0, freezeCooldown: 2.4,
-      chilledBonus: 0, executeBonus: 0, echoDamage: 0, armorBreak: 0,
+      armorPierce: ranks.earth ? 0.2 : 0, burn: ranks.grass ? 0.18 : 0, burnDuration: ranks.grass ? 2 : 0, freeze: 0, freezeCooldown: 2.4,
+      chilledBonus: 0, executeBonus: 0, echoDamage: 0, armorBreak: ranks.earth ? 0.02 : 0,
       fieldRadius: 0, fieldDamage: 0, fieldInterval: 2.6,
       ability: family, family, advanced, skill, tier: latest === 'normal' ? 0 : routeInfo(latest, n).tier,
       ranks, specialName: routeInfo(latest, n).name };
@@ -112,6 +142,15 @@
     if (advanced === 'solar') { stats.damage = safe(stats.damage * 1.2); stats.armorPierce = 0.3; }
     if (advanced === 'storm') { stats.chain = 3; stats.chainRange = 112; stats.slow = 0.16; }
     if (advanced === 'plasma') { stats.chainDamage = 0.7; stats.armorPierce = 0.4; }
+    if (advanced === 'rime') { stats.angularSpeed += 0.35; stats.slow = 0.3; stats.slowDuration = 1.4; }
+    if (advanced === 'inferno') { stats.burn = 0.3; stats.burnDuration = 2.2; stats.splashDamage = 0.65; }
+    if (advanced === 'surge') { stats.angularSpeed += 0.35; stats.armorPierce = 0.25; }
+    if (advanced === 'bastion') { stats.damage = safe(stats.damage * 1.2); stats.slow = 0.2; }
+    if (advanced === 'quake') { stats.splash = 60; stats.splashDamage = 0.55; }
+    if (advanced === 'crystal') { stats.armorPierce = 0.45; stats.echoDamage = 0.25; }
+    if (advanced === 'vine') { stats.slow = 0.3; stats.slowDuration = 1.4; stats.burnDuration = 2.5; }
+    if (advanced === 'thorn') { stats.damage = safe(stats.damage * 1.15); stats.armorPierce = 0.3; stats.burn = 0.25; }
+    if (advanced === 'bloom') { stats.splash = 55; stats.splashDamage = 0.4; stats.burn = 0.25; }
     if (skill === 'shatter') { stats.chilledBonus = 0.65; stats.splash = 42; stats.splashDamage = 0.5; }
     if (skill === 'permafrost') { stats.freeze = 0.42; stats.slowDuration = 1.6; }
     if (skill === 'whiteout') { stats.fieldRadius = 100; stats.fieldDamage = 0.6; stats.slow = 0.45; }
@@ -124,6 +163,14 @@
     if (skill === 'cyclone') { stats.fieldRadius = 110; stats.fieldDamage = 0.45; stats.slow = 0.35; }
     if (skill === 'pulse') { stats.freeze = 0.3; stats.armorBreak = 0.08; }
     if (skill === 'arc') { stats.armorPierce = 0.85; stats.chainRange = 145; stats.chainDamage = 0.85; }
+    if (skill === 'fault') { stats.armorBreak = 0.1; stats.splash = 75; stats.splashDamage = 0.6; }
+    if (skill === 'meteor') { stats.echoDamage = Math.max(stats.echoDamage, 0.6); stats.splash = 85; stats.splashDamage = 0.6; }
+    if (skill === 'fortress') { stats.fieldRadius = 105; stats.fieldDamage = 0.5; stats.slow = 0.4; }
+    if (skill === 'erosion') { stats.armorPierce = 0.8; stats.armorBreak = 0.12; }
+    if (skill === 'root') { stats.freeze = 0.35; stats.slow = 0.5; stats.slowDuration = 1.6; }
+    if (skill === 'venom') { stats.burn = 0.65; stats.burnDuration = 3; }
+    if (skill === 'harvest') { stats.executeBonus = 1.3; stats.splash = Math.max(stats.splash, 50); stats.splashDamage = 0.65; }
+    if (skill === 'seedstorm') { stats.chain = 3; stats.chainDamage = 0.6; stats.chainRange = 110; stats.burn = 0.35; }
     // Diminishing returns keep every practical future rank useful without
     // unbounded geometry, attack rates, or simulation work.
     stats.echoDamage += (1.2 - stats.echoDamage) * ranks.echo / (ranks.echo + 6);
@@ -138,6 +185,26 @@
     }
     return stats;
   };
+  const statsForUnit = unit => {
+    if (!unit?.isGolden) return statsForLevel(unit?.level, unit?.routes, unit?.route);
+    const { rank } = goldenProgress(unit), stats = statsForLevel(14);
+    return { ...stats, damage: safe(30 * Math.pow(3, Math.min(40, rank - 1))),
+      bladeCount: Math.min(6, 4 + rank), bladeLength: 30, bladeWidth: 8,
+      angularSpeed: 3.2 + 0.8 * (rank - 1) / (rank + 3), armorPierce: 0.35,
+      splash: 42, splashDamage: 0.3, family: 'golden', ability: 'golden', specialName: '黄金战士', tier: rank };
+  };
+  const REACTIONS = Object.freeze([
+    { elements: ['fire', 'ice'], name: '融解', color: '#ffd292', multiplier: 2, description: '后手伤害翻倍。' },
+    { elements: ['ice', 'lightning'], name: '超导', color: '#bee5ff', multiplier: 1.6, armorBreak: 0.1, description: '后手伤害 ×1.6，并削弱 10% 护甲。' },
+    { elements: ['earth', 'ice'], name: '碎冰', color: '#d1e7dc', multiplier: 1.7, splash: 60, splashDamage: 0.35, description: '后手伤害 ×1.7，碎冰震伤周围目标。' },
+    { elements: ['grass', 'ice'], name: '霜绽', color: '#cdf6da', multiplier: 1.5, freeze: 0.35, description: '后手伤害 ×1.5，短暂冻结目标。' },
+    { elements: ['fire', 'lightning'], name: '超载', color: '#ffc17b', multiplier: 1.8, splash: 65, splashDamage: 0.4, description: '后手伤害 ×1.8，爆炸波及周围目标。' },
+    { elements: ['earth', 'fire'], name: '熔流', color: '#f3a56b', multiplier: 1.6, burn: 0.3, burnDuration: 2, description: '后手伤害 ×1.6，熔流持续灼烧。' },
+    { elements: ['fire', 'grass'], name: '燎原', color: '#f4ca79', multiplier: 1.6, burn: 0.5, burnDuration: 2.5, description: '后手伤害 ×1.6，追加持续燃烧。' },
+    { elements: ['earth', 'lightning'], name: '磁崩', color: '#d8bafa', multiplier: 1.5, armorBreak: 0.15, description: '后手伤害 ×1.5，并削弱 15% 护甲。' },
+    { elements: ['grass', 'lightning'], name: '激生', color: '#d4eb91', multiplier: 1.7, slow: 0.2, slowDuration: 1.2, description: '后手伤害 ×1.7，麻痹减速 20%。' },
+    { elements: ['earth', 'grass'], name: '缠生', color: '#b0d38f', multiplier: 1.4, slow: 0.55, slowDuration: 1.6, description: '后手伤害 ×1.4，根系减速 55%。' },
+  ].map(reaction => Object.freeze({ ...reaction, id: reaction.elements.join('_'), elements: Object.freeze(reaction.elements) })));
   // Kept as inert compatibility APIs for older callers; evolution is merge-only.
   const upgradeCost = () => null;
   const enemyStatsForWave = (kindOrType, wave, boss = false) => {
@@ -146,13 +213,13 @@
     // Keep waves 1–10 intact, then grow linearly alongside defender damage.
     // Stacking quadratic HP and fast-rising armor created a wall around wave 20.
     const early = Math.min(5, late), endless = Math.max(0, late - 5);
-    const scaling = safe(1 + age * 0.13 + early * early * 0.16 + early * 0.4 + endless * 1.8);
+    const scaling = safe(1 + age * 0.13 + early * early * 0.16 + early * 0.4 + endless * 0.92);
     return { maxHp: Math.max(1, Math.round(safe(type.hp * scaling * (boss ? 4.2 : 1)))),
       speed: type.speed * 0.7 * Math.min(2.3, 1 + age * 0.032),
-      armor: Math.min(0.3, early * 0.018 + endless * 0.006 + (boss && late ? 0.06 : 0)), reward: 0, damage: boss ? 3 : 1 };
+      armor: Math.min(0.2, early * 0.018 + endless * 0.003 + (boss && late ? 0.06 : 0)), reward: 0, damage: boss ? 3 : 1 };
   };
   const bladesFor = (unit, time) => {
-    const stats = statsForLevel(unit.level, unit.routes, unit.route), phase = Number.isFinite(unit.phase) ? unit.phase : (unit.id || 0) * 2.399963229728653;
+    const stats = statsForUnit(unit), phase = Number.isFinite(unit.phase) ? unit.phase : (unit.id || 0) * 2.399963229728653;
     const rotation = ((Number.isFinite(time) ? time : 0) * stats.angularSpeed + phase) % TAU;
     return Array.from({ length: stats.bladeCount }, (_, index) => {
       const angle = rotation + index * TAU / stats.bladeCount, dx = Math.cos(angle), dy = Math.sin(angle);
@@ -185,7 +252,7 @@
       this.maxLevel = 0; this.elapsed = 0; this.accumulator = 0; this.nextWaveIn = 0;
       this.units = []; this.enemies = []; this.supplies = []; this.bullets = []; this.effects = [];
       this.spawnQueue = []; this.spawnTimer = 0; this.waveActive = false; this.completed = false;
-      this.sequence = 0; this.changeTimer = 0; this.supplySequence = 0; this.pendingEvolution = null;
+      this.goldenAppeared = false; this.sequence = 0; this.changeTimer = 0; this.supplySequence = 0; this.pendingEvolution = null;
       this._makeUnit(15); this._spawnSupply(); this._notify();
       return true;
     }
@@ -205,7 +272,7 @@
         lives: this.lives, maxLives: this.maxLives, kills: this.kills, unitCount: this.units.length,
         maxLevel: this.maxLevel, reserve: this.reserve, hatched: this.hatched, supplyCount: this.supplies.length, nextWaveIn: this.nextWaveIn,
         remaining: this.enemies.length + this.spawnQueue.length, elapsed: this.elapsed,
-        pendingEvolution: this.pendingEvolution ? { ...this.pendingEvolution, choices: [...this.pendingEvolution.choices] } : null };
+        goldenAppeared: this.goldenAppeared, pendingEvolution: this.pendingEvolution ? { ...this.pendingEvolution, choices: [...this.pendingEvolution.choices] } : null };
     }
 
     place(slot) {
@@ -217,10 +284,12 @@
     move(fromSlot, toSlot) {
       if (!this._canAct() || !this._validSlot(fromSlot) || !this._validSlot(toSlot) || fromSlot === toSlot) return false;
       const source = this._unitAt(fromSlot), target = this._unitAt(toSlot);
-      if (!source || (target && !canMerge(source, target))) return false;
+      if (!source || (target && !canMerge(source, target) && !canFeed(source, target))) return false;
       if (target) {
         this.units.splice(this.units.indexOf(source), 1);
-        this._attemptEvolution(target, 'merge', { materialId: source.id, sourceRoutes: routeRanks(source.routes), cost: 0 });
+        if (canFeed(source, target)) this._feedGolden(target, source);
+        else if (!this.goldenAppeared && this.wave >= 26 && target.level >= 14 && this._roll() < 0.05) this._awakenGolden(target, source);
+        else this._attemptEvolution(target, 'merge', { materialId: source.id, sourceRoutes: routeRanks(source.routes), cost: 0 });
       } else {
         Object.assign(source, { slot: toSlot, x: SLOTS[toSlot].x, y: SLOTS[toSlot].y, pulse: 0.35 });
         this._event('move', { unitId: source.id, fromSlot, slot: toSlot, level: source.level });
@@ -248,10 +317,34 @@
     _effect(type, at, details = {}) { this.effects.push({ type, x: at.x, y: at.y, age: 0, duration: 0.55, ...details }); }
     _roll() { const value = this.random(); return Number.isFinite(value) ? clamp(value, 0, 1 - Number.EPSILON) : 0.5; }
     _makeUnit(slot, blueprint = {}) {
-      const unit = { id: ++this.sequence, slot, level: 0, x: SLOTS[slot].x, y: SLOTS[slot].y, cooldown: 0, pulse: 0, phase: this.sequence * 2.399963229728653, bladeHits: {}, routes: { ice: 0, fire: 0, lightning: 0 }, route: null, routeChoices: {} };
+      const unit = { id: ++this.sequence, slot, level: 0, x: SLOTS[slot].x, y: SLOTS[slot].y, cooldown: 0, pulse: 0, phase: this.sequence * 2.399963229728653, bladeHits: {}, routes: routeRanks(), route: null, routeChoices: {} };
       unit.level = levelNumber(blueprint.level); unit.routeChoices = { ...blueprint.routeChoices };
       this._syncRoutes(unit); this.maxLevel = Math.max(this.maxLevel, unit.level);
       this.units.push(unit); return unit;
+    }
+    _drawChoices(pool) {
+      const remaining = [...pool], choices = [];
+      while (remaining.length && choices.length < 3) choices.push(remaining.splice(Math.floor(this._roll() * remaining.length), 1)[0]);
+      return choices;
+    }
+    _awakenGolden(unit, material) {
+      this.goldenAppeared = true; unit.isGolden = true; unit.goldenRank = 1; unit.goldenFeed = 0;
+      unit.cooldown = 0; unit.bladeHits = {}; unit.fieldCooldown = 0; unit.pulse = 1;
+      this._effect('golden', unit, { rank: 1, duration: 1.4 });
+      this._event('golden', { unitId: unit.id, slot: unit.slot, level: unit.level, rank: 1, materialId: material.id });
+    }
+    _feedGolden(unit, material) {
+      const previousRank = goldenProgress(unit).rank, gained = material.level + 1;
+      unit.goldenFeed = safe((unit.goldenFeed || 0) + gained);
+      // Exponential requirements make this loop logarithmic even for the largest safe feeder.
+      let progress = goldenProgress(unit);
+      while (progress.progress >= progress.required) {
+        unit.goldenFeed = Math.max(0, progress.progress - progress.required); unit.goldenRank = safe(progress.rank + 1);
+        progress = goldenProgress(unit);
+      }
+      unit.pulse = 0.8; unit.bladeHits = {};
+      const details = { unitId: unit.id, materialId: material.id, gained, previousRank, ...progress };
+      this._effect('feed', unit, { ...details, duration: 0.8 }); this._event('feed', details);
     }
     _attemptEvolution(unit, method, details) {
       const chance = evolutionChance(unit.level);
@@ -264,7 +357,7 @@
       }
       unit.level++; this._syncRoutes(unit); unit.cooldown = 0; unit.bladeHits = {}; unit.pulse = 0.6; this.maxLevel = Math.max(this.maxLevel, unit.level);
       if ((unit.level + 1) % 4 === 0) {
-        const choices = evolutionChoices(unit, unit.level);
+        const choices = this._drawChoices(evolutionChoices(unit, unit.level));
         if (choices.length) this.pendingEvolution = { unitId: unit.id, level: unit.level, choices };
         this.accumulator = 0;
       }
@@ -320,7 +413,7 @@
     }
 
     _swing(unit, dt) {
-      const stats = statsForLevel(unit.level, unit.routes, unit.route), hits = unit.bladeHits || (unit.bladeHits = {});
+      const stats = statsForUnit(unit), hits = unit.bladeHits || (unit.bladeHits = {});
       for (const key of Object.keys(hits)) if (hits[key] <= this.elapsed) delete hits[key];
       // Substep the same radial segments the renderer draws. The thin blade
       // cannot tunnel between ticks, and each blade hits once per revolution.
@@ -356,7 +449,7 @@
       const previousHp = target.hp; target.hitAngle = blade.angle;
       hit(target, safe(stats.damage * multiplier));
       const dealt = Math.max(0, previousHp - target.hp);
-      if (stats.echoDamage) { hit(target, safe(stats.damage * stats.echoDamage)); this._effect('skill', origin, { skill: stats.skill || 'echo', ability: stats.ability, radius: 24, duration: 0.35 }); }
+      if (stats.echoDamage) { if (type === 'supply') this._damageSupply(target, safe(stats.damage * stats.echoDamage), unit); else this._damage(target, safe(stats.damage * stats.echoDamage), stats.slow, stats, unit, false); this._effect('skill', origin, { skill: stats.skill || 'echo', ability: stats.ability, radius: 24, duration: 0.35 }); }
       for (const object of nearby) hit(object, stats.damage * stats.splashDamage);
       this._effect('slash', origin, { angle: blade.angle, ability: stats.ability, damage: dealt, duration: 0.22 });
       if (stats.splash) this._effect(stats.family === 'fire' ? 'fire' : 'skill', origin, { skill: stats.skill || stats.advanced, ability: stats.ability, radius: stats.splash, duration: 0.35 });
@@ -449,7 +542,7 @@
     }
 
     _field(unit, dt) {
-      const stats = statsForLevel(unit.level, unit.routes, unit.route);
+      const stats = statsForUnit(unit);
       if (!stats.fieldRadius) return;
       unit.fieldCooldown = Math.max(0, (unit.fieldCooldown || 0) - dt);
       if (unit.fieldCooldown) return;
@@ -461,15 +554,40 @@
       this._event('special', { ability: stats.ability, x: unit.x, y: unit.y, unitId: unit.id });
     }
 
-    _damage(enemy, amount, slow, stats = {}, unit) {
+    _elementReaction(enemy, family) {
+      if (!BASE_ROUTES.includes(family) || (enemy.reactionCooldownUntil || 0) > this.elapsed) return null;
+      const mark = enemy.elementMark;
+      if (mark && mark.until > this.elapsed && mark.element !== family) {
+        const reaction = REACTIONS.find(entry => entry.elements.includes(mark.element) && entry.elements.includes(family));
+        if (reaction) { enemy.elementMark = null; enemy.reactionCooldownUntil = this.elapsed + 0.75; return reaction; }
+      }
+      enemy.elementMark = { element: family, until: this.elapsed + 3 }; return null;
+    }
+    _applyReaction(enemy, reaction, amount, dealt) {
+      if (reaction.armorBreak) enemy.armorBroken = Math.min(0.5, (enemy.armorBroken || 0) + reaction.armorBreak);
+      if (reaction.slow) { enemy.slow = Math.max(enemy.slow || 0, reaction.slow); enemy.slowTime = Math.max(enemy.slowTime || 0, reaction.slowDuration); }
+      if (reaction.freeze && !(enemy.freezeResistance > 0)) { enemy.freezeTime = reaction.freeze; enemy.freezeResistance = 2.4; }
+      if (reaction.burn) { enemy.burnDamage = Math.max(enemy.burnDamage || 0, safe(amount * reaction.burn)); enemy.burnTime = Math.max(enemy.burnTime || 0, reaction.burnDuration); }
+      if (reaction.splash) for (const other of this.enemies.slice()) {
+        if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) <= reaction.splash) this._damage(other, safe(amount * reaction.splashDamage), 0, {}, undefined, false);
+      }
+      const details = { reaction: reaction.id, elements: [...reaction.elements], name: reaction.name, color: reaction.color,
+        multiplier: reaction.multiplier, damage: dealt, enemyId: enemy.id, x: enemy.x, y: enemy.y };
+      this._effect('reaction', enemy, { ...details, radius: reaction.splash || 40, duration: 0.65 }); this._event('reaction', details);
+    }
+
+    _damage(enemy, amount, slow, stats = {}, unit, allowReaction = true) {
       if (!this.enemies.includes(enemy)) return;
+      const reaction = allowReaction && unit && amount > 0 ? this._elementReaction(enemy, stats.family) : null;
+      const previousHp = enemy.hp;
       const armor = clamp((enemy.armor || 0) - (enemy.armorBroken || 0), 0, 0.8);
-      enemy.hp = Math.max(0, enemy.hp - safe(amount) * (1 - armor * (1 - (stats.armorPierce || 0)))); enemy.hit = 0.12;
+      enemy.hp = Math.max(0, enemy.hp - safe(amount * (reaction?.multiplier || 1)) * (1 - armor * (1 - (stats.armorPierce || 0)))); enemy.hit = 0.12;
       if (slow) { enemy.slow = Math.max(enemy.slow, slow); enemy.slowTime = Math.max(enemy.slowTime || 0, stats.slowDuration || 0.8); }
       if (stats.freeze && !(enemy.freezeResistance > 0)) { enemy.freezeTime = stats.freeze; enemy.freezeResistance = stats.freezeCooldown || 2.4; }
       if (stats.armorBreak) enemy.armorBroken = Math.min(0.5, (enemy.armorBroken || 0) + stats.armorBreak);
       if (stats.burn) { enemy.burnDamage = Math.max(enemy.burnDamage || 0, safe(stats.damage * stats.burn)); enemy.burnTime = Math.max(enemy.burnTime || 0, stats.burnDuration); }
       if (unit && (stats.freeze || stats.armorBreak)) this._effect('skill', enemy, { skill: stats.skill, ability: stats.ability, radius: 22, duration: 0.3 });
+      if (reaction) this._applyReaction(enemy, reaction, amount, previousHp - enemy.hp);
       this._effect('hit', enemy, { duration: 0.16 });
       if (enemy.hp > 0) return;
       this.enemies.splice(this.enemies.indexOf(enemy), 1); this.kills++;
@@ -487,7 +605,7 @@
       if (supply.hp > 0) return;
       this.supplies.splice(this.supplies.indexOf(supply), 1); this.hatched++;
       const slot = SLOTS.filter(value => !this._unitAt(value.id)).sort((a, b) => Math.hypot(a.x - supply.x, a.y - supply.y) - Math.hypot(b.x - supply.x, b.y - supply.y) || a.id - b.id)[0];
-      const level = Math.max(0, levelNumber(attacker?.level) - 2);
+      const level = attacker?.isGolden ? 0 : Math.max(0, levelNumber(attacker?.level) - 2);
       const routeChoices = Object.fromEntries(evolutionPath(attacker).filter(entry => entry.level <= level).map(entry => [entry.level, entry.route]));
       const blueprint = { level, routeChoices };
       let details;
@@ -513,6 +631,8 @@
   DefenseGame.SUPPLY_LANE = SUPPLY_LANE; DefenseGame.ROUTES = ROUTES;
   DefenseGame.routeInfo = routeInfo; DefenseGame.evolutionChoices = evolutionChoices; DefenseGame.enemyStatsForWave = enemyStatsForWave;
   DefenseGame.evolutionPath = evolutionPath; DefenseGame.canMerge = canMerge;
+  DefenseGame.statsForUnit = statsForUnit; DefenseGame.elementFor = elementFor; DefenseGame.canFeed = canFeed;
+  DefenseGame.goldenProgress = goldenProgress; DefenseGame.REACTIONS = REACTIONS; DefenseGame.BASE_ROUTES = BASE_ROUTES;
   DefenseGame.evolutionChance = evolutionChance; DefenseGame.upgradeSuccessRate = evolutionChance;
   root.DefenseGame = DefenseGame;
   if (typeof module !== 'undefined' && module.exports) module.exports = DefenseGame;
