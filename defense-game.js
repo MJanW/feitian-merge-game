@@ -271,7 +271,7 @@
     const details = [reaction.armorBreak ? `削弱 ${reaction.armorBreak * 100}% 护甲` : '', reaction.freeze ? `冻结 ${reaction.freeze} 秒（抗性 2.4 秒）` : '',
       reaction.splash ? `半径 ${reaction.splash} 内${reaction.targets ? `最多 ${reaction.targets} 个` : ''}其他敌人各受 ${reaction.splashDamage}D` : '',
       reaction.burn ? `每秒 ${reaction.burn}D ${reaction.dotType === 'poison' ? '毒伤' : '灼烧'}持续 ${reaction.burnDuration} 秒` : '',
-      reaction.slow ? `减速 ${reaction.slow * 100}% 持续 ${reaction.slowDuration} 秒` : '', reaction.root ? `定身 ${reaction.root} 秒（藤牢抗性 2.4 秒）` : '', reaction.ignoreArmor ? '本次直击无视护甲' : ''].filter(Boolean);
+      reaction.slow ? `减速 ${Math.round(reaction.slow * 1000) / 10}% 持续 ${reaction.slowDuration} 秒` : '', reaction.root ? `定身 ${reaction.root} 秒（藤牢抗性 2.4 秒）` : '', reaction.ignoreArmor ? '本次直击无视护甲' : ''].filter(Boolean);
     return Object.freeze({ ...reaction, id: reaction.elements.join('_'), elements: Object.freeze(reaction.elements),
       description: `反应伤害 ×${reaction.multiplier}${details.length ? '；' + details.join('；') : ''}。` });
   }));
@@ -803,6 +803,7 @@
         enemy.freezeTime = Math.max(0, (enemy.freezeTime || 0) - dt);
         enemy.freezeResistance = Math.max(0, (enemy.freezeResistance || 0) - dt);
         enemy.prisonResistance = Math.max(0, (enemy.prisonResistance || 0) - dt);
+        for (const timer of ['freezeTime', 'freezeResistance', 'prisonResistance']) if (enemy[timer] < 1e-8) enemy[timer] = 0;
         if (enemy.elementMark?.until <= this.elapsed) enemy.elementMark = null;
         if (enemy.dotEffects) {
           for (const [type, dot] of Object.entries(enemy.dotEffects)) {
