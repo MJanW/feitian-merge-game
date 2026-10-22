@@ -403,17 +403,24 @@
       const s=Math.min(g.cellWidth/72,g.cellHeight/80);
       ctx.save();ctx.translate(p.x,p.y);ctx.scale(s,s);
       ellipse(ctx,0,6,16,5,'#33472d44');
-      line(ctx,-9,-3,-17,-21,'#62715c',2); line(ctx,-17,-21,-7,-22,'#394b37',3);
-      ellipse(ctx,-10,4,5,5,'#454a3c','#29382d',1.5);ellipse(ctx,11,4,5,5,'#454a3c','#29382d',1.5);
-      round(ctx,-16,-9,31,11,4,'#c97c52','#8f573b',1.5);
-      round(ctx,-7,-17,15,9,3,'#e1a667','#9d7045',1.5);
-      line(ctx,-2,-15,4,-15,'#f8d5a0',1.7);
       const info=this._form('mower'),image=info&&this.images.get(info.image);
       if(image?.complete && image.naturalWidth) {
         const frame=info.frame || [0,0,image.naturalWidth,image.naturalHeight];
         const ratio=frame[2]/frame[3],height=Math.min(47,44/ratio),width=height*ratio;
+        const wheel=(x,y,rear=false)=>{
+          ellipse(ctx,x,y,3.7,4.1,rear?'#353b33':'#454a3c','#29382d',1.1);
+          ellipse(ctx,x,y,1.5,1.7,rear?'#879180':'#c2c8ad');
+        };
+        wheel(-width*.34,-1,true);wheel(width*.34,-1,true);
         ctx.save();ctx.shadowColor='#fff5dc';ctx.shadowBlur=2;
-        ctx.drawImage(image,...frame,-width/2,-10-height,width,height);ctx.restore();
+        ctx.drawImage(image,...frame,-width/2,-height,width,height);ctx.restore();
+        wheel(-width*.22,5);wheel(width*.22,5);
+      } else {
+        line(ctx,-9,-3,-17,-21,'#62715c',2);line(ctx,-17,-21,-7,-22,'#394b37',3);
+        ellipse(ctx,-10,4,5,5,'#454a3c','#29382d',1.5);ellipse(ctx,11,4,5,5,'#454a3c','#29382d',1.5);
+        round(ctx,-16,-9,31,11,4,'#c97c52','#8f573b',1.5);
+        round(ctx,-7,-17,15,9,3,'#e1a667','#9d7045',1.5);
+        line(ctx,-2,-15,4,-15,'#f8d5a0',1.7);
       }
       if(mower.active)for(let i=0;i<3;i++)line(ctx,-24-i*4,-7+i*5,-32-i*4,-7+i*5,'#f4e0a4',2);
       ctx.restore();
