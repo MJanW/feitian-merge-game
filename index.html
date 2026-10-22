@@ -27,11 +27,11 @@
   <script defer src="jump-app.js?v=20261017-softjump1"></script>
   <script defer src="defense-forms.js?v=20261021-elements1"></script>
   <script defer src="defense-enemies.js?v=20261019-paths1"></script>
-  <script defer src="defense-game.js?v=20261022-goldenfeed1"></script>
+  <script defer src="defense-game.js?v=20261022-levelodds1"></script>
   <script defer src="defense-renderer.js?v=20261022-goldenfeed1"></script>
   <script defer src="defense-sound.js?v=20261021-elements1"></script>
   <script defer src="defense-leaderboard.js?v=20261022-defenseboard1"></script>
-  <script defer src="defense-app.js?v=20261022-defenseboard1"></script>
+  <script defer src="defense-app.js?v=20261022-levelodds1"></script>
   <script defer src="modes.js?v=20261019-defense1"></script>
 </head>
 <body>
@@ -196,7 +196,7 @@
     <div class="dialog-header"><h2 id="defense-guide-title">守卫图鉴</h2><button id="defense-guide-close" class="icon-button" type="button" aria-label="关闭守卫图鉴" autofocus><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
     <div class="defense-guide-body">
       <p class="defense-guide-intro">查看图鉴时，战场会暂停。</p>
-      <h3>同元素，能合成</h3><p>同等级、同基础元素的守卫，无论高阶属性和技能是否一致，都可以合成。把材料拖到想保留的守卫上，接收方继续沿自己的技能进化。失败只消耗材料，接收方不降级。</p>
+      <h3>同元素，能合成</h3><p>同等级、同基础元素的守卫，无论高阶属性和技能是否一致，都可以合成。把材料拖到想保留的守卫上，接收方继续沿自己的技能进化。失败只消耗材料，接收方不降级。</p><p>普通合成成功率只看合成前的角色等级，不随波次变化：Lv.1始终100%，每升1级降低3个百分点，最低55%。例如Lv.2为97%、Lv.5为88%、Lv.10为73%，Lv.16及以上为55%。</p>
       <h3>垃圾筐，腾出阵位</h3><p>把普通守卫拖到垃圾筐上松手，即可丢弃；也可以先选中守卫，再点击垃圾筐确认。丢弃不会获得分数或材料。黄金战士不能丢弃，没有待命同伴时也会保留最后一位守卫。</p>
       <h3>五种元素与黄金，十五种反应</h3><p>冰霜命中附加 3 秒减速，基础减速 25%，触发元素反应后消除。草木每次命中缠绕定身 0.2 秒，再次命中刷新时长。不同元素或黄金接力击中同一只酒瓶，不分先后，都能触发对应反应。印记持续3秒，同一目标两次反应至少间隔0.75秒；黄金不能与黄金或未觉醒守卫反应。</p><ul id="defense-reactions" class="defense-reactions"></ul>
       <h3>Lv.16 起，十五种元素强化</h3><p>Lv.4 觉醒元素、Lv.8 选择高阶属性、Lv.12 学习技能。Lv.16、20、24…每次从本元素的三种强化中选择一项。重复选择逐步提升额外伤害或范围，命中门槛、目标数量、控制时长与冷却保持不变；卡片展示当前值和下一次的变化。</p><ul id="defense-enhancements" class="defense-reactions"></ul>

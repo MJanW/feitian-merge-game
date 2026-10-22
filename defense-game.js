@@ -150,7 +150,8 @@
     return { rank, progress: safe(unit.goldenFeed || 0), required: safe(30 * Math.pow(2, Math.min(50, rank - 1))) };
   };
   const routeRanks = routes => Object.fromEntries(ROUTES.map(route => [route, Number.isSafeInteger(routes?.[route]) && routes[route] > 0 ? routes[route] : 0]));
-  const evolutionChance = level => Math.max(0.55, 0.95 - levelNumber(level) * 0.03);
+  // Only the defender's current (zero-based) level affects ordinary merge odds.
+  const evolutionChance = level => Math.max(0.55, 1 - levelNumber(level) * 0.03);
   const statsForLevel = (level, routes = {}, activeRoute) => {
     const n = levelNumber(level), ranks = routeRanks(routes);
     const family = BASE_ROUTES.find(route => ranks[route]) || 'normal';

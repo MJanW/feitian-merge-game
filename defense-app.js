@@ -219,7 +219,7 @@
       attr('defense-selection', 'aria-label', selection);
       text('defense-unit-stats', golden ? `${stats.bladeCount} 把黄金飞剑 · 下次天赋：第 ${nextGoldenRank} 阶` : unit ? `${stats.bladeCount} 把飞刃 · 下次分支：${nextStage(unit)}` : 'Lv.4 元素 · Lv.8 属性 · Lv.12 技能 · Lv.16 起元素强化');
       text('defense-reserve', `待命 ${next.reserve} 位`);
-      text('defense-evolution-risk', golden ? '拖入任意普通守卫投喂，按显示等级累计进度。投喂必定生效，超出进度会保留。' : unit ? `合成成功 ${percent(chance)} · 同级同元素，保留接收方技能。失败仅消耗拖入者，原守卫等级与路线保留。` : '同级同元素即可合成，保留接收方技能。失败仅消耗拖入者。');
+      text('defense-evolution-risk', golden ? '拖入任意普通守卫投喂，按显示等级累计进度。投喂必定生效，超出进度会保留。' : unit ? `Lv.${unit.level + 1} 合成成功 ${percent(chance)} · 只看等级，不随波次变化。同级同元素，保留接收方技能。失败仅消耗拖入者，原守卫等级与路线保留。` : '同级同元素即可合成，保留接收方技能。失败仅消耗拖入者。');
       attr('defense-evolution-risk', 'title', $('defense-evolution-risk')?.textContent || '');
       attr('defense-tools', 'data-golden', String(Boolean(golden)));
       prop('defense-golden-progress', 'hidden', !golden);
