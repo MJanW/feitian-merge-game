@@ -8,7 +8,7 @@
   <title>合成飞天</title>
   <link rel="icon" href="assets/photo-10.png" type="image/png">
   <link rel="stylesheet" href="styles.css?v=20261019-defense1">
-  <link rel="stylesheet" href="defense.css?v=20261021-trash1">
+  <link rel="stylesheet" href="defense.css?v=20261022-builds1">
   <script defer src="vendor/matter.min.js"></script>
   <script defer src="levels.js?v=20261017-size10"></script>
   <script defer src="sound.js?v=20261016-finale300"></script>
@@ -27,10 +27,10 @@
   <script defer src="jump-app.js?v=20261017-softjump1"></script>
   <script defer src="defense-forms.js?v=20261021-elements1"></script>
   <script defer src="defense-enemies.js?v=20261019-paths1"></script>
-  <script defer src="defense-game.js?v=20261022-control1"></script>
-  <script defer src="defense-renderer.js?v=20261022-control1"></script>
+  <script defer src="defense-game.js?v=20261022-builds1"></script>
+  <script defer src="defense-renderer.js?v=20261022-builds1"></script>
   <script defer src="defense-sound.js?v=20261021-elements1"></script>
-  <script defer src="defense-app.js?v=20261022-impact1"></script>
+  <script defer src="defense-app.js?v=20261022-builds1"></script>
   <script defer src="modes.js?v=20261019-defense1"></script>
 </head>
 <body>
@@ -138,7 +138,7 @@
     <div class="defense-layout">
       <section class="defense-play" aria-label="守卫飞天战场">
         <div class="defense-board">
-          <canvas id="defense-canvas" width="400" height="650" tabindex="0" aria-label="飞刃守卫战场：飞剑旋转攻击酒瓶和孵化蛋。同级、同元素守卫可合成，保留接收方技能；普通守卫拖到黄金战士上可投喂。方向键选择阵位，回车部署待命守卫，P 暂停。" aria-describedby="defense-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
+          <canvas id="defense-canvas" width="520" height="760" tabindex="0" aria-label="飞刃守卫战场：上下两区共40个阵位，完整显示。飞剑旋转攻击酒瓶和孵化蛋。同级、同元素守卫可合成，保留接收方技能；普通守卫拖到黄金战士上可投喂。方向键选择阵位，回车部署待命守卫，P 暂停。" aria-describedby="defense-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
           <div id="defense-intro" class="defense-intro">
             <div class="defense-intro-card">
               <span class="defense-eyebrow">第四周目 · 无尽守卫</span>
@@ -197,8 +197,11 @@
       <p class="defense-guide-intro">查看图鉴时，战场会暂停。</p>
       <h3>同元素，能合成</h3><p>同等级、同基础元素的守卫，无论高阶属性和技能是否一致，都可以合成。把材料拖到想保留的守卫上，接收方继续沿自己的技能进化。失败只消耗材料，接收方不降级。</p>
       <h3>垃圾筐，腾出阵位</h3><p>把普通守卫拖到垃圾筐上松手，即可丢弃；也可以先选中守卫，再点击垃圾筐确认。丢弃不会获得分数或材料。黄金战士不能丢弃，没有待命同伴时也会保留最后一位守卫。</p>
-      <h3>五种元素，十种反应</h3><p>冰霜命中附加 3 秒减速，基础减速 25%，触发元素反应后消除。草木每次命中缠绕定身 0.2 秒，再次命中刷新时长。不同元素接力击中同一只酒瓶，不分先后，都能触发对应反应。</p><ul id="defense-reactions" class="defense-reactions"></ul>
-      <h3>隐藏进化 · 黄金战士</h3><p>第26波起，两名15级及以上、符合合成规则的守卫合成时，有5%概率觉醒黄金战士，每局只出现一次。</p><p>把任意普通守卫拖到黄金战士上，按其显示等级积累进度。每次升阶需要10、20、40、80、160…级材料，溢出进度保留。黄金1阶基础攻击30，之后每升一阶乘3。</p>
+      <h3>五种元素与黄金，十五种反应</h3><p>冰霜命中附加 3 秒减速，基础减速 25%，触发元素反应后消除。草木每次命中缠绕定身 0.2 秒，再次命中刷新时长。不同元素或黄金接力击中同一只酒瓶，不分先后，都能触发对应反应。印记持续3秒，同一目标两次反应至少间隔0.75秒；黄金不能与黄金或未觉醒守卫反应。</p><ul id="defense-reactions" class="defense-reactions"></ul>
+      <h3>Lv.16 起，十五种元素强化</h3><p>Lv.4 觉醒元素、Lv.8 选择高阶属性、Lv.12 学习技能。Lv.16、20、24…每次从本元素的三种强化中选择一项。重复选择逐步提升额外伤害或范围，命中门槛、目标数量、控制时长与冷却保持不变；卡片展示当前值和下一次的变化。</p><ul id="defense-enhancements" class="defense-reactions"></ul>
+      <h3>隐藏进化 · 黄金战士</h3><p>第26波起，两名Lv.10及以上、同级同元素且符合合成规则的守卫合成时，有独立5%概率觉醒黄金战士，每局只出现一次。</p><p>把任意普通守卫拖到黄金战士上，按其显示等级积累进度。每次升阶需要10、20、40、80、160…级材料，溢出进度保留。黄金1阶基础攻击30，之后每升一阶乘3。原有飞剑从1阶5把成长至2阶6把。</p>
+      <h3>黄金第3、5、7…阶，天赋三选一</h3><p><b>万剑归宗：</b>每次增加1把参与攻击的飞剑，最多12把。满12把后改为“剑意精修”，每次另加原基础攻击的8%。</p><p><b>天域剑阵：</b>首次解锁半径100的领域，每2.6秒造成单剑攻击40%的范围伤害；后续每次半径加15，最多160。满160后每次再提高10个百分点领域伤害。</p><p><b>炼金共鸣：</b>首次让黄金反应倍率额外+0.8。重复选择r次后的总额外加成为4r/(r+4)，逐步趋近+4，反应频率不变。</p><p>一次投喂跨越多个天赋节点时，先结算全部阶数与余粮，再逐个选择天赋。选择期间战场冻结；切换玩法或离开页面后，点击“继续”返回原选择。</p>
+      <h3>四十阵位，完整布阵</h3><p>上下两区各4列、5行，共40个阵位，全部显示在同一战场。拖动可跨区移动、合成或投喂；方向键选择阵位，回车部署待命守卫。</p>
     </div>
   </dialog>
   <dialog id="jump-lb-dialog" class="leaderboard-dialog jump-lb-dialog" aria-labelledby="jump-lb-title">

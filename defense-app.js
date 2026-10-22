@@ -12,7 +12,7 @@
     let selectedSlot = null, hoverSlot = null, pointer = null;
     let frame = null, lastFrame = null, destroyed = false;
     let best = 0, savedWarning = false, notice = '', noticeUntil = 0;
-    let evolutionVisible = false, evolutionFocus = null;
+    let evolutionVisible = false, evolutionFocus = null, evolutionKey = null, evolutionPending = null;
     let discardChoice = null;
     const routeSlots = [0, 1, 2];
     const images = [], enemyImages = {}, listeners = [];
@@ -44,7 +44,8 @@
     function combatStats(unit) { return unit ? window.DefenseGame.statsForUnit(unit) : null; }
     function abilityName(stats) { return stats?.specialName || '旋刃'; }
     function routeInfo(route, level) { return window.DefenseGame.routeInfo(route, level); }
-    function stageName(level) { return level < 7 ? '元素觉醒' : level < 11 ? '属性进阶' : level < 15 ? '专属技能' : '奥义精修'; }
+    function choiceInfo(unit, route, pending) { return window.DefenseGame.choiceInfo?.(unit, route, pending) || routeInfo(route, pending.level); }
+    function stageName(level) { return level < 7 ? '元素觉醒' : level < 11 ? '属性进阶' : level < 15 ? '专属技能' : '元素专属强化'; }
     function nextStage(unit) {
       const nextLevel = Math.floor((unit.level + 1) / 4 + 1) * 4;
       return `Lv.${nextLevel} ${stageName(nextLevel - 1)}`;
@@ -112,8 +113,10 @@
     }
     function resize() {
       clearInput();
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      if (Number.isFinite(viewportHeight) && viewportHeight > 0) document.documentElement?.style?.setProperty('--defense-viewport-height', `${viewportHeight}px`);
       if (!game) return;
-      const width = window.DefenseGame.WIDTH || 400, height = window.DefenseGame.HEIGHT || 650;
+      const width = window.DefenseGame.WIDTH || 520, height = window.DefenseGame.HEIGHT || 760;
       const ratio = Math.max(1, Math.min(3, Number(window.devicePixelRatio) || 1));
       canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio);
       context = canvas.getContext('2d');
@@ -135,7 +138,7 @@
       if (next.status === 'lost') return '防线失守了，换个阵容再试一次';
       if (blocked() || next.isPaused) return '已暂停，点击「继续」守卫';
       if (next.isCelebrating) return '隐藏进化！黄金战士降临 · 登场期间战场暂停';
-      if (next.pendingEvolution) return '特殊进化！战场已冻结，请选择一条路线';
+      if (next.pendingEvolution) return next.pendingEvolution.kind === 'golden' ? `黄金天赋 · 第 ${next.pendingEvolution.node} 个技能节点 · 战场已冻结` : '特殊进化！战场已冻结，请选择一条路线';
       if (notice && Date.now() < noticeUntil) return notice;
       if (next.status === 'ready') return '点击「出发」，布置你的第一道防线';
       if (next.nextWaveIn > 0) return '下一波即将来袭 · 趁现在调整阵容';
@@ -143,16 +146,20 @@
     }
     function renderEvolution(next) {
       const pending = next.pendingEvolution;
-      const visible = Boolean(pending && active && !blocked() && !next.isPaused && next.status !== 'lost');
+      const visible = Boolean(pending && active && !blocked() && !next.isPaused && !next.isCelebrating && next.status !== 'lost');
+      const pendingKey = pending ? `${pending.kind || 'element'}:${pending.unitId}:${pending.node ?? pending.level}` : null;
+      const changedChoice = pendingKey !== evolutionKey;
       prop('defense-evolution', 'hidden', !visible);
       if (pending) {
         clearInput(); stopFrame();
         const unit = game?.units.find(candidate => candidate.id === pending.unitId);
-        text('defense-evolution-title', `Lv.${pending.level + 1} · ${stageName(pending.level)}`);
-        text('defense-evolution-detail', `${unit ? routePath(unit) + '。' : ''}${pending.level < 7 ? '从本次随机出现的三种元素中选一种，后续沿同元素进化。' : pending.level < 11 ? '沿当前元素解锁更高阶属性，已学能力保留。' : pending.level < 15 ? '选择当前元素的专属技能，让守卫形成独特打法。' : '精修已掌握的奥义，继续提升威力。'}同级、同元素即可合成，保留接收方技能。`);
+        const golden = pending.kind === 'golden';
+        attr('defense-evolution', 'data-kind', golden ? 'golden' : 'element');
+        text('defense-evolution-title', golden ? `黄金 ${pending.rank} 阶 · 第 ${pending.node} 个技能节点` : `Lv.${pending.level + 1} · ${stageName(pending.level)}`);
+        text('defense-evolution-detail', golden ? '升至第 3、5、7…阶获得天赋。选择一项，可重复强化；卡片显示本次变化。跨阶获得的天赋逐个选择，全部完成后继续战斗。' : `${unit ? routePath(unit) + '。' : ''}${pending.level < 7 ? '从本次随机出现的三种元素中选一种，后续沿同元素进化。' : pending.level < 11 ? '沿当前元素解锁更高阶属性，已学能力保留。' : pending.level < 15 ? '选择当前元素的专属技能，让守卫形成独特打法。' : '从本元素的三项强化中选一种，可重复选择。卡片显示本次提升，命中门槛、目标数、控制时长及冷却不变。'}同级、同元素即可合成，保留接收方技能。`);
         for (const slot of routeSlots) {
           const route = pending.choices[slot];
-          const info = route ? routeInfo(route, pending.level) : null;
+          const info = route ? choiceInfo(unit, route, pending) : null;
           prop(`defense-route-${slot}`, 'hidden', !info);
           prop(`defense-route-${slot}`, 'disabled', !visible || !info);
           attr(`defense-route-${slot}`, 'data-family', info?.family || 'normal');
@@ -160,11 +167,11 @@
           text(`defense-route-${slot}-icon`, info?.icon || '✦');
           text(`defense-route-${slot}-name`, info?.name || '');
           text(`defense-route-${slot}-description`, info?.description || '');
-          text(`defense-route-${slot}-rank`, info ? pending.level < 15 ? stageName(pending.level) : `第 ${Math.floor((pending.level - 11) / 4)} 次精修` : '');
+          text(`defense-route-${slot}-rank`, info ? golden ? `第 ${pending.node} 个天赋` : pending.level < 15 ? stageName(pending.level) : `第 ${Math.floor((pending.level - 11) / 4)} 次强化` : '');
         }
       }
       const choices = routeSlots.map(slot => $(`defense-route-${slot}`)).filter(button => button && !button.hidden && !button.disabled);
-      if (visible && (!evolutionVisible || !choices.includes(document.activeElement))) {
+      if (visible && (!evolutionVisible || changedChoice || !choices.includes(document.activeElement))) {
         if (!evolutionFocus) evolutionFocus = document.activeElement;
         choices[0]?.focus({ preventScroll: true });
       } else if (!visible && evolutionVisible && !pending && active && !blocked() && !next.isPaused) {
@@ -173,6 +180,8 @@
         evolutionFocus = null;
       }
       evolutionVisible = visible;
+      evolutionKey = pendingKey;
+      evolutionPending = visible ? pending : null;
     }
     function render(next) {
       state = next; saveBest(next.score);
@@ -188,11 +197,12 @@
       const stats = combatStats(unit);
       const chance = chanceFor(unit);
       const golden = unit?.isGolden ? window.DefenseGame.goldenProgress(unit) : null;
-      const selection = (golden ? `黄金战士 · ${golden.rank} 阶 · 伤害 ${stats.damage.toLocaleString()}` : unit ? `Lv.${unit.level + 1} ${abilityName(stats)} · 伤害 ${stats.damage.toLocaleString()} · 路线：${routePath(unit)}` : next.reserve > 0 ? '点击空位让同伴上场' : '拖近酒瓶迎敌 · 拖近孵化蛋召集') + reserveHint;
+      const nextGoldenRank = golden ? golden.rank % 2 ? golden.rank + 2 : golden.rank + 1 : null;
+      const selection = (golden ? `黄金战士 · ${golden.rank} 阶 · 伤害 ${stats.damage.toLocaleString()} · ${stats.bladeCount} 把飞剑 · 下次天赋：第 ${nextGoldenRank} 阶` : unit ? `Lv.${unit.level + 1} ${abilityName(stats)} · 伤害 ${stats.damage.toLocaleString()} · 路线：${routePath(unit)} · 下次：${nextStage(unit)}` : next.reserve > 0 ? '点击空位让同伴上场' : '拖近酒瓶迎敌 · 拖近孵化蛋召集') + reserveHint;
       text('defense-selection', selection);
       attr('defense-selection', 'title', selection);
       attr('defense-selection', 'aria-label', selection);
-      text('defense-unit-stats', golden ? `${stats.bladeCount} 把黄金飞剑 · 每次升阶攻击 ×3` : unit ? `${stats.bladeCount} 把飞刃 · 下次分支：${nextStage(unit)}` : 'Lv.4 元素 · Lv.8 属性 · Lv.12 技能 · 此后奥义精修');
+      text('defense-unit-stats', golden ? `${stats.bladeCount} 把黄金飞剑 · 下次天赋：第 ${nextGoldenRank} 阶` : unit ? `${stats.bladeCount} 把飞刃 · 下次分支：${nextStage(unit)}` : 'Lv.4 元素 · Lv.8 属性 · Lv.12 技能 · Lv.16 起元素强化');
       text('defense-reserve', `待命 ${next.reserve} 位`);
       text('defense-evolution-risk', golden ? '拖入任意普通守卫投喂，按显示等级累计进度。投喂必定生效，超出进度会保留。' : unit ? `合成成功 ${percent(chance)} · 同级同元素，保留接收方技能。失败仅消耗拖入者，原守卫等级与路线保留。` : '同级同元素即可合成，保留接收方技能。失败仅消耗拖入者。');
       attr('defense-evolution-risk', 'title', $('defense-evolution-risk')?.textContent || '');
@@ -278,6 +288,16 @@
         description.textContent = reaction.description;
         item.append(heading, description); list.append(item);
       }
+      const enhancements = $('defense-enhancements');
+      if (enhancements) {
+        enhancements.replaceChildren();
+        for (const route of Object.values(window.DefenseGame.ENHANCEMENTS || {}).flat()) {
+          const info = routeInfo(route);
+          const item = document.createElement('li'), heading = document.createElement('strong'), description = document.createElement('span');
+          heading.textContent = info.name; description.textContent = info.description;
+          item.append(heading, description); enhancements.append(item);
+        }
+      }
     }
     function ensureGame() {
       if (game) return true;
@@ -307,7 +327,7 @@
     function position(event) {
       const rect = canvas.getBoundingClientRect();
       if (!(rect.width > 0 && rect.height > 0)) return null;
-      return { x: (event.clientX - rect.left) / rect.width * (window.DefenseGame.WIDTH || 400), y: (event.clientY - rect.top) / rect.height * (window.DefenseGame.HEIGHT || 650) };
+      return { x: (event.clientX - rect.left) / rect.width * (window.DefenseGame.WIDTH || 520), y: (event.clientY - rect.top) / rect.height * (window.DefenseGame.HEIGHT || 760) };
     }
     function slotAt(point) {
       if (!point) return null;
@@ -322,9 +342,10 @@
       render(game.getState()); draw();
     }
     function chooseRoute(route) {
-      if (!game || !state?.pendingEvolution || !evolutionVisible || blocked() || state.isPaused) return;
+      if (!game || !evolutionPending || !state?.pendingEvolution || !evolutionVisible || blocked() || state.isPaused) return;
+      const pending = evolutionPending;
       clearInput(); stopFrame();
-      if (game.chooseEvolution(route)) { render(game.getState()); draw(); requestFrame(); }
+      if (game.chooseEvolution(route, pending)) { render(game.getState()); draw(); requestFrame(); }
     }
     function discardUnit(slot, id) {
       const unit = unitAt(slot);
@@ -432,8 +453,9 @@
       if (!active || !ensureGame() || state.status !== 'ready' || state.pendingEvolution) return;
       focused = true; manualPaused = false; game.start(); syncPause(); canvas.focus({ preventScroll: true });
     });
-    for (const slot of routeSlots) listen($(`defense-route-${slot}`), 'click', () => {
-      const button = $(`defense-route-${slot}`), route = state?.pendingEvolution?.choices[slot];
+    for (const slot of routeSlots) listen($(`defense-route-${slot}`), 'click', event => {
+      if (event.detail > 1) return;
+      const button = $(`defense-route-${slot}`), route = evolutionPending?.choices[slot];
       if (route && button && !button.hidden && !button.disabled) chooseRoute(route);
     });
     listen($('defense-pause'), 'click', togglePause);
@@ -491,6 +513,7 @@
     listen(document, 'visibilitychange', () => { if (document.hidden && active && state?.status === 'playing') manualPaused = true; syncPause(); });
     listen(window, 'resize', resize);
     listen(window, 'orientationchange', resize);
+    listen(window.visualViewport, 'resize', resize);
     document.querySelectorAll('dialog').forEach(dialog => listen(dialog, 'close', syncPause));
     soundUI();
     return {
