@@ -361,7 +361,7 @@
         this.units.splice(this.units.indexOf(source), 1);
         this._removeUnitZones(source);
         if (canFeed(source, target)) this._feedGolden(target, source);
-        else if (!this.goldenAppeared && this.wave >= 26 && target.level >= 9 && this._roll() < 0.05) this._awakenGolden(target, source);
+        else if (!this.goldenAppeared && this.wave >= 21 && target.level >= 9 && this._roll() < 0.03) this._awakenGolden(target, source);
         else this._attemptEvolution(target, 'merge', { materialId: source.id, sourceRoutes: routeRanks(source.routes), cost: 0 });
       } else {
         Object.assign(source, { slot: toSlot, x: SLOTS[toSlot].x, y: SLOTS[toSlot].y, pulse: 0.35 });
