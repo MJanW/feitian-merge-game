@@ -107,6 +107,21 @@
     ],
     "imageHash": "4cebab27fef1d05aa640a1eae07861da7233c1fc07b0941f7179008f59749458",
     "sourceImage": "10:小推车.jpg"
+  },
+  "star": {
+    "image": "assets/garden/star-shooter.png",
+    "frame": [
+      23,
+      169,
+      1044,
+      1093
+    ],
+    "imageSize": [
+      1086,
+      1448
+    ],
+    "imageHash": "883c5dccc9e32df64cea695d6caa44e4b5df96292f09b1c5ce37b8d98e93333d",
+    "sourceImage": "星星射手.jpg"
   }
 };
   for (const form of Object.values(forms)) { Object.freeze(form.frame); Object.freeze(form.imageSize); Object.freeze(form); }
