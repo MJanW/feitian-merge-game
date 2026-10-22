@@ -4,12 +4,12 @@
     const $ = id => document.getElementById(id), canvas = $('garden-canvas');
     if (!canvas) return null;
     let game = null, renderer = null, audio = null, state = null, active = false, manualPaused = false;
-    let selected = 'sun', shovel = false, hover = null, pointer = null, pendingLevel = null;
+    let selected = 'shooter', shovel = false, hover = null, pointer = null, pendingLevel = null;
     let frame = null, lastFrame = null, destroyed = false, notice = '', noticeUntil = 0;
     const cards = new Map(), levelButtons = [], listeners = [], completed = new Set();
     const reducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
     let soundEnabled = typeof window.GameSoundEnabled === 'boolean' ? window.GameSoundEnabled : read('photo-merge-sound', 'on') !== 'off';
-    try { const saved = JSON.parse(read('feitian-garden-completed-v1', '[]')); if (Array.isArray(saved)) saved.filter(n => Number.isInteger(n) && n >= 0 && n < 3).forEach(n => completed.add(n)); } catch (_) {}
+    try { const saved = JSON.parse(read('feitian-garden-classic-completed-v1', '[]')); if (Array.isArray(saved)) saved.filter(n => Number.isInteger(n) && n >= 0 && n < (window.GardenGame?.LEVELS.length || 4)).forEach(n => completed.add(n)); } catch (_) {}
     function read(key, fallback) { try { return window.localStorage.getItem(key) ?? fallback; } catch (_) { return fallback; } }
     function write(key, value) { try { window.localStorage.setItem(key, value); } catch (_) {} }
     function listen(target, type, fn, opts) { target?.addEventListener(type, fn, opts); listeners.push([target, type, fn, opts]); }
@@ -22,13 +22,13 @@
     function showNotice(message) { notice = message; noticeUntil = now() + 2700; refresh(); }
     function soundUI() { text('garden-sound', soundEnabled ? '音效开' : '音效关'); attr($('garden-sound'), 'aria-pressed', soundEnabled); }
     function level() { return window.GardenGame.LEVELS[state?.levelIndex || 0]; }
-    function available(type) { return !level().cards || level().cards.includes(type); }
+    function available(type) { const config = level(); return (!config.cards || config.cards.includes(type)) && (state?.tutorialReady !== false || type === config.tutorialGate?.type); }
     function onEvent(event) {
       const sounds = { plant: 'hatch', shot: 'shoot', hit: 'supplyHit', collect: 'kill', explode: 'special', mower: 'special', win: 'upgrade', lose: 'lose' };
       if (active && !blocked() && sounds[event.type]) audioCall('play', { ...event, type: sounds[event.type] });
       if (event.type === 'win') {
         const index = game?.levelIndex ?? state?.levelIndex ?? 0;
-        completed.add(index); write('feitian-garden-completed-v1', JSON.stringify([...completed]));
+        completed.add(index); write('feitian-garden-classic-completed-v1', JSON.stringify([...completed]));
       }
       if (event.type === 'wave' && game) showNotice('新一波入侵者来了，检查每条小路的防线。');
     }
@@ -39,7 +39,7 @@
         attr(button, 'aria-label', `${plant.name}，${plant.cost}阳光，${plant.description}`);
         const key = document.createElement('span'); key.className = 'garden-seed-key'; key.textContent = i + 1;
         const portrait = document.createElement('span'); portrait.className = 'garden-portrait';
-        const form = window.GameLevels?.levels?.[plant.photoIndex];
+        const form = window.GardenForms?.[plant.id] || window.GameLevels?.levels?.[plant.photoIndex];
         if (form) {
           const img = document.createElement('img'); img.src = form.image; img.alt = ''; img.draggable = false;
           const [x, y, w, h] = form.frame || [0, 0, 1, 1], [iw, ih] = form.imageSize || [w, h], side = Math.max(w, h);
@@ -55,9 +55,9 @@
       }
       for (const [index, config] of window.GardenGame.LEVELS.entries()) {
         const button = document.createElement('button'); button.type = 'button';
-        const number = document.createElement('span'); number.textContent = `0${index + 1}`;
+        const number = document.createElement('span'); number.textContent = config.practice ? 'FREE PLAY' : `0${index + 1}`;
         const title = document.createElement('b'); title.textContent = config.title.replace(/^\d+\s*·\s*/, '');
-        button.append(number, title); attr(button, 'aria-label', `第${index + 1}关 ${config.title.replace(/^\d+\s*·\s*/, '')}`);
+        button.append(number, title); attr(button, 'aria-label', config.practice ? config.title : `第${index + 1}关 ${config.title.replace(/^\d+\s*·\s*/, '')}`);
         $('garden-levels').appendChild(button); levelButtons.push(button); listen(button, 'click', () => requestReset(index));
       }
     }
@@ -65,7 +65,7 @@
       if (game) return true;
       if (!window.GardenGame || !window.GardenRenderer) { text('garden-status', '花园加载失败，请刷新页面重试。'); return false; }
       game = new window.GardenGame({ onEvent }); state = game.getState();
-      renderer = new window.GardenRenderer(canvas, { levels: window.GameLevels?.levels || [], reducedMotion, onReady: () => { if (active) draw(); } });
+      renderer = new window.GardenRenderer(canvas, { levels: window.GameLevels?.levels || [], forms: window.GardenForms, reducedMotion, onReady: () => { if (active) draw(); } });
       try { if (window.DefenseAudio) audio = new window.DefenseAudio({ enabled: soundEnabled }); } catch (_) {}
       makeDeck(); refresh(); return true;
     }
@@ -81,27 +81,29 @@
       state = game.getState(); const config = level(), running = state.status === 'running';
       text('garden-sun', state.sun); text('garden-level-name', config.title);
       text('garden-level-goal', config.subtitle || '守住五条小路');
-      text('garden-wave', state.status === 'ready' ? '准备种植' : !state.wave ? `布阵时间 · ${Math.max(0, Math.ceil(((config.waves?.[0]?.at || 20000) - state.elapsed) / 1000))}s` : `第 ${state.wave}/${state.totalWaves || 3} 波 · 击退 ${state.kills}`);
+      text('garden-wave', state.status === 'ready' ? '准备种植' : state.tutorialReady === false ? '教学布阵' : !state.wave ? `布阵时间 · ${Math.max(0, Math.ceil((state.nextWaveIn ?? ((config.waves?.[0]?.at || 20000) - state.elapsed)) / 1000))}s` : `第 ${state.wave}/${state.totalWaves || 3} 波 · 击退 ${state.kills}`);
       for (const [id, { button, status, plant }] of cards) {
         const cd = state.cooldowns?.[id] || 0, allowed = available(id);
         button.disabled = !allowed; attr(button, 'aria-pressed', selected === id && !shovel);
         attr(button, 'data-unaffordable', state.sun < plant.cost);
         button.style.setProperty('--cooldown', `${Math.min(100, cd / plant.cooldown * 100)}%`);
-        const label = !allowed ? '后续关卡' : cd > 0 ? `${Math.ceil(cd / 1000)}s` : state.sun < plant.cost ? '缺阳光' : '就绪';
+        const label = !allowed ? config.cards.includes(id) ? '先完成教学' : '后续关卡' : cd > 0 ? `${Math.ceil(cd / 1000)}s` : state.sun < plant.cost ? '缺阳光' : '就绪';
         if (status.textContent !== label) status.textContent = label;
       }
       levelButtons.forEach((button, i) => { attr(button, 'aria-current', state.levelIndex === i); attr(button, 'data-complete', completed.has(i)); });
       $('garden-pause').disabled = !['running', 'paused'].includes(state.status);
+      $('garden-shovel').disabled = config.shovel === false;
+      attr($('garden-shovel'), 'title', config.shovel === false ? '自由演练中可使用铲除工具' : '移除一位同伴，不返还阳光');
       text('garden-pause', state.status === 'paused' ? '继续' : '暂停'); attr($('garden-pause'), 'aria-pressed', state.status === 'paused');
       attr($('garden-shovel'), 'aria-pressed', shovel);
       const plant = cards.get(selected)?.plant;
       text('garden-selected-name', shovel ? '铲除工具' : plant ? `${plant.name} · ${plant.cost} 阳光` : '选择一位同伴');
-      text('garden-status', noticeUntil > now() ? notice : shovel ? '点击已种植的角色铲除。铲除不返还阳光。' : plant?.description || '选择角色，再点击空格种植。');
+      text('garden-status', noticeUntil > now() ? notice : state.tutorialReady === false && state.status === 'running' ? state.tutorialHint : shovel ? '点击已种植的角色铲除。铲除不返还阳光。' : plant?.description || '选择角色，再点击空格种植。');
       $('garden-overlay').hidden = running;
       const secondary = $('garden-overlay-secondary'); secondary.hidden = !['won', 'lost'].includes(state.status);
       text('garden-overlay-secondary', state.status === 'lost' ? '重新布阵' : '再玩本关');
       if (state.status === 'ready') {
-        text('garden-overlay-kicker', `第 ${state.levelIndex + 1} 关 / ${config.title.replace(/^\d+\s*·\s*/, '')}`);
+        text('garden-overlay-kicker', config.practice ? '自由演练 / 六位同伴全部开放' : `第 ${state.levelIndex + 1} 关 / ${config.title.replace(/^\d+\s*·\s*/, '')}`);
         text('garden-overlay-title', '今天，守住花园。');
         text('garden-overlay-copy', config.subtitle || '先种采光员收集阳光，再在每条小路安排射手。'); text('garden-start', '开始种植 ↗');
       } else if (state.status === 'paused') {
@@ -109,8 +111,9 @@
         text('garden-overlay-copy', '同伴和入侵者都会等你回来。'); text('garden-start', '继续守护 ↗');
       } else if (state.status === 'won') {
         text('garden-overlay-kicker', `第 ${state.levelIndex + 1} 关完成 · 击退 ${state.kills}`); text('garden-overlay-title', '这一片晴天，守住了。');
-        text('garden-overlay-copy', state.levelIndex < 2 ? '下一关会有新的同伴，也会有更难缠的入侵者。' : '三片花园全部体验完成。更多角色，等你的新照片加入。');
-        text('garden-start', state.levelIndex < 2 ? '进入下一关 ↗' : '再守一轮 ↗');
+        const next = window.GardenGame.LEVELS[state.levelIndex + 1];
+        text('garden-overlay-copy', next ? next.practice ? '基础关卡已完成。自由演练开放五行草地、六位同伴和铲除工具。' : `获得新同伴，下一关：${next.subtitle}` : '六位同伴都已登场。可以重试演练，或回到前面的关卡。');
+        text('garden-start', next ? next.practice ? '进入自由演练 ↗' : '进入下一关 ↗' : '再守一轮 ↗');
       } else if (state.status === 'lost') {
         text('garden-overlay-kicker', `击退 ${state.kills} 位入侵者`); text('garden-overlay-title', '花园需要你再试一次。');
         text('garden-overlay-copy', '先建立阳光供给，给每条小路配上射手，盾卫放在前面。'); text('garden-start', '再试一次 ↗');
@@ -134,8 +137,8 @@
       unlock(); selected = selected === id && !shovel ? null : id; shovel = false; refresh(); draw();
     }
     function reset(index) {
-      stopFrame(); audioCall('pause'); manualPaused = false; pointer = null; hover = null; selected = 'sun'; shovel = false; notice = ''; noticeUntil = 0;
-      game.reset(index); refresh(); resize();
+      stopFrame(); audioCall('pause'); manualPaused = false; pointer = null; hover = null; shovel = false; notice = ''; noticeUntil = 0;
+      game.reset(index); selected = game.level.cards.includes('sun') ? 'sun' : 'shooter'; refresh(); resize();
     }
     function requestReset(index) {
       if (!active || !game || document.querySelector('dialog[open]')) return;
@@ -145,7 +148,7 @@
     function start() {
       if (!active || !ensure() || document.querySelector('dialog[open]')) return;
       unlock();
-      if (state.status === 'won') reset(state.levelIndex < 2 ? state.levelIndex + 1 : 0);
+      if (state.status === 'won') reset(state.levelIndex < window.GardenGame.LEVELS.length - 1 ? state.levelIndex + 1 : state.levelIndex);
       else if (state.status === 'lost') reset(state.levelIndex);
       manualPaused = false; if (state.status === 'ready') game.start();
       syncPause(); canvas.focus({ preventScroll: true });
@@ -156,6 +159,7 @@
     }
     function act(cell) {
       if (!cell || blocked() || state?.status !== 'running') return;
+      if (level().activeRows && !level().activeRows.includes(cell.row)) { showNotice('这条草地尚未开放，请种在亮色草坪上。'); return; }
       if (shovel) {
         if (game.remove(cell.row, cell.col)) showNotice('已腾出位置，可以重新种植。');
         else showNotice('这个位置没有角色。');
@@ -187,7 +191,7 @@
     listen($('garden-overlay-secondary'), 'click', () => { if (active) reset(state.levelIndex); });
     listen($('garden-pause'), 'click', togglePause);
     listen($('garden-restart'), 'click', () => requestReset(state.levelIndex));
-    listen($('garden-shovel'), 'click', () => { if (!active || document.querySelector('dialog[open]')) return; shovel = !shovel; selected = null; refresh(); draw(); });
+    listen($('garden-shovel'), 'click', () => { if (!active || level().shovel === false || document.querySelector('dialog[open]')) return; shovel = !shovel; selected = null; refresh(); draw(); });
     listen($('garden-confirm-cancel'), 'click', () => { pendingLevel = null; $('garden-confirm').close(); });
     listen($('garden-confirm-ok'), 'click', () => { const index = pendingLevel; pendingLevel = null; $('garden-confirm').close(); if (index != null) reset(index); });
     listen($('garden-confirm'), 'close', () => { pendingLevel = null; syncPause(); });

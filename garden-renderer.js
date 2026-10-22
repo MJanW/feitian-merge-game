@@ -60,20 +60,50 @@
     }
     ellipse(ctx, x, y, r * .4, r * .4, '#e2aa43');
   }
+  function visitorHead(ctx, skin = '#acc09a', edge = '#647a58', eating = 0) {
+    ellipse(ctx,0,0,18,19,skin,edge,2);
+    ellipse(ctx,16,2,4,6,skin,edge,1.5);
+    ellipse(ctx,-9,-3,6.8,7.8,'#f5ecd1',edge,1.2);
+    ellipse(ctx,4,-5,6,6.9,'#fff0ce',edge,1.2);
+    ellipse(ctx,-12,-2,2,3,'#344331'); ellipse(ctx,1,-4,2,2.6,'#344331');
+    line(ctx,-15,-12,-5,-10,edge,2); line(ctx,0,-12,8,-14,edge,2);
+    const jaw=2+Math.abs(eating)*3;
+    poly(ctx,[[-16,8],[-4,7],[2,11],[-2,13+jaw],[-14,12+jaw]],'#5b6251',edge,1);
+    round(ctx,-12,8,4,5,.8,'#f7e8c6'); round(ctx,-6,8,4,4,.8,'#f7e8c6');
+  }
+  function visitorArmor(ctx, type) {
+    if (['brute','bucket'].includes(type)) {
+      // A battered garden pail is separate from the head so it can fall away.
+      poly(ctx,[[-19,-8],[-16,-38],[15,-38],[21,-8]],'#a8b6b7','#637a7d',2);
+      ellipse(ctx,-.5,-38,15.5,4,'#d4dcda','#637a7d',1.5);
+      round(ctx,-22,-10,46,6,2,'#bdc9c6','#637a7d',1.5);
+      line(ctx,-10,-32,-12,-14,'#e5ece3',3);
+      line(ctx,9,-30,13,-15,'#859da0',2);
+      ctx.beginPath();ctx.moveTo(-18,-25);ctx.quadraticCurveTo(0,-10,19,-25);
+      ctx.strokeStyle='#698286';ctx.lineWidth=2;ctx.stroke();
+      ellipse(ctx,-18,-25,2,2,'#536e72');ellipse(ctx,19,-25,2,2,'#536e72');
+    } else {
+      poly(ctx,[[-18,-10],[-5,-48],[6,-48],[20,-10]],'#ee994d','#aa603a',2);
+      poly(ctx,[[-12,-25],[-9,-34],[10,-34],[14,-25]],'#fff1c9');
+      round(ctx,-24,-12,48,7,2,'#cf753f','#aa603a',1.5);
+      line(ctx,-1,-43,-11,-16,'#ffc374',2);
+    }
+  }
 
   class GardenRenderer {
     constructor(canvas, options = {}) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
       this.levels = options.levels || root.GameLevels?.levels || [];
+      this.forms = options.forms || root.GardenForms || {};
       this.reducedMotion = !!options.reducedMotion;
       this.images = new Map();
       this.width = 1; this.height = 1; this.dpr = 1;
       this.terrainCanvas = null; this.terrainKey = '';
       this.geometry = this._geometry(1, 1);
       if (typeof root.Image === 'function') {
-        for (const look of Object.values(LOOKS)) {
-          const info = this.levels[look.photo];
+        for (const type of [...Object.keys(LOOKS), 'mower']) {
+          const info = this._form(type);
           if (!info?.image || this.images.has(info.image)) continue;
           const image = new root.Image();
           image.onload = image.onerror = () => options.onReady?.();
@@ -83,6 +113,10 @@
       }
       const rect = canvas.getBoundingClientRect?.();
       this.resize(rect?.width || 900, rect?.height || 500);
+    }
+
+    _form(type) {
+      return this.forms[type] || this.levels[LOOKS[type]?.photo];
     }
 
     _geometry(width, height) {
@@ -251,7 +285,7 @@
         line(ctx,7,-33,17,-43,'#644e36',3);
         sparkle(ctx,19,-45,5+Math.sin(time*12)*1.2,'#ffe6a1');
       }
-      const info=this.levels[look.photo],image=info&&this.images.get(info.image);
+      const info=this._form(plant.type),image=info&&this.images.get(info.image);
       if(image?.complete && image.naturalWidth) {
         const frame=info.frame || [0,0,image.naturalWidth,image.naturalHeight];
         const ratio=frame[2]/frame[3],height=Math.min(56,53/ratio),width=height*ratio;
@@ -283,18 +317,35 @@
 
     _enemy(ctx, enemy, time) {
       const g=this.geometry,p=this._world(enemy.x,enemy.row+.72);
-      const tank=['tank','giant','brute'].includes(enemy.type);
-      const fast=['runner','fast'].includes(enemy.type);
-      const helmet=['helmet','armored','armor','bucket','cone'].includes(enemy.type);
-      const scale=Math.min(g.cellWidth/69,g.cellHeight/80)*(tank?1.18:1);
-      const phase=this.reducedMotion?0:time*(fast?12:5)+(finite(enemy.id)*1.7 || enemy.row);
+      const runner=['runner','fast'].includes(enemy.type);
+      const hasPole=runner&&!enemy.headless&&(enemy.hasPole ?? (!enemy.usedPole&&!enemy.hasVaulted));
+      const fast=hasPole || enemy.type==='flag';
+      const armored=['helmet','armored','armor','bucket','cone','brute'].includes(enemy.type)
+        && finite(enemy.armorHp,1)>0&&!enemy.headless;
+      const isCold=finite(enemy.slowTime)>0,headless=!!enemy.headless;
+      const vaulting=!!enemy.vaulting&&!headless;
+      const vaultProgress=clamp(finite(enemy.vaultProgress),0,1);
+      const jump=vaulting?Math.sin(vaultProgress*Math.PI)*49:0;
+      const scale=Math.min(g.cellWidth/69,g.cellHeight/80);
+      const phase=this.reducedMotion?0:time*(fast?12:5)*(isCold?.5:1)+(finite(enemy.id)*1.7 || enemy.row);
       const stride=Math.sin(phase), bob=Math.abs(stride)*(fast?2.7:1.3);
-      const isCold=finite(enemy.slowTime)>0;
-      const skin=isCold?'#a2d2ce':tank?'#91a08a':'#acc09a';
+      const skin=isCold?'#a2d2ce':'#acc09a';
       const skinDark=isCold?'#5f9ba4':'#647a58';
+      const eating=!headless&&!vaulting&&(enemy.eating || enemy.attacking || enemy.state==='attacking');
       ctx.save(); ctx.translate(p.x,p.y); ctx.scale(scale,scale);
-      ellipse(ctx,1,5,tank?26:22,7,'#2e4b2e3b');
-      const walk=enemy.eating || enemy.attacking || enemy.state==='attacking' ? Math.sin(phase*2)*.8 : stride;
+      ellipse(ctx,1,5,22-jump*.16,7-jump*.045,'#2e4b2e3b');
+      if(hasPole) {
+        if(vaulting) {
+          const gripX=-32+vaultProgress*60;
+          line(ctx,gripX,4,gripX+10-vaultProgress*55,-70-jump,'#6e8052',3.2);
+          line(ctx,gripX+1,1,gripX+11-vaultProgress*55,-69-jump,'#c4cd94',1);
+        } else {
+          line(ctx,-45,-61,30,-13,'#6e8052',3.2);
+          line(ctx,-44,-62,31,-14,'#c4cd94',1);
+        }
+      }
+      ctx.save();ctx.translate(0,-jump);
+      const walk=vaulting ? -.65 : eating ? Math.sin(phase*2)*.8 : stride;
       // Oversized boots and offset knees make the leftward shuffle readable.
       line(ctx,-9,-16,-12+walk*4,-2,'#64594d',9);
       line(ctx,9,-16,10-walk*4,-1,'#6e6252',9);
@@ -302,7 +353,7 @@
       round(ctx,1-walk*4,-3,18,9,3,'#55483b','#37392b',1.5);
       ctx.save(); ctx.translate(0,-bob); ctx.rotate(-.075);
       poly(ctx,[[-14,-38],[12,-40],[18,-17],[5,-13],[0,-19],[-12,-15],[-17,-26]],
-        fast?'#a16b55':tank?'#7d6659':'#7d8290','#4e594b',2);
+        runner?'#a16b55':'#7d8290','#4e594b',2);
       poly(ctx,[[-2,-36],[5,-37],[7,-18],[2,-21],[-3,-17]],'#e6d4ad');
       poly(ctx,[[0,-35],[5,-35],[4,-28],[8,-21],[3,-18],[-1,-27]],fast?'#f4d775':'#b55d49');
       line(ctx,-12,-34,-26,-28+walk*1.4,'#737c75',9);
@@ -310,47 +361,44 @@
       line(ctx,10,-34,-6,-23,'#727e72',8);
       line(ctx,-6,-23,-21,-24,skin,7);
       for(let i=0;i<3;i++) line(ctx,-35,-32+i*2.2,-41,-32+i*2.5,skinDark,1.1);
-      ctx.save(); ctx.translate(-3,-49); ctx.rotate(Math.sin(phase*.55)*.04);
-      ellipse(ctx,0,0,tank?20:18,tank?20:19,skin,skinDark,2);
-      ellipse(ctx,16,2,4,6,skin,skinDark,1.5);
-      ellipse(ctx,-9,-3,6.8,7.8,'#f5ecd1',skinDark,1.2);
-      ellipse(ctx,4,-5,6,6.9,'#fff0ce',skinDark,1.2);
-      ellipse(ctx,-12,-2,2,3,'#344331'); ellipse(ctx,1,-4,2,2.6,'#344331');
-      line(ctx,-15,-12,-5,-10,skinDark,2); line(ctx,0,-12,8,-14,skinDark,2);
-      poly(ctx,[[-16,8],[-4,7],[2,11],[-2,15],[-14,14]],'#5b6251',skinDark,1);
-      round(ctx,-12,8,4,5,.8,'#f7e8c6'); round(ctx,-6,8,4,4,.8,'#f7e8c6');
-      if(helmet) {
-        ctx.beginPath(); ctx.ellipse(0,-10,20,15,0,Math.PI,TAU);
-        ctx.lineTo(21,-9);ctx.lineTo(-21,-9);ctx.closePath();
-        ctx.fillStyle='#e1b85f';ctx.fill();ctx.strokeStyle='#937942';ctx.lineWidth=2;ctx.stroke();
-        round(ctx,-22,-13,45,6,2,'#bc9248','#937942',1.5);
-        line(ctx,0,-25,0,-15,'#f3d38c',4);
-      } else if(fast) {
-        poly(ctx,[[-18,-9],[-14,-20],[7,-22],[18,-10]],'#a85543','#774637',1.5);
-        line(ctx,-18,-10,18,-10,'#e2a46c',4);
-      } else if(tank) {
-        poly(ctx,[[-14,-12],[-12,-24],[-4,-20],[1,-26],[7,-20],[12,-23],[17,-12]],'#575d4d');
-        round(ctx,7,4,5,3,1,'#74856b'); line(ctx,10,6,13,9,'#62755d',1);
-      } else {
-        for(let i=0;i<4;i++) line(ctx,3+i*3,-17,6+i*2,-24+(i%2)*3,'#536346',2);
+      if(enemy.type==='flag') {
+        line(ctx,16,0,16,-82,'#697750',2.7);
+        poly(ctx,[[17,-80],[42,-77],[38,-65],[43,-52],[17,-56]],'#cc6a53','#914e3c',1.5);
+        sparkle(ctx,29,-66,6,'#f5dfa1');
+        ellipse(ctx,16,-83,3,3,'#e9d088');
       }
-      ctx.restore(); ctx.restore();
+      if(!headless) {
+        ctx.save(); ctx.translate(-3,-49); ctx.rotate(Math.sin(phase*.55)*.04);
+        visitorHead(ctx,skin,skinDark,eating?Math.sin(phase*2):0);
+        if(armored) visitorArmor(ctx,enemy.type);
+        else if(runner) {
+          poly(ctx,[[-18,-9],[-14,-20],[7,-22],[18,-10]],'#a85543','#774637',1.5);
+          line(ctx,-18,-10,18,-10,'#e2a46c',4);
+        } else {
+          for(let i=0;i<4;i++) line(ctx,3+i*3,-17,6+i*2,-24+(i%2)*3,'#536346',2);
+        }
+        ctx.restore();
+      } else {
+        // A closed scarf/collar keeps this purely cartoon, without a wound.
+        ellipse(ctx,-2,-37,8,3,'#e6d4ad','#65715d',1.3);
+      }
+      ctx.restore();
       if(isCold) {
         sparkle(ctx,-20,-37,5,'#d6f8ff'); sparkle(ctx,20,-18,4,'#d6f8ff');
         ellipse(ctx,0,4,23,7,'#a9e3ed33','#9adee6',1);
       }
       const hit=clamp(finite(enemy.hitPulse)/180,0,1);
       if(hit>0) sparkle(ctx,-19,-40,14*hit,'#fff4ae');
-      if(enemy.hp<enemy.maxHp || tank) {
-        const y=helmet?-79:-74;
+      if(enemy.hp<enemy.maxHp || armored) {
+        const y=headless?-47:armored?-102:-74;
         round(ctx,-18,y,36,4,2,'#445342b0');
         round(ctx,-17,y+1,34*clamp(enemy.hp/enemy.maxHp,0,1),2,1,'#f1d08a');
       }
-      ctx.restore();
+      ctx.restore();ctx.restore();
     }
 
     _mower(ctx,mower,time) {
-      if(mower.used&&!mower.active)return;
+      if(mower.enabled===false || mower.used&&!mower.active)return;
       const g=this.geometry,p=this._world(mower.active ? mower.x : -.37,mower.row+.72);
       const s=Math.min(g.cellWidth/72,g.cellHeight/80);
       ctx.save();ctx.translate(p.x,p.y);ctx.scale(s,s);
@@ -360,6 +408,13 @@
       round(ctx,-16,-9,31,11,4,'#c97c52','#8f573b',1.5);
       round(ctx,-7,-17,15,9,3,'#e1a667','#9d7045',1.5);
       line(ctx,-2,-15,4,-15,'#f8d5a0',1.7);
+      const info=this._form('mower'),image=info&&this.images.get(info.image);
+      if(image?.complete && image.naturalWidth) {
+        const frame=info.frame || [0,0,image.naturalWidth,image.naturalHeight];
+        const ratio=frame[2]/frame[3],height=Math.min(47,44/ratio),width=height*ratio;
+        ctx.save();ctx.shadowColor='#fff5dc';ctx.shadowBlur=2;
+        ctx.drawImage(image,...frame,-width/2,-10-height,width,height);ctx.restore();
+      }
       if(mower.active)for(let i=0;i<3;i++)line(ctx,-24-i*4,-7+i*5,-32-i*4,-7+i*5,'#f4e0a4',2);
       ctx.restore();
     }
@@ -398,7 +453,18 @@
       const progress=clamp(1-life/max,0,1),scale=Math.min(g.cellWidth/70,g.cellHeight/76);
       const type=effect.type || '';
       ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);ctx.globalAlpha=1-progress;
-      if(/bomb|explosion|explode|blast/.test(type)) {
+      if(type==='armorBreak') {
+        ctx.save();ctx.translate(12+progress*31,-47-Math.sin(progress*Math.PI)*21+progress*43);
+        ctx.rotate(.2+progress*2.5);visitorArmor(ctx,effect.enemyType || 'helmet');ctx.restore();
+        for(let i=0;i<3;i++)sparkle(ctx,-7+i*10,-40-progress*20,4*(1-progress),'#f9e9ba');
+      } else if(type==='headless') {
+        ctx.save();ctx.translate(-12-progress*29,-35-Math.sin(progress*Math.PI)*18+progress*39);
+        ctx.rotate(-progress*2.7);visitorHead(ctx);ctx.restore();
+        if(progress>.45)ellipse(ctx,-12-progress*29,13,7+progress*7,2,'#e8ddbc8c');
+      } else if(type==='vault' || type==='land') {
+        ellipse(ctx,0,14,9+progress*22,3+progress*6,null,'#eee8be',2);
+        for(let i=0;i<4;i++)ellipse(ctx,(i-1.5)*(7+progress*8),12-progress*9,3*(1-progress)+1,2,'#dbd1a0');
+      } else if(/bomb|explosion|explode|blast/.test(type)) {
         const r=20+progress*95;
         ellipse(ctx,0,0,r,r*.75,'#f7c35f48','#ffe9a8',4*(1-progress)+1);
         for(let i=0;i<12;i++) {
@@ -432,8 +498,17 @@
       const g=this.geometry;
       ctx.setTransform(this.dpr,0,0,this.dpr,0,0);ctx.clearRect(0,0,this.width,this.height);
       this._drawTerrain(ctx);
+      const activeRows = state.activeRows || state.level?.activeRows || [0,1,2,3,4];
+      for (let row=0;row<5;row++) if (!activeRows.includes(row)) {
+        ctx.fillStyle='#c4b48ce8';
+        ctx.fillRect(g.left,g.top+row*g.cellHeight,g.boardWidth,g.cellHeight);
+        for(let col=0;col<9;col++) {
+          const p=this._world(col+.5,row+.5);
+          ellipse(ctx,p.x,p.y,Math.min(12,g.cellWidth*.2),2,'#a99a753e');
+        }
+      }
       const hover=options.hover;
-      if(hover && hover.row>=0 && hover.row<5 && hover.col>=0 && hover.col<9 && (options.selected || options.shovel)) {
+      if(hover && hover.row>=0 && hover.row<5 && activeRows.includes(hover.row) && hover.col>=0 && hover.col<9 && (options.selected || options.shovel)) {
         const x=g.left+hover.col*g.cellWidth,y=g.top+hover.row*g.cellHeight;
         const occupied=(state.plants || []).some(p=>p.row===hover.row && p.col===hover.col);
         const color=options.shovel?'#efb489':occupied?'#e7aa86':'#fff2b5';
@@ -443,6 +518,7 @@
         if(options.selected&&!occupied) this._plant(ctx,{...hover,type:options.selected,hp:1,maxHp:1},time,true);
       }
       for(let row=0;row<5;row++) {
+        if (!activeRows.includes(row)) continue;
         const mower=(state.mowers || []).find(m=>m.row===row);if(mower)this._mower(ctx,mower,time);
         const actors=[];
         for(const plant of state.plants || [])if(plant.row===row)actors.push({kind:'plant',value:plant,x:plant.col+.5});
