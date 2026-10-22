@@ -57,7 +57,7 @@
     lightning: ['雷电', '飞刃连锁附近敌人；后续仅出现雷元素进化。', '雷', '#b69af5', 'lightning', 1],
     earth: ['大地', '飞刃侵蚀护甲；后续仅出现土元素进化。', '土', '#cba16d', 'earth', 1],
     grass: ['草木', '每次命中缠绕定身 0.2 秒，并施加持续毒伤。', '草', '#81c875', 'grass', 1],
-    golden: ['黄金战士', '吞噬任意普通伙伴积累等级，每阶攻击变为原来的三倍。', '金', '#ffd76a', 'golden', 0],
+    golden: ['黄金战士', '吞噬任意普通伙伴积累等级，每阶攻击变为原来的两倍。', '金', '#ffd76a', 'golden', 0],
     rime: ['凛风', '飞刃转速提高，冰霜减速加强至 30%。', '凛', '#b1effa', 'ice', 2],
     inferno: ['烈狱', '飞刃持续灼烧目标，并强化火焰溅射。', '狱', '#ff9063', 'fire', 2],
     surge: ['雷涌', '飞刃转速提高，连锁能穿透部分护甲。', '涌', '#aaadff', 'lightning', 2],
@@ -221,7 +221,7 @@
   const statsForUnit = unit => {
     if (!unit?.isGolden) return statsForLevel(unit?.level, unit?.routes, unit?.route);
     const { rank } = goldenProgress(unit), stats = statsForLevel(14), talents = goldenRanks(unit);
-    const baseDamage = safe(30 * Math.pow(3, Math.min(40, rank - 1)));
+    const baseDamage = safe(30 * Math.pow(2, Math.min(53, rank - 1)));
     const baseBlades = Math.min(6, 4 + rank), bladeRank = talents.golden_blades;
     const refinement = Math.max(0, bladeRank - (12 - baseBlades)), domain = talents.golden_domain;
     return { ...stats, damage: safe(baseDamage * (1 + .08 * refinement)), baseDamage, talentDamageBonus: .08 * refinement,
