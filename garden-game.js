@@ -65,6 +65,7 @@
     reset(levelIndex = 0) {
       this.levelIndex = Number.isInteger(levelIndex) ? clamp(levelIndex, 0, LEVELS.length - 1) : 0;
       this.level = LEVELS[this.levelIndex];
+      this.deck = [...this.level.cards];
       this.status = 'ready'; this.sun = this.level.startSun; this.kills = 0;
       this.elapsed = 0; this.wave = 0; this.totalWaves = this.level.waves.length;
       this.spawnElapsed = 0; this.tutorialReady = !this.level.tutorialGate;
@@ -91,7 +92,7 @@
 
     getState() {
       return {
-        status: this.status, levelIndex: this.levelIndex, level: this.level,
+        status: this.status, levelIndex: this.levelIndex, level: this.level, deck: [...this.deck],
         activeRows: this.level.activeRows, tutorialReady: this.tutorialReady,
         tutorialHint: this.tutorialReady ? '' : this.level.tutorialGate.hint,
         spawnElapsed: this.spawnElapsed,
@@ -103,6 +104,15 @@
         plants: this.plants, enemies: this.enemies, projectiles: this.projectiles,
         suns: this.suns, mowers: this.mowers, effects: this.effects, cooldowns: this.cooldowns,
       };
+    }
+
+    setDeck(ids) {
+      if (this.status !== 'ready' || !Array.isArray(ids) || !ids.length || new Set(ids).size !== ids.length) return false;
+      for (const id of ids) if (!this.level.cards.includes(id)) return false;
+      if (this.level.tutorialGate && !ids.includes(this.level.tutorialGate.type)) return false;
+      if (this.level.cards.includes('sun') && !ids.includes('sun')) return false;
+      if (!ids.some(id => ['shooter', 'ice', 'burst'].includes(id))) return false;
+      this.deck = [...ids]; this._notify(); return true;
     }
 
     start() {
@@ -120,9 +130,9 @@
     plant(type, row, col) {
       const config = PLANT_BY_ID[type];
       if (!this.tutorialReady && type !== this.level.tutorialGate.type) return false;
-      if (this.status !== 'running' || !config || !this.level.cards.includes(type) || !this._validCell(row, col) || this.cooldowns[type] > 0 || this.sun < config.cost || this._plantAt(row, col)) return false;
+      if (this.status !== 'running' || !config || !this.deck.includes(type) || !this._validCell(row, col) || this.cooldowns[type] > 0 || this.sun < config.cost || this._plantAt(row, col)) return false;
       const plant = {
-        id: this._id('plant'), type, row, col, hp: config.hp, maxHp: config.hp, attackPulse: 0,
+        id: this._id('plant'), type, row, col, hp: config.hp, maxHp: config.hp, attackPulse: 0, hurtPulse: 0,
         attackTimer: 200, burstTimer: 0, pendingShot: false, sunTimer: 7000, fuse: config.fuse || 0,
       };
       this.sun -= config.cost; this.cooldowns[type] = config.cooldown; this.plants.push(plant);
@@ -212,6 +222,7 @@
       if (plant.hp <= 0) return;
       const config = PLANT_BY_ID[plant.type];
       plant.attackPulse = Math.max(0, plant.attackPulse - dt);
+      plant.hurtPulse = Math.max(0, plant.hurtPulse - dt);
       if (plant.type === 'sun') {
         plant.sunTimer -= dt;
         if (plant.sunTimer <= 1e-7) {
@@ -291,7 +302,10 @@
         this._effect('vault', enemy.row, enemy.x, 450); this._emit('vault', { enemy });
       } else if (target) {
         enemy.x = Math.max(enemy.x, target.col + .86);
-        if (target.type !== 'bomb') target.hp = Math.max(0, target.hp - config.bite * slow * dt / 1000);
+        if (target.type !== 'bomb') {
+          target.hp = Math.max(0, target.hp - config.bite * slow * dt / 1000);
+          target.hurtPulse = 180;
+        }
       } else enemy.x = nextX;
       const mower = this.mowers[enemy.row];
       if (!enemy.vaulting && mower.enabled && !mower.used && enemy.x <= .04) {
@@ -322,6 +336,11 @@
         this._effect('armorBreak', enemy.row, enemy.x, 650, { enemyType: enemy.type });
         this._emit('armorBreak', { enemy });
       }
+      if (enemy.hp > 0 && enemy.bodyHp <= 180 && !enemy.armLost) {
+        enemy.armLost = true;
+        this._effect('armLost', enemy.row, enemy.x, 700, { enemyType: enemy.type });
+        this._emit('armLost', { enemy });
+      }
       if (enemy.hp > 0 && enemy.bodyHp < 90 && !enemy.headless) {
         enemy.headless = true; enemy.eating = false; enemy.dyingTime = 3000;
         enemy.vaulting = false; enemy.hasPole = false;
@@ -330,7 +349,12 @@
       }
       this._effect('hit', enemy.row, enemy.x, 220, { value: amount, source });
       this._emit('hit', { enemy, damage: amount, source, killed: enemy.hp <= 0 });
-      if (enemy.hp <= 0) this.kills++;
+      if (enemy.hp <= 0) {
+        this.kills++;
+        this._effect('defeat', enemy.row, enemy.x, 700, { enemyType: enemy.type, source,
+          armLost: enemy.armLost, headless: enemy.headless, hasPole: enemy.hasPole, armorHp: enemy.armorHp });
+        this._emit('defeat', { enemy, source });
+      }
     }
 
     _spawnEnemy(type, row) {
@@ -341,7 +365,7 @@
       const enemy = { id: this._id('enemy'), type, row, x: COLS + .35, hp: config.hp, maxHp: config.hp,
         armorHp: config.armor, maxArmorHp: config.armor, bodyHp: config.hp - config.armor,
         speed, walkSpeed, hasPole: Boolean(config.vault), vaulting: false, vaultProgress: 0,
-        headless: false, dyingTime: 0, slowTime: 0, hitPulse: 0, eating: false };
+        armLost: false, headless: false, dyingTime: 0, slowTime: 0, hitPulse: 0, eating: false };
       this.enemies.push(enemy); return enemy;
     }
 
