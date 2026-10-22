@@ -210,13 +210,14 @@
   const enemyStatsForWave = (kindOrType, wave, boss = false) => {
     const type = typeof kindOrType === 'object' ? kindOrType : FALLBACK_TYPES.find(value => value.kind === kindOrType) || FALLBACK_TYPES[0];
     const age = Math.max(0, levelNumber(wave) - 1), late = Math.max(0, age - 4);
-    // Keep waves 1–10 intact, then grow linearly alongside defender damage.
-    // Stacking quadratic HP and fast-rising armor created a wall around wave 20.
+    // Preserve the first ten waves, then ease both the midgame slope and the
+    // endless slope. HP, armor and speed must not all accelerate around wave 20.
     const early = Math.min(5, late), endless = Math.max(0, late - 5);
-    const scaling = safe(1 + age * 0.13 + early * early * 0.16 + early * 0.4 + endless * 0.92);
+    const middle = Math.min(10, endless), beyondTwenty = Math.max(0, endless - 10);
+    const scaling = safe(1 + age * 0.13 + early * early * 0.16 + early * 0.4 + middle * 0.62 + beyondTwenty * 0.42);
     return { maxHp: Math.max(1, Math.round(safe(type.hp * scaling * (boss ? 4.2 : 1)))),
-      speed: type.speed * 0.7 * Math.min(2.3, 1 + age * 0.032),
-      armor: Math.min(0.2, early * 0.018 + endless * 0.003 + (boss && late ? 0.06 : 0)), reward: 0, damage: boss ? 3 : 1 };
+      speed: type.speed * 0.7 * Math.min(1.8, 1 + Math.min(9, age) * 0.032 + middle * 0.022 + beyondTwenty * 0.012),
+      armor: Math.min(0.18, early * 0.018 + middle * 0.0015 + beyondTwenty * 0.0005 + (boss && late ? 0.06 : 0)), reward: 0, damage: boss ? 3 : 1 };
   };
   const bladesFor = (unit, time) => {
     const stats = statsForUnit(unit), phase = Number.isFinite(unit.phase) ? unit.phase : (unit.id || 0) * 2.399963229728653;
@@ -252,7 +253,7 @@
       this.maxLevel = 0; this.elapsed = 0; this.accumulator = 0; this.nextWaveIn = 0;
       this.units = []; this.enemies = []; this.supplies = []; this.bullets = []; this.effects = [];
       this.spawnQueue = []; this.spawnTimer = 0; this.waveActive = false; this.completed = false;
-      this.goldenAppeared = false; this.sequence = 0; this.changeTimer = 0; this.supplySequence = 0; this.pendingEvolution = null;
+      this.goldenAppeared = false; this.goldenRevealRemaining = 0; this.sequence = 0; this.changeTimer = 0; this.supplySequence = 0; this.pendingEvolution = null;
       this._makeUnit(15); this._spawnSupply(); this._notify();
       return true;
     }
@@ -268,7 +269,7 @@
     }
 
     getState() {
-      return { status: this.status, isPaused: this.isPaused, score: this.score, wave: this.wave, gold: this.gold,
+      return { status: this.status, isPaused: this.isPaused, isCelebrating: this.goldenRevealRemaining > 0, score: this.score, wave: this.wave, gold: this.gold,
         lives: this.lives, maxLives: this.maxLives, kills: this.kills, unitCount: this.units.length,
         maxLevel: this.maxLevel, reserve: this.reserve, hatched: this.hatched, supplyCount: this.supplies.length, nextWaveIn: this.nextWaveIn,
         remaining: this.enemies.length + this.spawnQueue.length, elapsed: this.elapsed,
@@ -325,7 +326,7 @@
       }
     }
 
-    _canAct() { return (this.status === 'ready' || this.status === 'playing') && !this.isPaused && !this.pendingEvolution; }
+    _canAct() { return (this.status === 'ready' || this.status === 'playing') && !this.isPaused && !this.pendingEvolution && !this.goldenRevealRemaining; }
     _validSlot(slot) { return Number.isInteger(slot) && slot >= 0 && slot < SLOTS.length; }
     _unitAt(slot) { return this.units.find(unit => unit.slot === slot); }
     _notify() { this.onChange(this.getState()); }
@@ -344,9 +345,9 @@
       return choices;
     }
     _awakenGolden(unit, material) {
-      this.goldenAppeared = true; unit.isGolden = true; unit.goldenRank = 1; unit.goldenFeed = 0;
+      this.goldenAppeared = true; this.goldenRevealRemaining = 2.8; unit.isGolden = true; unit.goldenRank = 1; unit.goldenFeed = 0;
       unit.cooldown = 0; unit.bladeHits = {}; unit.fieldCooldown = 0; unit.pulse = 1;
-      this._effect('golden', unit, { rank: 1, duration: 1.4 });
+      this._effect('golden', unit, { rank: 1, duration: 2.8 });
       this._event('golden', { unitId: unit.id, slot: unit.slot, level: unit.level, rank: 1, materialId: material.id });
     }
     _feedGolden(unit, material) {
@@ -516,6 +517,19 @@
     }
 
     _tick(dt) {
+      if (this.goldenRevealRemaining > 0) {
+        // The full-field reveal owns this time: no damage, leaks, egg movement,
+        // status expiry or attack rotation may progress behind the portrait.
+        const revealStep = Math.min(dt, this.goldenRevealRemaining);
+        this.goldenRevealRemaining = Math.max(0, this.goldenRevealRemaining - dt);
+        if (this.goldenRevealRemaining < 1e-8) this.goldenRevealRemaining = 0;
+        for (const effect of this.effects) if (effect.type === 'golden') effect.age = Math.min(effect.duration, effect.age + revealStep);
+        if (!this.goldenRevealRemaining) {
+          this.effects = this.effects.filter(effect => effect.type !== 'golden');
+          this._notify();
+        }
+        return;
+      }
       this.elapsed += dt; this.changeTimer += dt;
       for (const effect of this.effects) effect.age += dt;
       this.effects = this.effects.filter(effect => effect.age < effect.duration);
@@ -525,7 +539,7 @@
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 1e-8) {
           this._spawnEnemy(this.spawnQueue.shift());
-          this.spawnTimer += Math.max(0.28, 0.7 - (this.wave - 1) * 0.025);
+          this.spawnTimer += Math.max(0.34, 0.7 - Math.min(9, this.wave - 1) * 0.025 - Math.max(0, this.wave - 10) * 0.012);
         }
       }
       for (const enemy of this.enemies.slice()) {
@@ -589,7 +603,7 @@
       }
       const details = { reaction: reaction.id, elements: [...reaction.elements], name: reaction.name, color: reaction.color,
         multiplier: reaction.multiplier, damage: dealt, enemyId: enemy.id, x: enemy.x, y: enemy.y };
-      this._effect('reaction', enemy, { ...details, radius: reaction.splash || 40, duration: 0.65 }); this._event('reaction', details);
+      this._effect('reaction', enemy, { ...details, radius: reaction.splash || 40, duration: 1.15 }); this._event('reaction', details);
     }
 
     _damage(enemy, amount, slow, stats = {}, unit, allowReaction = true) {

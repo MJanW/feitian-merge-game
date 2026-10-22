@@ -55,7 +55,7 @@
       return window.DefenseGame.evolutionPath(unit).map(({ level, route }) => routeInfo(route, level)?.name || route).join(' → ') || '等待 Lv.4 元素觉醒';
     }
     function blocked() { return !active || !focused || document.hidden || manualPaused || Boolean(document.querySelector('dialog[open]')); }
-    function canAct() { return Boolean(game && state && state.status !== 'lost' && !state.isPaused && !state.pendingEvolution && !blocked()); }
+    function canAct() { return Boolean(game && state && state.status !== 'lost' && !state.isPaused && !state.pendingEvolution && !state.isCelebrating && !blocked()); }
     function overTrash(point) {
       const rect = $('defense-trash')?.getBoundingClientRect();
       return Boolean(rect && rect.width > 0 && rect.height > 0 && Number.isFinite(point?.clientX) && Number.isFinite(point?.clientY) &&
@@ -134,6 +134,7 @@
     function statusText(next) {
       if (next.status === 'lost') return '防线失守了，换个阵容再试一次';
       if (blocked() || next.isPaused) return '已暂停，点击「继续」守卫';
+      if (next.isCelebrating) return '隐藏进化！黄金战士降临 · 登场期间战场暂停';
       if (next.pendingEvolution) return '特殊进化！战场已冻结，请选择一条路线';
       if (notice && Date.now() < noticeUntil) return notice;
       if (next.status === 'ready') return '点击「出发」，布置你的第一道防线';
@@ -231,6 +232,7 @@
       if (event.type === 'evolveFail') messages.evolveFail = `合成失败，拖入的守卫已消耗；原守卫保留 Lv.${event.level + 1} 与路线`;
       if (event.type === 'route') messages.route = `${routeInfo(event.route, event.level)?.name || '特殊能力'}已觉醒！所选路线已生效`;
       if (event.type === 'golden') {
+        clearInput();
         selectedSlot = event.slot;
         messages.golden = '隐藏进化！黄金战士降临，拖入任意普通守卫为它升阶';
       }

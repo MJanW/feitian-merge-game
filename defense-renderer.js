@@ -618,21 +618,41 @@
     ctx.restore();
   }
 
-  function reactionEffect(ctx, e, motion, fade) {
-    const key = Array.isArray(e.elements) ? [...e.elements].sort().join('_') : e.reaction;
-    const color = e.color || '#fff0bd', r = clamp(number(e.radius, 40), 10, 74) * (.3 + motion * .5);
+  const REACTION_TINT = Object.freeze({ fire: '#ff792b', ice: '#72e7ff', lightning: '#e6afff', earth: '#e6b063', grass: '#a4f46f' });
+  function reactionPair(e) {
+    const elements = Array.isArray(e.elements) ? [...e.elements].sort() : String(e.reaction || '').split('_').sort();
+    return { key: elements.join('_'), colors: elements.map(element => REACTION_TINT[element] || '#fff0bd') };
+  }
+  function effectTime(e) { return clamp(number(e.age) / Math.max(.001, number(e.duration, .55)), 0, 1); }
+  function reactionFade(t) { return t < .66 ? 1 : (1 - t) / .34; }
+  function reactionEffect(ctx, e, motion) {
+    const { key, colors } = reactionPair(e), color = e.color || '#fff0bd';
+    const r = clamp(number(e.radius, 40), 48, 70) * (.72 + motion * .28);
     ctx.save(); ctx.translate(e.x, e.y);
+    // Two saturated elements share one impact ring. The dark rim keeps the
+    // burst legible on both the gray road and the light grass at phone scale.
+    ellipse(ctx, 0, 0, r, r, '#203b444d', '#263c4ddd', 5);
+    for (let half = 0; half < 2; half++) {
+      ctx.beginPath(); ctx.arc(0, 0, r, half * Math.PI + .12, (half + 1) * Math.PI - .12);
+      ctx.strokeStyle = colors[half] || color; ctx.lineWidth = 3.5; ctx.stroke();
+    }
+    ellipse(ctx, 0, 0, 12 + motion * 11, 12 + motion * 11, '#fff8d754');
+    for (let i = 0; i < 8; i++) {
+      const a = i * TAU / 8 + .24, reach = r * (.65 + motion * .35), x = Math.cos(a) * reach, y = Math.sin(a) * reach;
+      line(ctx, Math.cos(a) * (reach - 9), Math.sin(a) * (reach - 9), x, y, '#283642', 5);
+      line(ctx, Math.cos(a) * (reach - 9), Math.sin(a) * (reach - 9), x, y, colors[i % 2] || color, 2.8);
+    }
     if (key === 'fire_ice') {
       for (let i = 0; i < 4; i++) {
         const x = (i - 1.5) * r * .4;
         ctx.beginPath(); ctx.moveTo(x, 10); ctx.bezierCurveTo(x + 8, -3, x - 8, -12, x + 3, -r);
-        ctx.strokeStyle = i % 2 ? '#ffcf94' : '#e4fdff'; ctx.lineWidth = 2.5; ctx.stroke();
+        ctx.strokeStyle = i % 2 ? '#ffb05a' : '#dbfbff'; ctx.lineWidth = 4; ctx.stroke();
       }
     } else if (key === 'fire_lightning') {
-      ellipse(ctx, 0, 0, r, r, '#ffd16f20', '#ffc16c', 2.5);
-      polygon(ctx, Array.from({ length: 12 }, (_, i) => { const a = i * TAU / 12, reach = r * (i % 2 ? .42 : 1.2); return [Math.cos(a) * reach, Math.sin(a) * reach]; }), '#fff0a950', '#fff5ca', 1.5);
+      ellipse(ctx, 0, 0, r, r, '#ff943b85', '#fff3b0', 3.5);
+      polygon(ctx, Array.from({ length: 12 }, (_, i) => { const a = i * TAU / 12, reach = r * (i % 2 ? .42 : 1.2); return [Math.cos(a) * reach, Math.sin(a) * reach]; }), '#fff0a999', '#fff5ca', 2);
     } else if (key === 'earth_fire') {
-      ellipse(ctx, 0, 6, r, r * .6, '#78482b50', '#ffb76b', 1.7);
+      ellipse(ctx, 0, 6, r, r * .6, '#7c3f27a0', '#ffb76b', 3);
       for (let i = 0; i < 4; i++) {
         const a = i * TAU / 4;
         line(ctx, 0, 4, Math.cos(a + .2) * r * .55, 4 + Math.sin(a + .2) * r * .4, '#ffe0a0', 2);
@@ -641,7 +661,7 @@
     } else if (key === 'fire_grass') {
       for (let i = 0; i < 5; i++) {
         const a = i * TAU / 5, x = Math.cos(a) * r * .8, y = Math.sin(a) * r * .8;
-        polygon(ctx, [[x - 3, y + 5], [x - 5, y - 2], [x + 2, y - 12], [x + 5, y + 3]], '#efb263b0', '#ffe8a2', 1);
+        polygon(ctx, [[x - 3, y + 5], [x - 5, y - 2], [x + 2, y - 12], [x + 5, y + 3]], '#ff8b3ce6', '#ffe8a2', 1.8);
         line(ctx, x, y + 3, x + 1, y - 6, '#e5f49d', 1);
       }
     } else if (key === 'ice_lightning') {
@@ -656,17 +676,17 @@
     } else if (key === 'grass_ice') {
       for (let i = 0; i < 4; i++) {
         const a = i * TAU / 4;
-        ctx.save(); ctx.rotate(a); polygon(ctx, [[0, 2], [-7, -r * .55], [0, -r], [7, -r * .55]], '#a9e7b775', '#e0fff3', 1.2); ctx.restore();
+        ctx.save(); ctx.rotate(a); polygon(ctx, [[0, 2], [-7, -r * .55], [0, -r], [7, -r * .55]], '#81e3b8ba', '#e0fff3', 2); ctx.restore();
       }
       snowflake(ctx, 0, 0, 8, '#f5fffd');
     } else if (key === 'earth_lightning') {
       for (let i = 0; i < 3; i++) {
         const a = i * TAU / 3, x = Math.cos(a) * r, y = Math.sin(a) * r;
-        polygon(ctx, [[x - 4, y - 6], [x + 6, y - 3], [x + 4, y + 5], [x - 6, y + 3]], '#b6a7c3', '#ffe8c2', 1);
+        polygon(ctx, [[x - 4, y - 6], [x + 6, y - 3], [x + 4, y + 5], [x - 6, y + 3]], '#ae82cb', '#ffe8c2', 1.6);
         line(ctx, 0, 0, x * .5 + 4, y * .5 - 3, '#e9d8ff', 2); line(ctx, x * .5 + 4, y * .5 - 3, x, y, '#e9d8ff', 2);
       }
     } else if (key === 'grass_lightning') {
-      ellipse(ctx, 0, 0, r, r * .65, null, '#d6f599', 2);
+      ellipse(ctx, 0, 0, r, r * .65, null, '#d6f599', 3.5);
       for (let i = 0; i < 4; i++) {
         const a = i * TAU / 4, x = Math.cos(a) * r, y = Math.sin(a) * r * .65;
         polygon(ctx, [[x, y - 7], [x - 4, y + 1], [x, y], [x - 2, y + 7], [x + 5, y - 2]], '#fff3ac', '#a4cb65', .8);
@@ -680,19 +700,101 @@
       }
     } else ellipse(ctx, 0, 0, r, r, null, color, 2);
     ctx.restore();
-    const label = `${e.name || '元素反应'}${number(e.multiplier) > 1 ? ` ×${e.multiplier}` : ''}`;
-    ctx.globalAlpha = Math.max(ctx.globalAlpha, fade * .8);
-    effectLabel(ctx, label, e.x, e.y - 28 - motion * 14, '#fff8db');
+  }
+
+  function reactionBadges(ctx, reactions, options) {
+    const occupied = [], seen = new Set();
+    for (const e of [...reactions].reverse()) {
+      const t = effectTime(e), identity = e.enemyId ?? `${e.x},${e.y}`;
+      if (t >= 1 || !Number.isFinite(e.x) || !Number.isFinite(e.y) || seen.has(identity)) continue;
+      seen.add(identity);
+      if (occupied.length >= 6) break;
+      const label = `${e.name || '元素反应'}${number(e.multiplier) > 1 ? ` ×${e.multiplier}` : ''}`;
+      const width = clamp(Array.from(label).length * 9 + 34, 90, 152), height = 25;
+      const x = clamp(e.x + 22, width / 2 + 7, 393 - width / 2);
+      const idealY = clamp(e.y - 48 - (options.reducedMotion ? 2 : t * 8), 18, 630);
+      let y = idealY;
+      for (const offset of [0, -29, 29, -58, 58, -87, 87]) {
+        const candidate = clamp(idealY + offset, 18, 630);
+        if (occupied.every(box => Math.abs(x - box.x) >= (width + box.width) / 2 + 4 || Math.abs(candidate - box.y) >= height + 3)) { y = candidate; break; }
+      }
+      if (occupied.some(box => Math.abs(x - box.x) < (width + box.width) / 2 + 4 && Math.abs(y - box.y) < height + 3)) continue;
+      occupied.push({ x, y, width });
+      const { colors } = reactionPair(e);
+      ctx.save(); ctx.globalAlpha *= reactionFade(t);
+      round(ctx, x - width / 2, y - height / 2 + 2, width, height, 7, '#18302bc9');
+      round(ctx, x - width / 2, y - height / 2, width, height, 7, '#243c34', '#fff2c7', 1.3);
+      ellipse(ctx, x - width / 2 + 11, y - 3, 3.5, 3.5, colors[0] || '#fff0bd');
+      ellipse(ctx, x - width / 2 + 15, y + 3, 3.5, 3.5, colors[1] || '#fff0bd');
+      text(ctx, label, x + 8, y, 12, '#fff9e0', '800', 'center');
+      ctx.restore();
+    }
+  }
+
+  function goldenReveal(ctx, e, options) {
+    const t = effectTime(e);
+    if (t >= 1 || !Number.isFinite(e.x) || !Number.isFinite(e.y)) return;
+    const fade = Math.min(1, t / .1, (1 - t) / .18);
+    const rise = options.reducedMotion ? 1 : 1 - Math.pow(1 - clamp(t / .28, 0, 1), 3);
+    const phase = options.reducedMotion ? 0 : t * .22;
+    ctx.save(); ctx.globalAlpha *= fade;
+    // The engine briefly holds the battlefield during this one-time entrance.
+    // Use one gentle exposure envelope, never alternating bright flashes.
+    ctx.fillStyle = '#142a24df'; ctx.fillRect(0, 0, 400, 650);
+    ctx.fillStyle = '#7c5a273d'; ctx.fillRect(0, 98, 400, 447);
+    ctx.save(); ctx.translate(200, 295);
+    for (let i = 0; i < 12; i++) {
+      const a = i * TAU / 12 + phase, near = 57, far = 350;
+      polygon(ctx, [[Math.cos(a - .035) * near, Math.sin(a - .035) * near], [Math.cos(a - .075) * far, Math.sin(a - .075) * far], [Math.cos(a + .075) * far, Math.sin(a + .075) * far], [Math.cos(a + .035) * near, Math.sin(a + .035) * near]], i % 2 ? '#ffe1a118' : '#e6b35c24');
+    }
+    const scale = .8 + rise * .2;
+    ctx.scale(scale, scale);
+    for (let i = 3; i >= 0; i--) ellipse(ctx, 0, -2, 113 + i * 15, 113 + i * 15, i % 2 ? '#efbb4520' : '#ffd97716');
+    ellipse(ctx, 0, -2, 112, 112, '#84662c70', '#ffe9a6', 2.5);
+    ellipse(ctx, 0, -2, 103, 103, null, '#d4a74f', 1);
+    for (let i = 0; i < 6; i++) {
+      const angle = i * TAU / 6 + phase;
+      ctx.save(); ctx.rotate(angle); ctx.translate(0, -125);
+      // Six ceremonial swords frame the cutout without covering its face.
+      polygon(ctx, [[0, -27], [-6, -8], [-4, 16], [4, 16], [6, -8]], '#fff8d2', '#b88736', 1.5);
+      polygon(ctx, [[0, -27], [0, 16], [4, 16], [6, -8]], '#ebbf64');
+      line(ctx, -10, 16, 10, 16, '#e6ae43', 4);
+      line(ctx, 0, 18, 0, 29, '#ffe6a2', 5);
+      polygon(ctx, [[0, 29], [4, 33], [0, 37], [-4, 33]], '#ffedb3', '#b88736', 1);
+      ctx.restore();
+    }
+    const image = options.goldenImage;
+    if (image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
+      const source = crop(image, forms?.goldenPortrait?.frame), fit = Math.min(184 / source[2], 222 / source[3]);
+      const width = source[2] * fit, height = source[3] * fit;
+      ctx.drawImage(image, ...source, -width / 2, 102 - height, width, height);
+    } else {
+      polygon(ctx, [[0, -72], [-46, -22], [-32, 78], [32, 78], [46, -22]], '#e2b857', '#fff1b8', 3);
+      ellipse(ctx, 0, -82, 27, 31, '#ffe2ac', '#b68132', 2);
+    }
+    for (let i = 0; i < 8; i++) {
+      const a = i * TAU / 8 + .3 + phase, x = Math.cos(a) * 153, y = Math.sin(a) * 153;
+      polygon(ctx, [[x, y - 6], [x + 2, y - 1], [x + 6, y], [x + 2, y + 1], [x, y + 6], [x - 2, y + 1], [x - 6, y], [x - 2, y - 1]], '#fff4c8');
+    }
+    ctx.restore();
+    round(ctx, 143, 116, 114, 27, 13, '#473d25', '#dcb46c', 1);
+    text(ctx, '隐 藏 进 化', 200, 130, 12, '#fff0be', '800', 'center');
+    effectLabel(ctx, '黄金战士', 200, 471, '#ffe3a0', 38);
+    line(ctx, 89, 507, 141, 507, '#c39c59', 1); line(ctx, 259, 507, 311, 507, '#c39c59', 1);
+    text(ctx, '传 说 降 临', 200, 507, 13, '#fff2ca', '800', 'center');
+    text(ctx, '吞噬棋子 · 无限成长', 200, 543, 12, '#e7d5af', '600', 'center');
+    text(ctx, '战场暂歇 · 准备迎战', 200, 576, 10, '#d5c49e', '500', 'center');
+    ctx.restore();
   }
 
   function effect(ctx, e, options) {
-    const t = clamp(number(e.age) / Math.max(.001, number(e.duration, .55)), 0, 1);
+    const t = effectTime(e);
     if (t >= 1 || !Number.isFinite(e.x) || !Number.isFinite(e.y)) return;
     const fade = 1 - t, motion = options.reducedMotion ? .35 : t;
-    ctx.save(); ctx.globalAlpha *= fade;
+    ctx.save(); ctx.globalAlpha *= e.type === 'reaction' ? reactionFade(t) : fade;
     const color = e.color || e.tint || (e.type === 'leak' ? ORANGE : '#d7ad4a');
     if (e.type === 'reaction') {
-      reactionEffect(ctx, e, motion, fade);
+      reactionEffect(ctx, e, motion);
     } else if (e.type === 'golden' || e.type === 'feed') {
       const awakening = e.type === 'golden', evolved = awakening || number(e.rank) > number(e.previousRank, e.rank);
       const r = 15 + motion * (awakening ? 43 : evolved ? 30 : 15);
@@ -921,6 +1023,12 @@
       // Bottle bodies overlap in a dense queue. Draw all health labels in a
       // final pass so the following bottle (or its flash) cannot cover them.
       for (const e of game.enemies || []) enemyVitals(ctx, e);
+      reactionBadges(ctx, reactions, options);
+      let awakening;
+      for (let i = allEffects.length - 1; i >= 0; i--) {
+        if (allEffects[i].type === 'golden' && effectTime(allEffects[i]) < 1) { awakening = allEffects[i]; break; }
+      }
+      if (awakening) goldenReveal(ctx, awakening, options);
     } finally { ctx.restore(); }
   }
 
