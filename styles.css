@@ -39,7 +39,7 @@ kbd { font: inherit; }
 .icon-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
 .icon { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
-/* A single paper-and-ink identity spans all four games. */
+/* A single paper-and-ink identity spans all five games. */
 .mode-bar {
   display: flex; align-items: center; gap: 40px;
   height: calc(var(--modebar-height) + var(--safe-top));
@@ -51,7 +51,7 @@ kbd { font: inherit; }
 .site-signature > div { display: flex; flex-direction: column; gap: 4px; }
 .site-signature strong { font-family: var(--font-display); font-size: 19px; font-weight: 500; line-height: 1; }
 .site-signature > div > span { color: var(--muted); font-family: var(--font-mono); font-size: 8px; letter-spacing: .09em; }
-.mode-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; width: min(100%, 610px); height: 100%; margin-left: auto; }
+.mode-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; width: min(100%, 720px); height: 100%; margin-left: auto; }
 .mode-tabs button { display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; min-height: 44px; padding: 0 4px; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); white-space: nowrap; }
 .mode-number { font-family: var(--font-mono); font-size: 10px; }
 .mode-label { font-size: 14px; font-weight: 600; }
@@ -378,3 +378,7 @@ body:has(dialog[open]) { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Keep five playable chapters readable on narrow phones. */
+@media (max-width: 779px) { .mode-bar { gap: 8px; padding-inline: 8px; } .site-signature { display: none; } .mode-tabs { max-width: none; gap: 4px; } .mode-tabs button { flex-direction: column; gap: 4px; padding-inline: 0; } .mode-label { font-size: 12px; } }
+@media (max-width: 359px) { .mode-label { font-size: 11px; } }
