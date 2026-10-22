@@ -17,6 +17,7 @@
   const rpcNames = {
     merge: { list: 'feitian_leaderboard', submit: 'feitian_submit_score', profile: 'feitian_update_profile' },
     jump: { list: 'feitian_jump_leaderboard', submit: 'feitian_jump_submit_score', profile: 'feitian_jump_update_profile' },
+    defense: { list: 'feitian_defense_leaderboard', submit: 'feitian_defense_submit_score', profile: 'feitian_defense_update_profile' },
   };
   const transports = [];
   const newTransport = () => ({ client: null, sessionPromise: null, anonymousAttempted: false, hadSession: false, playerId: null, sessionOperation: null });

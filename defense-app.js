@@ -6,8 +6,10 @@
     const canvas = $('defense-canvas');
     if (!canvas) return null;
     const BEST_KEY = 'feitian-defense-best-v5';
+    const BEST_WAVE_KEY = 'feitian-defense-best-wave-v1';
     const HIT_RADIUS = 34;
-    let game = null, audio = null, state = null, context = null, goldenImage = null;
+    let game = null, audio = null, state = null, context = null, goldenImage = null, board = null;
+    let roundId = makeRoundId(), roundRecorded = false, bestWave = 0;
     let active = false, focused = true, manualPaused = false;
     let selectedSlot = null, hoverSlot = null, pointer = null;
     let frame = null, lastFrame = null, destroyed = false;
@@ -22,6 +24,19 @@
 
     function read(key, fallback) { try { return window.localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
     function write(key, value) { try { window.localStorage.setItem(key, String(value)); return true; } catch { return false; } }
+    function makeRoundId() { return window.crypto?.randomUUID?.() || Date.now().toString(36) + '-' + Math.random().toString(36).slice(2); }
+    function ensureBoard() {
+      if (board) return board;
+      try {
+        if (typeof window.DefenseLeaderboard === 'function') board = new window.DefenseLeaderboard({
+          canOpen: () => !destroyed && active && !state?.pendingEvolution &&
+            (!document.querySelector('dialog[open]') || $('defense-lb-dialog')?.open),
+          onOpen: () => { clearInput(); syncPause(); },
+          onClose: () => { if (!destroyed) syncPause(); },
+        });
+      } catch { /* Ranking is optional and must not interrupt the battlefield. */ }
+      return board;
+    }
     function listen(target, type, listener, options) { target?.addEventListener(type, listener, options); listeners.push([target, type, listener, options]); }
     function prop(id, key, value) { const element = $(id); if (element && element[key] !== value) element[key] = value; }
     function text(id, value) { prop(id, 'textContent', value); }
@@ -217,6 +232,7 @@
       }
       prop('defense-restart', 'disabled', Boolean(next.pendingEvolution));
       prop('defense-guide-open', 'disabled', Boolean(next.pendingEvolution));
+      prop('defense-leaderboard-button', 'disabled', Boolean(next.pendingEvolution));
       text('defense-pause', paused ? '继续' : '暂停');
       attr('defense-pause', 'aria-pressed', String(paused));
       prop('defense-pause', 'disabled', next.status !== 'playing');
@@ -225,15 +241,28 @@
       prop('defense-result', 'hidden', !ended);
       if (ended) {
         text('defense-result-title', '防线守到了第几波？');
-        text('defense-result-detail', `${next.score.toLocaleString()} 分 · 第 ${next.wave} 波 · 击退 ${next.kills} 个入侵者` + (savedWarning ? ' · 本机记录保存失败' : ` · 本机最高 ${best.toLocaleString()}`));
+        text('defense-result-detail', `到达第 ${next.wave} 波 · ${next.score.toLocaleString()} 分 · 击退 ${next.kills} 个入侵者` + (savedWarning ? ' · 本机记录保存失败' : ` · 本机最高第 ${bestWave} 波`));
       }
       renderEvolution(next);
       renderTrash();
       requestFrame();
     }
     function completed(next) {
+      if (Number.isSafeInteger(next.wave) && next.wave > bestWave && next.wave <= 1000000000) {
+        bestWave = next.wave;
+        savedWarning = !write(BEST_WAVE_KEY, bestWave) || savedWarning;
+      }
       clearInput(); stopFrame(); render(next); draw();
       if (active) $('defense-result-title')?.focus({ preventScroll: true });
+      if (roundRecorded || !Number.isSafeInteger(next.wave) || next.wave <= 0 || next.wave > 1000000000) return;
+      roundRecorded = true;
+      const finishedId = roundId, ranking = ensureBoard();
+      if (!ranking) { text('defense-submit-status', '波数已在本机记录；排行榜组件未加载，请刷新后重试。'); return; }
+      try {
+        Promise.resolve(ranking.record(next.wave, finishedId)).catch(() => {
+          if (!destroyed && roundId === finishedId) text('defense-submit-status', '波数上传未确认，请打开排行榜重试。');
+        });
+      } catch { text('defense-submit-status', '波数上传未确认，请打开排行榜重试。'); }
     }
     function showNotice(message) { notice = message; noticeUntil = Date.now() + 1900; if (game) { render(game.getState()); draw(); } }
     function onEvent(event) {
@@ -305,6 +334,9 @@
         if (typeof window.DefenseGame !== 'function') throw new Error('四周目文件未加载，请刷新后重试');
         const stored = Number(read(BEST_KEY, '0'));
         best = Number.isSafeInteger(stored) && stored >= 0 ? stored : 0;
+        const storedWave = Number(read(BEST_WAVE_KEY, '0'));
+        bestWave = Number.isSafeInteger(storedWave) && storedWave >= 0 && storedWave <= 1000000000 ? storedWave : 0;
+        ensureBoard();
         try { if (typeof window.DefenseAudio === 'function') audio = new window.DefenseAudio({ enabled: soundEnabled }); } catch { /* Audio failure must not block play. */ }
         callAudio('setEnabled', soundEnabled);
         game = new window.DefenseGame({ onChange: render, onEvent, onComplete: completed });
@@ -316,12 +348,14 @@
       }
     }
     function reset(ask = true) {
-      if (!active || !ensureGame() || state?.pendingEvolution) return;
+      if (!active || !ensureGame() || state?.pendingEvolution || document.querySelector('dialog[open]')) return;
       if (ask && state?.status === 'playing') {
         clearInput(); stopFrame(); game.pause(true); callAudio('pause');
-        if (!window.confirm('重新开始会清空本局进度，本机最高分会保留。确定吗？')) { syncPause(); return; }
+        if (!window.confirm('重新开始会清空本局进度，本机纪录和已结束对局的待上传波数会保留。确定吗？')) { syncPause(); return; }
       }
       clearInput(); stopFrame(); selectedSlot = null; focused = true; manualPaused = false; notice = ''; savedWarning = false;
+      roundId = makeRoundId(); roundRecorded = false; board?.clearStatus?.();
+      text('defense-submit-status', ''); prop('defense-submit-retry', 'hidden', true);
       callAudio('pause'); game.reset(); syncPause(); canvas.focus({ preventScroll: true });
     }
     function position(event) {
@@ -445,12 +479,12 @@
       else if (key === 'Enter' || key === ' ') { event.preventDefault(); if (!event.repeat) deploy(selectedSlot ?? 0); }
     });
     function togglePause() {
-      if (!active || !game || state.status !== 'playing') return;
+      if (!active || !game || state.status !== 'playing' || document.querySelector('dialog[open]')) return;
       focused = true; manualPaused = !manualPaused; syncPause();
       if (!manualPaused && !state.pendingEvolution) canvas.focus({ preventScroll: true });
     }
     listen($('defense-start'), 'click', () => {
-      if (!active || !ensureGame() || state.status !== 'ready' || state.pendingEvolution) return;
+      if (!active || !ensureGame() || state.status !== 'ready' || state.pendingEvolution || document.querySelector('dialog[open]')) return;
       focused = true; manualPaused = false; game.start(); syncPause(); canvas.focus({ preventScroll: true });
     });
     for (const slot of routeSlots) listen($(`defense-route-${slot}`), 'click', event => {
@@ -487,7 +521,7 @@
       if (active && !document.hidden && focused) canvas.focus({ preventScroll: true });
     });
     listen($('defense-guide-open'), 'click', () => {
-      if (!active || state?.pendingEvolution) return;
+      if (!active || state?.pendingEvolution || document.querySelector('dialog[open]')) return;
       clearInput(); $('defense-guide-dialog')?.showModal(); syncPause();
     });
     listen($('defense-guide-close'), 'click', () => $('defense-guide-dialog')?.close());
@@ -504,6 +538,7 @@
       const wasActive = active; active = event.detail?.mode === 'defense';
       clearInput(); stopFrame();
       if (!active && discardChoice) cancelDiscard();
+      if (!active && $('defense-lb-dialog')?.open) $('defense-lb-dialog').close();
       if (!active && wasActive && state?.status === 'playing') manualPaused = true;
       if (active && !ensureGame()) return;
       soundUI(); if (active) resize(); syncPause();

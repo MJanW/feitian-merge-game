@@ -8,14 +8,14 @@
   <title>合成飞天</title>
   <link rel="icon" href="assets/photo-10.png" type="image/png">
   <link rel="stylesheet" href="styles.css?v=20261019-defense1">
-  <link rel="stylesheet" href="defense.css?v=20261022-builds1">
+  <link rel="stylesheet" href="defense.css?v=20261022-defenseboard1">
   <script defer src="vendor/matter.min.js"></script>
   <script defer src="levels.js?v=20261017-size10"></script>
   <script defer src="sound.js?v=20261016-finale300"></script>
   <script defer src="game.js?v=20261017-rescue1"></script>
   <script defer src="supabase-config.js?v=20261020-gateway1"></script>
   <script defer src="vendor/supabase.min.js"></script>
-  <script defer src="leaderboard.js?v=20261020-gateway1"></script>
+  <script defer src="leaderboard.js?v=20261022-defenseboard1"></script>
   <script defer src="app.js?v=20261017-jump1"></script>
   <script defer src="rescue-game.js?v=20261017-obstacles2"></script>
   <script defer src="rescue-app.js?v=20261017-obstacles2"></script>
@@ -30,7 +30,8 @@
   <script defer src="defense-game.js?v=20261022-golden3"></script>
   <script defer src="defense-renderer.js?v=20261022-builds1"></script>
   <script defer src="defense-sound.js?v=20261021-elements1"></script>
-  <script defer src="defense-app.js?v=20261022-builds1"></script>
+  <script defer src="defense-leaderboard.js?v=20261022-defenseboard1"></script>
+  <script defer src="defense-app.js?v=20261022-defenseboard1"></script>
   <script defer src="modes.js?v=20261019-defense1"></script>
 </head>
 <body>
@@ -163,7 +164,7 @@
             </div>
           </div>
           <div id="defense-result" class="defense-result" role="group" aria-labelledby="defense-result-title" aria-describedby="defense-result-detail" hidden>
-            <div class="defense-result-card"><span class="defense-eyebrow">本次守卫 / REPORT</span><h2 id="defense-result-title" tabindex="-1">防线失守</h2><p id="defense-result-detail"></p><button id="defense-retry" class="primary-button" type="button">再战一回</button></div>
+            <div class="defense-result-card"><span class="defense-eyebrow">本次守卫 / REPORT</span><h2 id="defense-result-title" tabindex="-1">防线失守</h2><p id="defense-result-detail"></p><p id="defense-submit-status" role="status"></p><button id="defense-submit-retry" class="secondary-button" type="button" hidden>重试上传本局波数</button><div class="defense-result-actions"><button id="defense-end-leaderboard-button" class="secondary-button" type="button">波数排行榜</button><button id="defense-retry" class="primary-button" type="button">再战一回</button></div></div>
           </div>
         </div>
         <p id="defense-status" class="defense-status" role="status" aria-live="polite">点击开始守卫，建立你的防线</p>
@@ -171,7 +172,7 @@
       <aside class="defense-side" aria-label="守卫飞天信息和操作">
         <header class="defense-head"><span class="mode-caption">CHAPTER 04 · ENDLESS DEFENSE</span><h1>守卫飞天<span aria-hidden="true">✦</span></h1><p>飞刃旋转，酒潮来袭。<br>从一位同伴，到一整支防线。</p></header>
         <div class="defense-hud" aria-label="战场信息">
-          <div class="defense-stat"><span><i aria-hidden="true">⚑</i> 波次</span><strong id="defense-wave">0</strong></div>
+          <button id="defense-leaderboard-button" class="defense-stat defense-ranking" type="button" aria-haspopup="dialog" aria-label="查看守卫飞天波数排行榜，下方为本局到达波数"><span><i aria-hidden="true">⚑</i> 波次 · 榜 ↗</span><strong id="defense-wave">0</strong></button>
           <div class="defense-stat"><span><i aria-hidden="true">♥</i> 防线</span><strong id="defense-lives">12/12</strong></div>
           <div class="defense-stat"><span><i aria-hidden="true">⚔</i> 击退</span><strong id="defense-kills">0</strong></div>
           <div class="defense-stat"><span><i aria-hidden="true">✦</i> 得分</span><strong id="defense-score">0</strong></div>
@@ -210,6 +211,13 @@
     <div class="leaderboard-access"><button class="secondary-button" id="jump-lb-refresh" type="button">刷新榜单</button><button class="secondary-button" id="jump-lb-retry" type="button" hidden>重试待上传成绩</button><button class="secondary-button" id="jump-lb-recover" type="button" hidden>补传此前本机最高分</button></div>
     <form class="nickname-form" id="jump-lb-form" hidden><label for="jump-lb-name">我的昵称</label><input id="jump-lb-name" name="nickname" type="text" maxlength="48" placeholder="玩家" autocomplete="nickname" enterkeyhint="done" aria-describedby="jump-lb-rules"><button class="secondary-button" id="jump-lb-save" type="submit">保存</button></form>
     <div class="leaderboard-content"><p class="leaderboard-empty" id="jump-lb-empty" hidden>还没有跳跃成绩，先来一局吧。</p><table id="jump-lb-table" hidden><thead><tr><th scope="col">排名</th><th scope="col">昵称</th><th scope="col">最高分</th></tr></thead><tbody id="jump-lb-body"></tbody></table></div>
+  </dialog>
+  <dialog id="defense-lb-dialog" class="leaderboard-dialog defense-lb-dialog" aria-labelledby="defense-lb-title">
+    <div class="dialog-header"><h2 id="defense-lb-title">守卫飞天排行榜</h2><button class="icon-button" id="defense-lb-close" type="button" aria-label="关闭守卫排行榜" autofocus><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="leaderboard-info"><p>历史前 20 名，每位玩家只保留最高波数；同波先到优先。</p><p id="defense-lb-rules">与其他模式共用昵称和浏览器身份，波数独立排名。以本局结束时到达的波数为准。换设备或清除浏览器数据会成为新玩家。</p><p id="defense-lb-status" role="status">正在连接守卫共享榜…</p><p id="defense-lb-pending" role="status" hidden></p></div>
+    <div class="leaderboard-access"><button class="secondary-button" id="defense-lb-refresh" type="button">刷新榜单</button><button class="secondary-button" id="defense-lb-retry" type="button" hidden>重试待上传成绩</button><button class="secondary-button" id="defense-lb-recover" type="button" hidden>补传此前本机最高波数</button></div>
+    <form class="nickname-form" id="defense-lb-form" hidden><label for="defense-lb-name">我的昵称</label><input id="defense-lb-name" name="nickname" type="text" maxlength="48" placeholder="玩家" autocomplete="nickname" enterkeyhint="done" aria-describedby="defense-lb-rules"><button class="secondary-button" id="defense-lb-save" type="submit">保存</button></form>
+    <div class="leaderboard-content"><p class="leaderboard-empty" id="defense-lb-empty" hidden>还没有守卫记录，先来一局吧。</p><table id="defense-lb-table" hidden><thead><tr><th scope="col">排名</th><th scope="col">昵称</th><th scope="col">最高波数</th></tr></thead><tbody id="defense-lb-body"></tbody></table></div>
   </dialog>
   <dialog id="leaderboard-dialog" class="leaderboard-dialog" aria-labelledby="leaderboard-title">
     <div class="dialog-header"><h2 id="leaderboard-title">共享排行榜</h2><button class="icon-button" data-close="leaderboard-dialog" aria-label="关闭排行榜" autofocus><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
