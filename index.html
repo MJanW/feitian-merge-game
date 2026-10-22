@@ -27,11 +27,11 @@
   <script defer src="jump-app.js?v=20261017-softjump1"></script>
   <script defer src="defense-forms.js?v=20261021-elements1"></script>
   <script defer src="defense-enemies.js?v=20261019-paths1"></script>
-  <script defer src="defense-game.js?v=20261022-levelodds1"></script>
-  <script defer src="defense-renderer.js?v=20261022-goldenfeed1"></script>
+  <script defer src="defense-game.js?v=20261022-swap1"></script>
+  <script defer src="defense-renderer.js?v=20261022-swap1"></script>
   <script defer src="defense-sound.js?v=20261021-elements1"></script>
   <script defer src="defense-leaderboard.js?v=20261022-defenseboard1"></script>
-  <script defer src="defense-app.js?v=20261022-levelodds1"></script>
+  <script defer src="defense-app.js?v=20261022-swap1"></script>
   <script defer src="modes.js?v=20261019-defense1"></script>
 </head>
 <body>
@@ -139,14 +139,14 @@
     <div class="defense-layout">
       <section class="defense-play" aria-label="守卫飞天战场">
         <div class="defense-board">
-          <canvas id="defense-canvas" width="520" height="760" tabindex="0" aria-label="飞刃守卫战场：上下两区共40个阵位，完整显示。飞剑旋转攻击酒瓶和孵化蛋。同级、同元素守卫可合成，保留接收方技能；普通守卫拖到黄金战士上可投喂。方向键选择阵位，回车部署待命守卫，P 暂停。" aria-describedby="defense-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
+          <canvas id="defense-canvas" width="520" height="760" tabindex="0" aria-label="飞刃守卫战场：上下两区共40个阵位，完整显示。飞剑旋转攻击酒瓶和孵化蛋。同级、同元素守卫可合成，保留接收方技能；无法合成时交换位置，普通守卫拖到黄金战士上优先投喂。方向键选择阵位，回车部署待命守卫，P 暂停。" aria-describedby="defense-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
           <div id="defense-intro" class="defense-intro">
             <div class="defense-intro-card">
               <span class="defense-eyebrow">第四周目 · 无尽守卫</span>
               <div class="defense-emblem" aria-hidden="true">✦</div>
               <h2>五系聚成阵，<br>飞剑守四方。</h2>
               <p>左边酒瓶来袭，右边同伴待醒。<br>把守卫放在哪里，由你决定。</p>
-              <ol><li><span>1</span>靠右击蛋，召集低2级、继承路线的同伴</li><li><span>2</span>同级同元素合成，保留接收方技能</li><li><span>3</span>不同元素接力攻击，触发额外反应</li></ol>
+              <ol><li><span>1</span>靠右击蛋，召集低2级、继承路线的同伴</li><li><span>2</span>同级同元素合成，其他棋子互换位置</li><li><span>3</span>不同元素接力攻击，触发额外反应</li></ol>
               <button id="defense-start" class="primary-button" type="button">出发，守住防线 <span aria-hidden="true">▶</span></button>
             </div>
           </div>
@@ -184,7 +184,7 @@
           <p id="defense-evolution-risk" class="defense-evolution-risk">选择守卫查看合成成功率。失败仅消耗拖入者，原守卫等级与路线保留。</p>
           <div class="defense-controls" role="group" aria-label="守卫飞天操作"><button id="defense-pause" class="secondary-button" type="button" aria-pressed="false">暂停</button><button id="defense-restart" class="secondary-button" type="button">重开</button><button id="defense-sound" class="secondary-button" type="button" aria-pressed="true">音效开</button><button id="defense-guide-open" class="secondary-button" type="button" aria-haspopup="dialog">图鉴</button></div>
         </div>
-        <div class="defense-tips"><span class="tips-label">你的守卫手册</span><p><b>击蛋召集</b> 靠右击蛋召集低2级的同伴，最低1级，继承已解锁路线。</p><p><b>同元素进化</b> 同级、同元素即可合成，技能可以不同，保留接收方技能。失败消耗拖入者，原守卫等级不变。</p><p><b>元素接力</b> 冰、火、雷、土、草，每次随机三选一；不同元素连续击中同一酒瓶，会产生反应。打开图鉴查看效果。</p><div class="defense-skills"><span>随机觉醒</span><span>元素反应</span><span>隐藏战士</span></div><p class="keyboard-tip">方向键选择 · 回车部署 · P 暂停</p></div>
+        <div class="defense-tips"><span class="tips-label">你的守卫手册</span><p><b>击蛋召集</b> 靠右击蛋召集低2级的同伴，最低1级，继承已解锁路线。</p><p><b>合成与换位</b> 同级同元素优先合成，保留接收方技能；无法合成时交换位置。普通角色拖到黄金战士上优先投喂。</p><p><b>元素接力</b> 冰、火、雷、土、草，每次随机三选一；不同元素连续击中同一酒瓶，会产生反应。打开图鉴查看效果。</p><div class="defense-skills"><span>随机觉醒</span><span>元素反应</span><span>隐藏战士</span></div><p class="keyboard-tip">方向键选择 · 回车部署 · P 暂停</p></div>
       </aside>
     </div>
   </section>
@@ -197,10 +197,10 @@
     <div class="defense-guide-body">
       <p class="defense-guide-intro">查看图鉴时，战场会暂停。</p>
       <h3>同元素，能合成</h3><p>同等级、同基础元素的守卫，无论高阶属性和技能是否一致，都可以合成。把材料拖到想保留的守卫上，接收方继续沿自己的技能进化。失败只消耗材料，接收方不降级。</p><p>普通合成成功率只看合成前的角色等级，不随波次变化：Lv.1始终100%，每升1级降低3个百分点，最低55%。例如Lv.2为97%、Lv.5为88%、Lv.10为73%，Lv.16及以上为55%。</p>
-      <h3>垃圾筐，腾出阵位</h3><p>把普通守卫拖到垃圾筐上松手，即可丢弃；也可以先选中守卫，再点击垃圾筐确认。丢弃不会获得分数或材料。黄金战士不能丢弃，没有待命同伴时也会保留最后一位守卫。</p>
+      <h3>拖动交换，自由布阵</h3><p>拖到不同等级或不同元素的守卫上，双方交换位置，等级、技能与攻击冷却都保留。同级同元素仍优先合成；普通守卫拖到黄金战士上优先投喂，黄金战士拖到普通守卫上则交换位置。拖到空位正常移动。</p><h3>垃圾筐，腾出阵位</h3><p>把普通守卫拖到垃圾筐上松手，即可丢弃；也可以先选中守卫，再点击垃圾筐确认。丢弃不会获得分数或材料。黄金战士不能丢弃，没有待命同伴时也会保留最后一位守卫。</p>
       <h3>五种元素与黄金，十五种反应</h3><p>冰霜命中附加 3 秒减速，基础减速 25%，触发元素反应后消除。草木每次命中缠绕定身 0.2 秒，再次命中刷新时长。不同元素或黄金接力击中同一只酒瓶，不分先后，都能触发对应反应。印记持续3秒，同一目标两次反应至少间隔0.75秒；黄金不能与黄金或未觉醒守卫反应。</p><ul id="defense-reactions" class="defense-reactions"></ul>
       <h3>Lv.16 起，十五种元素强化</h3><p>Lv.4 觉醒元素、Lv.8 选择高阶属性、Lv.12 学习技能。Lv.16、20、24…每次从本元素的三种强化中选择一项。重复选择逐步提升额外伤害或范围，命中门槛、目标数量、控制时长与冷却保持不变；卡片展示当前值和下一次的变化。</p><ul id="defense-enhancements" class="defense-reactions"></ul>
-      <h3>隐藏进化 · 黄金战士</h3><p>第21波起，两名Lv.10及以上、同级同元素且符合合成规则的守卫合成时，有独立3%概率觉醒黄金战士，每局只出现一次。</p><p>把任意普通守卫拖到黄金战士上，按其显示等级积累进度。每次升阶需要30、60、120、240、480…级材料，溢出进度保留。黄金1阶基础攻击30，之后每升一阶乘3。原有飞剑从1阶5把成长至2阶6把。</p><p>黄金1阶击破孵化蛋召出Lv.10普通守卫，每升1阶，召出等级增加1级（2阶Lv.11、3阶Lv.12……）。召出的同伴无元素，不复制黄金属性或天赋。</p>
+      <h3>隐藏进化 · 黄金战士</h3><p>第21波起，两名Lv.10及以上、同级同元素且符合合成规则的守卫合成时，有独立3%概率觉醒黄金战士，每局只出现一次。</p><p>把任意普通守卫拖到黄金战士上，按其显示等级积累进度。每次升阶需要30、60、120、240、480…级材料，溢出进度保留。黄金1阶基础攻击30，之后每升一阶乘3。原有飞剑从1阶5把成长至2阶6把。</p><p>黄金1阶击破孵化蛋召出Lv.10普通守卫，每升1阶，召出等级增加1级（2阶Lv.11、3阶Lv.12……）。每名同伴随机获得冰、火、雷、土、草中的一种元素，各20%概率，并随机补齐当前等级已解锁的同系属性、技能和强化，后续进化仍可继续选择。不复制黄金身份或天赋；阵位满时保留抽到的完整路线，部署时不会重抽。</p>
       <h3>黄金第3、5、7…阶，天赋三选一</h3><p><b>万剑归宗：</b>每次增加1把参与攻击的飞剑，最多12把。满12把后改为“剑意精修”，每次另加原基础攻击的8%。</p><p><b>天域剑阵：</b>首次解锁半径100的领域，每2.6秒造成单剑攻击40%的范围伤害；后续每次半径加15，最多160。满160后每次再提高10个百分点领域伤害。</p><p><b>炼金共鸣：</b>首次让黄金反应倍率额外+0.8。重复选择r次后的总额外加成为4r/(r+4)，逐步趋近+4，反应频率不变。</p><p>一次投喂跨越多个天赋节点时，先结算全部阶数与余粮，再逐个选择天赋。选择期间战场冻结；切换玩法或离开页面后，点击“继续”返回原选择。</p>
       <h3>四十阵位，完整布阵</h3><p>上下两区各4列、5行，共40个阵位，全部显示在同一战场。拖动可跨区移动、合成或投喂；方向键选择阵位，回车部署待命守卫。</p>
     </div>

@@ -267,7 +267,7 @@
     function showNotice(message) { notice = message; noticeUntil = Date.now() + 1900; if (game) { render(game.getState()); draw(); } }
     function onEvent(event) {
       if (active && !blocked()) callAudio('play', event);
-      const messages = { merge: '合成成功，守卫进化了！', hit: '有入侵者突破了防线！', clear: '这一波守住了！趁现在移动和进化', hatch: event.reserve ? '孵化成功！阵位已满，同伴正在待命' : '孵化成功，新同伴加入防线！', wave: `第 ${event.wave || game?.getState().wave || 1} 波来袭` };
+      const messages = { merge: '合成成功，守卫进化了！', swap: '已交换位置，双方等级与技能保留', hit: '有入侵者突破了防线！', clear: '这一波守住了！趁现在移动和进化', hatch: event.reserve ? '孵化成功！阵位已满，同伴正在待命' : '孵化成功，新同伴加入防线！', wave: `第 ${event.wave || game?.getState().wave || 1} 波来袭` };
       if (event.type === 'evolveFail') messages.evolveFail = `合成失败，拖入的守卫已消耗；原守卫保留 Lv.${event.level + 1} 与路线`;
       if (event.type === 'route') messages.route = `${routeInfo(event.route, event.level)?.name || '特殊能力'}已觉醒！所选路线已生效`;
       if (event.type === 'golden') {
@@ -277,7 +277,7 @@
       }
       if (event.type === 'feed') messages.feed = event.rank > event.previousRank ? `黄金战士升至 ${event.rank} 阶！攻击随升阶提升，余量已保留` : `投喂成功 +${event.gained} 级 · 升阶进度 ${event.progress}/${event.required}`;
       if (event.type === 'discard') messages.discard = `已丢弃 Lv.${event.level + 1} 守卫，腾出一个阵位`;
-      if (event.type === 'hatch' && Number.isInteger(event.level)) messages.hatch += ` · Lv.${event.level + 1}` + (Object.keys(event.routeChoices || {}).length ? '，继承击蛋者的已解锁路线' : '，尚未觉醒元素');
+      if (event.type === 'hatch' && Number.isInteger(event.level)) messages.hatch += ` · Lv.${event.level + 1}` + (event.recruitedByGolden ? `，随机觉醒${routeInfo(event.element)?.name || '元素'}，已获得同系成长路线` : Object.keys(event.routeChoices || {}).length ? '，继承击蛋者的已解锁路线' : '，尚未觉醒元素');
       if (messages[event.type]) { notice = messages[event.type]; noticeUntil = Date.now() + (event.type === 'golden' ? 6000 : event.type === 'evolveFail' || event.type === 'feed' ? 4200 : 1700); }
     }
     function preload() {
@@ -400,14 +400,7 @@
         if (trash && source?.id === held.unitId) discardUnit(held.slot, held.unitId);
         else if (destination !== null && destination !== held.slot && source?.id === held.unitId) {
           if (game.move(held.slot, destination)) selectedSlot = destination;
-          else {
-            const target = unitAt(destination);
-            showNotice(source.isGolden || target?.isGolden
-              ? '把普通守卫拖到黄金战士上即可投喂；黄金战士可拖到空位移动'
-              : target && source.level === target.level && !window.DefenseGame.canMerge(source, target)
-                ? '基础元素不同，无法合成；双方守卫均已保留'
-                : '只能合成同级、同元素的守卫，技能可以不同；或拖到空位移动');
-          }
+          else showNotice('暂时无法移动，请稍后重试');
         }
       } else if (!held.moved && destination === held.slot) deploy(destination);
       render(game.getState()); draw();

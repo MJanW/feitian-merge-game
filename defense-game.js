@@ -350,15 +350,21 @@
 
     place(slot) {
       if (!this._canAct() || !this._validSlot(slot) || this._unitAt(slot) || this.reserve < 1) return false;
-      this.reserve--; const unit = this._makeUnit(slot, this.reserveQueue.shift());
-      this._effect('spawn', unit, { level: unit.level }); this._event('spawn', { unitId: unit.id, slot, level: unit.level }); this._notify(); return true;
+      this.reserve--; const blueprint = this.reserveQueue.shift(), unit = this._makeUnit(slot, blueprint);
+      const recruitment = blueprint?.recruitedByGolden ? { recruitedByGolden: true, element: elementFor(unit) } : {};
+      this._effect('spawn', unit, { level: unit.level }); this._event('spawn', { unitId: unit.id, slot, level: unit.level, ...recruitment }); this._notify(); return true;
     }
 
     move(fromSlot, toSlot) {
       if (!this._canAct() || !this._validSlot(fromSlot) || !this._validSlot(toSlot) || fromSlot === toSlot) return false;
       const source = this._unitAt(fromSlot), target = this._unitAt(toSlot);
-      if (!source || (target && !canMerge(source, target) && !canFeed(source, target))) return false;
-      if (target) {
+      if (!source) return false;
+      if (target && !canMerge(source, target) && !canFeed(source, target)) {
+        // Swapping is positioning only: identities, attacks, routes and progress travel with each unit.
+        Object.assign(source, { slot: toSlot, x: SLOTS[toSlot].x, y: SLOTS[toSlot].y, pulse: 0.35 });
+        Object.assign(target, { slot: fromSlot, x: SLOTS[fromSlot].x, y: SLOTS[fromSlot].y, pulse: 0.35 });
+        this._event('swap', { unitId: source.id, otherUnitId: target.id, fromSlot, slot: toSlot, level: source.level, otherLevel: target.level });
+      } else if (target) {
         this.units.splice(this.units.indexOf(source), 1);
         this._removeUnitZones(source);
         if (canFeed(source, target)) this._feedGolden(target, source);
@@ -417,6 +423,17 @@
       const remaining = [...pool], choices = [];
       while (remaining.length && choices.length < 3) choices.push(remaining.splice(Math.floor(this._roll() * remaining.length), 1)[0]);
       return choices;
+    }
+    _goldenRecruitBlueprint(level) {
+      const routeChoices = {};
+      // Complete every earned milestone in normal play. The bound protects against
+      // injected, unrealistic ranks near MAX_SAFE_INTEGER without an enormous loop.
+      for (let stage = 3, count = 0; stage <= level && count < 256; stage += 4, count++) {
+        const element = routeChoices[3];
+        const choices = stage === 3 ? BASE_ROUTES : stage === 7 ? ADVANCED[element] : stage === 11 ? SKILLS[element] : ENHANCEMENTS[element];
+        routeChoices[stage] = choices[Math.floor(this._roll() * choices.length)];
+      }
+      return { level, routeChoices, recruitedByGolden: true, element: routeChoices[3] };
     }
     _awakenGolden(unit, material) {
       this.goldenAppeared = true; this.goldenRevealRemaining = 2.8; unit.isGolden = true; unit.goldenRank = 1; unit.goldenFeed = 0;
@@ -952,15 +969,17 @@
       const slot = SLOTS.filter(value => !this._unitAt(value.id)).sort((a, b) => Math.hypot(a.x - supply.x, a.y - supply.y) - Math.hypot(b.x - supply.x, b.y - supply.y) || a.id - b.id)[0];
       // Internal levels are zero-based: golden rank 1 hatches Lv.10, rank 2 Lv.11, etc.
       const level = attacker?.isGolden ? Math.min(SAFE_LIMIT - 1, goldenProgress(attacker).rank + 8) : Math.max(0, levelNumber(attacker?.level) - 2);
-      const routeChoices = attacker?.isGolden ? {} : Object.fromEntries(evolutionPath(attacker).filter(entry => entry.level <= level).map(entry => [entry.level, entry.route]));
-      const blueprint = { level, routeChoices };
+      const blueprint = attacker?.isGolden ? this._goldenRecruitBlueprint(level) : { level,
+        routeChoices: Object.fromEntries(evolutionPath(attacker).filter(entry => entry.level <= level).map(entry => [entry.level, entry.route])) };
+      const { routeChoices } = blueprint;
+      const recruitment = blueprint.recruitedByGolden ? { recruitedByGolden: true, element: blueprint.element } : {};
       let details;
       if (slot) {
         const unit = this._makeUnit(slot.id, blueprint); unit.pulse = 0.6;
-        details = { supplyId: supply.id, unitId: unit.id, slot: slot.id, level, routeChoices: { ...routeChoices } };
+        details = { supplyId: supply.id, unitId: unit.id, slot: slot.id, level, routeChoices: { ...routeChoices }, ...recruitment };
       } else {
         this.reserveQueue.push(blueprint); this.reserve = safe(this.reserve + 1);
-        details = { supplyId: supply.id, reserve: true, level, routeChoices: { ...routeChoices } };
+        details = { supplyId: supply.id, reserve: true, level, routeChoices: { ...routeChoices }, ...recruitment };
       }
       this._effect('hatch', supply, { ...details, duration: 0.8 }); this._event('hatch', details); this._notify();
     }

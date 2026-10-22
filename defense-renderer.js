@@ -135,11 +135,19 @@
   function selectedUnit(game, options) {
     return (game.units || []).find(unit => unit.slot === options.selectedSlot);
   }
-  function cell(ctx, slot, unit, selected, canMerge, hovered, incompatible, feedable) {
+  function dropAction(source, target) {
+    if (!source || source.id === target?.id) return null;
+    if (!target) return 'move';
+    if (engine()?.canFeed?.(source, target)) return 'feed';
+    if (engine()?.canMerge?.(source, target)) return 'merge';
+    return 'swap';
+  }
+  function cell(ctx, slot, unit, selected, action, hovered) {
     const { x, y } = slot;
     const base = (Math.round(x / 70) + Math.round(y / 70)) % 2 ? '#acd269' : '#9fc85b';
-    const rejected = hovered && incompatible;
-    round(ctx, x - 32, y - 32, 64, 64, 7, selected ? '#dfe88b' : rejected ? '#d5a67e' : feedable ? '#e4d07b' : hovered ? '#c4de7a' : base, feedable ? '#b97b21' : selected ? '#ffeb81' : rejected ? '#a84339' : canMerge ? '#fcf3bc' : '#759c4690', selected || canMerge || rejected || feedable ? 3 : 1.2);
+    const swapping = hovered && action === 'swap', feedable = action === 'feed', mergeable = action === 'merge';
+    const moving = hovered && action === 'move';
+    round(ctx, x - 32, y - 32, 64, 64, 7, selected ? '#dfe88b' : swapping ? '#a8d5b1' : feedable ? '#e4d07b' : hovered ? '#c4de7a' : base, feedable ? '#b97b21' : selected ? '#ffeb81' : swapping ? '#367a6b' : mergeable ? '#fcf3bc' : moving ? '#5b8439' : '#759c4690', selected || mergeable || swapping || feedable || moving ? 3 : 1.2);
     if (unit) ellipse(ctx, x, y + 13, 24, 8, '#6d983c66');
     else {
       line(ctx, x - 4, y + 1, x + 4, y + 1, '#6a963f66', 1.6);
@@ -1164,11 +1172,7 @@
       for (let i = 0; i < slots.length; i++) {
         const slot = slots[i], index = Number.isFinite(slot.id) ? slot.id : i;
         const unit = units.find(u => u.slot === index);
-        const candidate = active && unit && active.id !== unit.id;
-        const mergeable = candidate && Boolean(engine()?.canMerge?.(active, unit));
-        const feedable = candidate && Boolean(engine()?.canFeed?.(active, unit));
-        const incompatible = candidate && active.level === unit.level && !mergeable && !feedable;
-        cell(ctx, { ...slot, id: index }, unit, index === active?.slot, mergeable, index === options.hoverSlot, incompatible, feedable);
+        cell(ctx, { ...slot, id: index }, unit, index === active?.slot, dropAction(active, unit), index === options.hoverSlot);
       }
       battlefieldFields(ctx, game, options);
       for (const unit of units) portrait(ctx, unit, options, unit.x, unit.y, options.drag?.moved && options.drag.fromSlot === unit.slot ? .22 : 1, game.elapsed);
@@ -1197,16 +1201,20 @@
           portrait(ctx, u, options, options.drag.x, options.drag.y - 14, .92, game.elapsed);
         }
       }
-      // A rejected drop label stays above portraits, attribute effects and the
-      // dragged preview, so players can see why the same-level units differ.
+      // Keep the pending action above portraits, effects and the drag preview.
+      // Feeding is directional; a golden hero dragged onto a normal one swaps.
       const hovered = units.find(unit => unit.slot === options.hoverSlot);
-      if (active && hovered && engine()?.canFeed?.(active, hovered)) {
+      const hoveredSlot = slots.find((slot, index) => (Number.isFinite(slot.id) ? slot.id : index) === options.hoverSlot);
+      const action = hoveredSlot && dropAction(active, hovered);
+      if (action === 'feed') {
         round(ctx, hovered.x - 29, hovered.y - 51, 58, 15, 4, '#fff0b9', '#b58530', 1);
         text(ctx, `投喂 +${active.level + 1}`, hovered.x, hovered.y - 43, 8, '#694923', '800', 'center');
-      }
-      if (active && hovered && active.id !== hovered.id && active.level === hovered.level && !engine()?.canMerge?.(active, hovered) && !engine()?.canFeed?.(active, hovered)) {
-        round(ctx, hovered.x - 29, hovered.y - 44, 58, 15, 4, '#a84339', '#fff1d7', .8);
-        text(ctx, active.isGolden ? '拖入角色投喂' : '× 元素不同', hovered.x, hovered.y - 36, 8, '#fff8df', '800', 'center');
+      } else if (action) {
+        const point = hovered || hoveredSlot;
+        const label = action === 'swap' ? '⇄ 交换位置' : action === 'merge' ? '合成进化' : '移动到这里';
+        const fill = action === 'swap' ? '#367a6b' : action === 'merge' ? '#6f773d' : '#5b8439';
+        round(ctx, point.x - 29, point.y - 44, 58, 15, 4, fill, '#fff1d7', .8);
+        text(ctx, label, point.x, point.y - 36, 8, '#fff8df', '800', 'center');
       }
       // Bottle bodies overlap in a dense queue. Draw all health labels in a
       // final pass so the following bottle (or its flash) cannot cover them.
