@@ -26,13 +26,13 @@
     lightning: ['thunderhead', 'cyclone', 'pulse', 'arc'], earth: ['fault', 'meteor', 'fortress', 'erosion'], grass: ['root', 'venom', 'harvest', 'seedstorm'] });
   const ENHANCEMENTS = Object.freeze(['echo', 'dominion', 'overdrive']);
   const CATALOG = {
-    ice: ['冰霜', '飞刃减速敌人；后续仅出现冰元素进化。', '冰', '#78d0e0', 'ice', 1],
+    ice: ['冰霜', '命中减速 25%，持续 3 秒；触发元素反应后消除冰霜减速。', '冰', '#78d0e0', 'ice', 1],
     fire: ['火焰', '飞刃产生溅射；后续仅出现火元素进化。', '火', '#f29a55', 'fire', 1],
     lightning: ['雷电', '飞刃连锁附近敌人；后续仅出现雷元素进化。', '雷', '#b69af5', 'lightning', 1],
     earth: ['大地', '飞刃侵蚀护甲；后续仅出现土元素进化。', '土', '#cba16d', 'earth', 1],
-    grass: ['草木', '飞刃施加持续毒伤；后续仅出现草元素进化。', '草', '#81c875', 'grass', 1],
+    grass: ['草木', '每次命中缠绕定身 0.2 秒，并施加持续毒伤。', '草', '#81c875', 'grass', 1],
     golden: ['黄金战士', '吞噬任意普通伙伴积累等级，每阶攻击变为原来的三倍。', '金', '#ffd76a', 'golden', 0],
-    rime: ['凛风', '飞刃转速提高，冰霜减速持续更久。', '凛', '#b1effa', 'ice', 2],
+    rime: ['凛风', '飞刃转速提高，冰霜减速加强至 30%。', '凛', '#b1effa', 'ice', 2],
     inferno: ['烈狱', '飞刃持续灼烧目标，并强化火焰溅射。', '狱', '#ff9063', 'fire', 2],
     surge: ['雷涌', '飞刃转速提高，连锁能穿透部分护甲。', '涌', '#aaadff', 'lightning', 2],
     bastion: ['岩垒', '重型飞刃提高直击伤害并减速敌人。', '垒', '#c8ac7d', 'earth', 2],
@@ -128,7 +128,7 @@
     const orbitRadius = 52 + Math.min(16, n);
     const stats = { damage: safe(n + 1), range: orbitRadius, orbitRadius, bladeCount: Math.min(4, 1 + Math.floor(n / 4)),
       angularSpeed: 2.6 + Math.min(0.6, n * 0.025), bladeLength: 24, bladeWidth: 7,
-      slow: ranks.ice ? 0.25 : 0, slowDuration: 0.8,
+      slow: ranks.ice ? 0.25 : 0, slowDuration: ranks.ice ? 3 : 0.8, rootDuration: ranks.grass ? 0.2 : 0,
       splash: ranks.fire ? 35 : 0, splashDamage: ranks.fire ? 0.45 : 0,
       chain: ranks.lightning ? 2 : 0, chainDamage: ranks.lightning ? 0.48 : 0, chainRange: 90,
       armorPierce: ranks.earth ? 0.2 : 0, burn: ranks.grass ? 0.18 : 0, burnDuration: ranks.grass ? 2 : 0, freeze: 0, freezeCooldown: 2.4,
@@ -136,13 +136,13 @@
       fieldRadius: 0, fieldDamage: 0, fieldInterval: 2.6,
       ability: family, family, advanced, skill, tier: latest === 'normal' ? 0 : routeInfo(latest, n).tier,
       ranks, specialName: routeInfo(latest, n).name };
-    if (advanced === 'glacier') { stats.slow = 0.4; stats.slowDuration = 1.2; stats.chilledBonus = 0.25; }
+    if (advanced === 'glacier') { stats.slow = 0.4; stats.chilledBonus = 0.25; }
     if (advanced === 'blizzard') { stats.slow = 0.32; stats.splash = 48; stats.splashDamage = 0.35; }
     if (advanced === 'magma') { stats.splash = 55; stats.splashDamage = 0.6; stats.burn = 0.15; stats.burnDuration = 1.8; }
     if (advanced === 'solar') { stats.damage = safe(stats.damage * 1.2); stats.armorPierce = 0.3; }
     if (advanced === 'storm') { stats.chain = 3; stats.chainRange = 112; stats.slow = 0.16; }
     if (advanced === 'plasma') { stats.chainDamage = 0.7; stats.armorPierce = 0.4; }
-    if (advanced === 'rime') { stats.angularSpeed += 0.35; stats.slow = 0.3; stats.slowDuration = 1.4; }
+    if (advanced === 'rime') { stats.angularSpeed += 0.35; stats.slow = 0.3; }
     if (advanced === 'inferno') { stats.burn = 0.3; stats.burnDuration = 2.2; stats.splashDamage = 0.65; }
     if (advanced === 'surge') { stats.angularSpeed += 0.35; stats.armorPierce = 0.25; }
     if (advanced === 'bastion') { stats.damage = safe(stats.damage * 1.2); stats.slow = 0.2; }
@@ -152,7 +152,7 @@
     if (advanced === 'thorn') { stats.damage = safe(stats.damage * 1.15); stats.armorPierce = 0.3; stats.burn = 0.25; }
     if (advanced === 'bloom') { stats.splash = 55; stats.splashDamage = 0.4; stats.burn = 0.25; }
     if (skill === 'shatter') { stats.chilledBonus = 0.65; stats.splash = 42; stats.splashDamage = 0.5; }
-    if (skill === 'permafrost') { stats.freeze = 0.42; stats.slowDuration = 1.6; }
+    if (skill === 'permafrost') { stats.freeze = 0.42; }
     if (skill === 'whiteout') { stats.fieldRadius = 100; stats.fieldDamage = 0.6; stats.slow = 0.45; }
     if (skill === 'hail') { stats.echoDamage = 0.4; stats.splash = 60; }
     if (skill === 'eruption') { stats.splash = 84; stats.splashDamage = 0.9; }
@@ -210,12 +210,13 @@
   const enemyStatsForWave = (kindOrType, wave, boss = false) => {
     const type = typeof kindOrType === 'object' ? kindOrType : FALLBACK_TYPES.find(value => value.kind === kindOrType) || FALLBACK_TYPES[0];
     const age = Math.max(0, levelNumber(wave) - 1), late = Math.max(0, age - 4);
-    // Preserve the first ten waves, then ease both the midgame slope and the
-    // endless slope. HP, armor and speed must not all accelerate around wave 20.
+    // Keep the softened midgame/endless curves; adjust ordinary bottles and
+    // elite bottles independently so elites do not inherit the ordinary buff.
     const early = Math.min(5, late), endless = Math.max(0, late - 5);
     const middle = Math.min(10, endless), beyondTwenty = Math.max(0, endless - 10);
     const scaling = safe(1 + age * 0.13 + early * early * 0.16 + early * 0.4 + middle * 0.62 + beyondTwenty * 0.42);
-    return { maxHp: Math.max(1, Math.round(safe(type.hp * scaling * (boss ? 4.2 : 1)))),
+    const previousHp = Math.max(1, Math.round(safe(type.hp * scaling * (boss ? 4.2 : 1))));
+    return { maxHp: Math.max(1, Math.round(safe(previousHp * (boss ? 0.7 : 1.25)))),
       speed: type.speed * 0.7 * Math.min(1.8, 1 + Math.min(9, age) * 0.032 + middle * 0.022 + beyondTwenty * 0.012),
       armor: Math.min(0.18, early * 0.018 + middle * 0.0015 + beyondTwenty * 0.0005 + (boss && late ? 0.06 : 0)), reward: 0, damage: boss ? 3 : 1 };
   };
@@ -462,7 +463,8 @@
       const origin = { x: target.x, y: target.y };
       const nearby = stats.splash ? objects.filter(object => object !== target && Math.hypot(object.x - target.x, object.y - target.y) <= stats.splash) : [];
       const hit = (object, amount) => type === 'supply' ? this._damageSupply(object, amount, unit) : this._damage(object, amount, stats.slow, stats, unit);
-      const multiplier = (target.slow ? 1 + stats.chilledBonus : 1) * (stats.executeBonus && target.hp / target.maxHp < 0.25 ? 1 + stats.executeBonus : 1);
+      const chilled = target.slow > 0 || (target.frostTime > 0 && target.frostSlow > 0);
+      const multiplier = (chilled ? 1 + stats.chilledBonus : 1) * (stats.executeBonus && target.hp / target.maxHp < 0.25 ? 1 + stats.executeBonus : 1);
       const previousHp = target.hp; target.hitAngle = blade.angle;
       hit(target, safe(stats.damage * multiplier));
       const dealt = Math.max(0, previousHp - target.hp);
@@ -502,7 +504,7 @@
       const type = this.types.find(value => value.kind === entry.kind) || this.types[0];
       const stats = enemyStatsForWave(type, this.wave, entry.boss);
       const enemy = { id: ++this.sequence, kind: type.kind, name: type.name, tint: type.tint, x: PATH[0].x, y: PATH[0].y,
-        ...stats, hp: stats.maxHp, progress: 0, hit: 0, boss: entry.boss, slow: 0, slowTime: 0 };
+        ...stats, hp: stats.maxHp, progress: 0, hit: 0, boss: entry.boss, slow: 0, slowTime: 0, frostSlow: 0, frostTime: 0, rootTime: 0 };
       this.enemies.push(enemy);
     }
 
@@ -543,8 +545,20 @@
         }
       }
       for (const enemy of this.enemies.slice()) {
+        // Integrate only the unfrozen part of this step, including status
+        // expiries inside it. A 0.2-second root lasts the full 0.2 seconds.
+        const stoppedFor = Math.min(dt, Math.max(enemy.freezeTime || 0, enemy.rootTime || 0));
+        const slowFor = Math.max(0, Math.min(dt, enemy.slowTime || 0) - stoppedFor);
+        const frostFor = Math.max(0, Math.min(dt, enemy.frostTime || 0) - stoppedFor);
+        const sharedFor = Math.min(slowFor, frostFor), frostSlow = enemy.frostSlow || 0;
+        const movement = enemy.speed * Math.max(0, dt - stoppedFor - Math.max(enemy.slow || 0, frostSlow) * sharedFor -
+          (enemy.slow || 0) * (slowFor - sharedFor) - frostSlow * (frostFor - sharedFor));
         enemy.hit = Math.max(0, enemy.hit - dt); enemy.slowTime = Math.max(0, enemy.slowTime - dt);
         if (!enemy.slowTime) enemy.slow = 0;
+        enemy.frostTime = Math.max(0, (enemy.frostTime || 0) - dt);
+        if (enemy.frostTime < 1e-8) { enemy.frostTime = 0; enemy.frostSlow = 0; }
+        enemy.rootTime = Math.max(0, (enemy.rootTime || 0) - dt);
+        if (enemy.rootTime < 1e-8) enemy.rootTime = 0;
         enemy.freezeTime = Math.max(0, (enemy.freezeTime || 0) - dt);
         enemy.freezeResistance = Math.max(0, (enemy.freezeResistance || 0) - dt);
         if (enemy.burnTime > 0) {
@@ -552,7 +566,7 @@
           this._damage(enemy, enemy.burnDamage * burning, 0, { armorPierce: 0.3 });
           if (!this.enemies.includes(enemy)) continue;
         }
-        enemy.progress += enemy.speed * (1 - enemy.slow) * (enemy.freezeTime ? 0 : 1) * dt; this._positionEnemy(enemy);
+        enemy.progress += movement; this._positionEnemy(enemy);
         if (enemy.progress >= PATH_LENGTH) {
           this.enemies.splice(this.enemies.indexOf(enemy), 1); this.lives = Math.max(0, this.lives - enemy.damage);
           this._effect('leak', PATH[PATH.length - 1]); this._event('hit', { lives: this.lives, damage: enemy.damage, enemyId: enemy.id });
@@ -594,6 +608,9 @@
       enemy.elementMark = { element: family, until: this.elapsed + 3 }; return null;
     }
     _applyReaction(enemy, reaction, amount, dealt) {
+      // Consume native frost only. Reaction/skill slows and freezes have
+      // independent timers and must survive this elemental consumption.
+      enemy.frostSlow = 0; enemy.frostTime = 0;
       if (reaction.armorBreak) enemy.armorBroken = Math.min(0.5, (enemy.armorBroken || 0) + reaction.armorBreak);
       if (reaction.slow) { enemy.slow = Math.max(enemy.slow || 0, reaction.slow); enemy.slowTime = Math.max(enemy.slowTime || 0, reaction.slowDuration); }
       if (reaction.freeze && !(enemy.freezeResistance > 0)) { enemy.freezeTime = reaction.freeze; enemy.freezeResistance = 2.4; }
@@ -612,7 +629,12 @@
       const previousHp = enemy.hp;
       const armor = clamp((enemy.armor || 0) - (enemy.armorBroken || 0), 0, 0.8);
       enemy.hp = Math.max(0, enemy.hp - safe(amount * (reaction?.multiplier || 1)) * (1 - armor * (1 - (stats.armorPierce || 0)))); enemy.hit = 0.12;
-      if (slow) { enemy.slow = Math.max(enemy.slow, slow); enemy.slowTime = Math.max(enemy.slowTime || 0, stats.slowDuration || 0.8); }
+      const elementalHit = allowReaction && unit && amount > 0;
+      if (stats.family === 'ice') {
+        // The hit that consumes a mark, and its echo, cannot reapply frost.
+        if (elementalHit && !reaction && slow) { enemy.frostSlow = Math.max(enemy.frostSlow || 0, slow); enemy.frostTime = 3; }
+      } else if (slow) { enemy.slow = Math.max(enemy.slow || 0, slow); enemy.slowTime = Math.max(enemy.slowTime || 0, stats.slowDuration || 0.8); }
+      if (elementalHit && stats.family === 'grass') enemy.rootTime = Math.max(enemy.rootTime || 0, 0.2);
       if (stats.freeze && !(enemy.freezeResistance > 0)) { enemy.freezeTime = stats.freeze; enemy.freezeResistance = stats.freezeCooldown || 2.4; }
       if (stats.armorBreak) enemy.armorBroken = Math.min(0.5, (enemy.armorBroken || 0) + stats.armorBreak);
       if (stats.burn) { enemy.burnDamage = Math.max(enemy.burnDamage || 0, safe(stats.damage * stats.burn)); enemy.burnTime = Math.max(enemy.burnTime || 0, stats.burnDuration); }

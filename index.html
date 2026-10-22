@@ -27,8 +27,8 @@
   <script defer src="jump-app.js?v=20261017-softjump1"></script>
   <script defer src="defense-forms.js?v=20261021-elements1"></script>
   <script defer src="defense-enemies.js?v=20261019-paths1"></script>
-  <script defer src="defense-game.js?v=20261022-impact1"></script>
-  <script defer src="defense-renderer.js?v=20261022-impact1"></script>
+  <script defer src="defense-game.js?v=20261022-control1"></script>
+  <script defer src="defense-renderer.js?v=20261022-control1"></script>
   <script defer src="defense-sound.js?v=20261021-elements1"></script>
   <script defer src="defense-app.js?v=20261022-impact1"></script>
   <script defer src="modes.js?v=20261019-defense1"></script>
@@ -197,7 +197,7 @@
       <p class="defense-guide-intro">查看图鉴时，战场会暂停。</p>
       <h3>同元素，能合成</h3><p>同等级、同基础元素的守卫，无论高阶属性和技能是否一致，都可以合成。把材料拖到想保留的守卫上，接收方继续沿自己的技能进化。失败只消耗材料，接收方不降级。</p>
       <h3>垃圾筐，腾出阵位</h3><p>把普通守卫拖到垃圾筐上松手，即可丢弃；也可以先选中守卫，再点击垃圾筐确认。丢弃不会获得分数或材料。黄金战士不能丢弃，没有待命同伴时也会保留最后一位守卫。</p>
-      <h3>五种元素，十种反应</h3><p>不同元素在短时间内接力击中同一只酒瓶，不分先后，都能触发对应反应。</p><ul id="defense-reactions" class="defense-reactions"></ul>
+      <h3>五种元素，十种反应</h3><p>冰霜命中附加 3 秒减速，基础减速 25%，触发元素反应后消除。草木每次命中缠绕定身 0.2 秒，再次命中刷新时长。不同元素接力击中同一只酒瓶，不分先后，都能触发对应反应。</p><ul id="defense-reactions" class="defense-reactions"></ul>
       <h3>隐藏进化 · 黄金战士</h3><p>第26波起，两名15级及以上、符合合成规则的守卫合成时，有5%概率觉醒黄金战士，每局只出现一次。</p><p>把任意普通守卫拖到黄金战士上，按其显示等级积累进度。每次升阶需要10、20、40、80、160…级材料，溢出进度保留。黄金1阶基础攻击30，之后每升一阶乘3。</p>
     </div>
   </dialog>

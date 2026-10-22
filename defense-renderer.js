@@ -542,6 +542,39 @@
     }
   }
 
+  function enemyStatus(ctx, e, game, options) {
+    // These accents follow the actual control timers, not the reaction mark:
+    // consuming frost therefore removes its crystals on the very next frame.
+    const phase = options.reducedMotion ? 0 : Math.sin(number(game.elapsed) * 5 + number(e.id));
+    if (number(e.frostTime) > 0) {
+      ellipse(ctx, 0, 26, 19 + phase * .6, 7, '#72dfff55', '#e5fcff', 2);
+      for (const side of [-1, 1]) {
+        const x = side * 15;
+        polygon(ctx, [[x - 4, 23], [x - 3, 13], [x + side * 2, 7], [x + 4, 19], [x + 3, 25]], '#71d9eecc', '#e5fcff', 1.3);
+        line(ctx, x, 23, x + side, 12, '#ffffff', 1);
+      }
+      snowflake(ctx, 0, 28, 4, '#e5fcff');
+    } else if (number(e.slowTime) > 0) {
+      ellipse(ctx, 0, 25, 16, 6, '#c5cfac44', '#d4ddbb', 1.3);
+    }
+    if (number(e.rootTime) > 0) {
+      ellipse(ctx, 0, 27, 19, 6, '#407b4966', '#a5ec76', 1.5);
+      // Two narrow coils leave the bottle label visible while the feet and
+      // side leaves make even a short, repeatedly refreshed root recognizable.
+      for (const color of ['#245d36', '#9ce66d']) {
+        ctx.strokeStyle = color; ctx.lineWidth = color === '#245d36' ? 4.5 : 2.4;
+        ctx.beginPath(); ctx.moveTo(-17, 28);
+        ctx.bezierCurveTo(-5, 21, 16, 26, 15, 17);
+        ctx.bezierCurveTo(14, 10, -18, 17, -14, 6);
+        ctx.stroke();
+      }
+      for (const side of [-1, 1]) {
+        const x = side * 15, y = side < 0 ? 8 : 19;
+        polygon(ctx, [[x, y + 3], [x + side * 7, y - 4], [x + side * 8, y + 2], [x + side * 3, y + 6]], '#a5ec76', '#245d36', 1.2);
+      }
+    }
+  }
+
   function enemy(ctx, e, game, options) {
     if (!Number.isFinite(e.x) || !Number.isFinite(e.y) || e.y < -45 || e.y > 700) return;
     const data = catalog?.byKind?.[e.kind] || { tint: '#c58a39' };
@@ -567,7 +600,7 @@
         ellipse(ctx, 0, 0, w * .66, h * .45, null, `rgba(255,245,161,${hit * .8})`, 2);
       }
     } else { ctx.save(); ctx.scale(.96, 1.15); bottle(ctx, e.kind, hit); ctx.restore(); }
-    if (number(e.slowTime) > 0) ellipse(ctx, 0, 25, 16, 6, '#b4f3ff55', '#d3fbff', 1.5);
+    enemyStatus(ctx, e, game, options);
     ctx.restore();
   }
 
