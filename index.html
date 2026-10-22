@@ -32,11 +32,12 @@
   <script defer src="defense-sound.js?v=20261021-elements1"></script>
   <script defer src="defense-leaderboard.js?v=20261022-defenseboard1"></script>
   <script defer src="defense-app.js?v=20261022-swap1"></script>
-  <link rel="stylesheet" href="garden.css?v=20261022-gardenalive1">
-  <script defer src="garden-forms.js?v=20261022-gardenclassic1"></script>
-  <script defer src="garden-game.js?v=20261022-gardenalive1"></script>
-  <script defer src="garden-renderer.js?v=20261022-gardenalive1"></script>
-  <script defer src="garden-app.js?v=20261022-gardenalive1"></script>
+  <link rel="stylesheet" href="garden.css?v=20261022-gardenphotos1">
+  <script defer src="garden-forms.js?v=20261022-gardenphotos1"></script>
+  <script defer src="garden-enemy-forms.js?v=20261022-gardenphotos1"></script>
+  <script defer src="garden-game.js?v=20261022-gardenphotos1"></script>
+  <script defer src="garden-renderer.js?v=20261022-gardenphotos1"></script>
+  <script defer src="garden-app.js?v=20261022-gardenphotos1"></script>
   <script defer src="modes.js?v=20261022-garden1"></script>
 </head>
 <body>
@@ -215,7 +216,7 @@
       <section id="garden-play" aria-label="花园战场" hidden>
       <div class="garden-workbench">
         <div class="garden-sun-counter" aria-label="可用阳光"><span aria-hidden="true">☀</span><strong id="garden-sun">150</strong><small>阳光</small></div>
-        <div class="garden-seeds" id="garden-seeds" role="group" aria-label="选择种植角色"></div>
+        <div class="garden-seeds" id="garden-seeds" aria-label="角色种子盒，手机可左右滑动选卡" role="group"></div>
       </div>
       <div class="garden-field-head"><span><b id="garden-level-name">01 · 第一片草坪</b><span id="garden-level-goal">从中间一条草坪开始</span></span><span id="garden-wave">准备种植</span></div>
       <div class="garden-board" id="garden-board">
@@ -229,8 +230,8 @@
         <div class="garden-current"><strong id="garden-selected-name">先种一位射手</strong><p id="garden-status" role="status">点击阳光收集，再选角色、点草地种植。</p></div>
         <div class="garden-controls" aria-label="花园操作"><button id="garden-shovel" type="button" aria-pressed="false">铲除</button><button id="garden-pause" type="button" aria-pressed="false" disabled>暂停</button><button id="garden-restart" type="button">重开</button><button id="garden-sound" type="button" aria-pressed="true">音效开</button></div>
       </div>
-      <footer class="garden-footnote"><span>阳光会消失，记得及时收取。每条小路有一次清扫车救场。</span><span>1–6 选卡 · 方向键选格 · Enter 种植 · C 收阳光</span></footer>
-      <details class="garden-rule-note"><summary>白天草坪 · 玩法说明</summary><p>先在种子盒里选好本局伙伴，再点角色卡、点空地种植；点太阳收集 25 阳光。卡片变暗时需要等待冷却或补足阳光。射手只攻击前方同一行的敌人，敌人靠近后会停下啃咬。</p><p>日光伙伴约 7 秒首产，随后约 24 秒产出；冰霜同时减慢移动与啃咬；双星分两次射击；焰火引燃后炸开周围 3×3 区域。护甲破损后仍有本体；受伤会掉落手臂，失去头部后不再啃咬。</p><p>前三关依次开放中间一行、三行及新角色；自由演练开放五行、全部六卡和铲子。清扫车每条路只用一次。当前为白天玩法 Demo，使用自己的美术和演示出怪脚本。</p></details>
+      <footer class="garden-footnote"><span>阳光会消失，记得及时收取。每条小路有一次清扫车救场。</span><span>1–7 选卡 · 方向键选格 · Enter 种植 · C 收阳光</span></footer>
+      <details class="garden-rule-note"><summary>白天草坪 · 玩法说明</summary><p>先在种子盒里选好本局伙伴，再点角色卡、点空地种植；点太阳收集 25 阳光。卡片变暗时需要等待冷却或补足阳光。普通射手攻击前方同一行，星星射手向左、上、下和右侧两条斜线发射，敌人靠近后会停下啃咬。</p><p>日光伙伴约 7 秒首产，随后约 24 秒产出；冰霜同时减慢移动与啃咬；双发射手分两次射击；焰火引燃后炸开周围 3×3 区域。护甲破损后仍有本体；受伤会掉落手臂，失去头部后不再啃咬。</p><p>前三关依次开放中间一行、三行及新角色；自由演练开放五行、全部七卡和铲子。清扫车每条路只用一次。当前为白天玩法 Demo，使用自己的美术和演示出怪脚本。</p></details>
       </section>
     </main>
   </section>

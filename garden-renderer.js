@@ -11,6 +11,7 @@
     ice: { photo: 7, color: '#9ce3f2', dark: '#3d8ca1', symbol: '❄' },
     burst: { photo: 9, color: '#b8adf0', dark: '#6b629c', symbol: '••' },
     bomb: { photo: 11, color: '#fa9674', dark: '#b84b36', symbol: '✦' },
+    star: { photo: null, color: '#ffe783', dark: '#b98534', symbol: '★' },
   };
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
   const finite = (n, fallback = 0) => Number.isFinite(n) ? n : fallback;
@@ -52,6 +53,14 @@
   function sparkle(ctx, x, y, r, fill) {
     poly(ctx, [[x, y-r], [x+r*.23, y-r*.23], [x+r, y], [x+r*.23, y+r*.23],
       [x,y+r], [x-r*.23,y+r*.23], [x-r,y], [x-r*.23,y-r*.23]], fill);
+  }
+  function star(ctx, x, y, r, fill, stroke, width = 1) {
+    const points=[];
+    for(let i=0;i<10;i++) {
+      const angle=-Math.PI/2+i*Math.PI/5, radius=i%2?r*.46:r;
+      points.push([x+Math.cos(angle)*radius,y+Math.sin(angle)*radius]);
+    }
+    poly(ctx,points,fill,stroke,width);
   }
   function flower(ctx, x, y, r, color = '#fff5c0') {
     for (let i = 0; i < 5; i++) {
@@ -127,14 +136,15 @@
       this.ctx = canvas.getContext('2d');
       this.levels = options.levels || root.GameLevels?.levels || [];
       this.forms = options.forms || root.GardenForms || {};
+      this.enemyForms = options.enemyForms || root.GardenEnemyForms || {};
       this.reducedMotion = !!options.reducedMotion;
       this.images = new Map();
       this.width = 1; this.height = 1; this.dpr = 1;
       this.terrainCanvas = null; this.terrainKey = '';
       this.geometry = this._geometry(1, 1);
       if (typeof root.Image === 'function') {
-        for (const type of [...Object.keys(LOOKS), 'mower']) {
-          const info = this._form(type);
+        for (const info of [...Object.keys(LOOKS), 'mower'].map(type=>this._form(type))
+          .concat(Object.values(this.enemyForms))) {
           if (!info?.image || this.images.has(info.image)) continue;
           const image = new root.Image();
           image.onload = image.onerror = () => options.onReady?.();
@@ -147,7 +157,7 @@
     }
 
     _form(type) {
-      return this.forms[type] || this.levels[LOOKS[type]?.photo];
+      return this.forms[type] || (Number.isInteger(LOOKS[type]?.photo) ? this.levels[LOOKS[type].photo] : undefined);
     }
 
     _geometry(width, height) {
@@ -363,6 +373,10 @@
         const ratio=frame[2]/frame[3],height=Math.min(56,53/ratio),width=height*ratio;
         ctx.save(); ctx.shadowColor='#fff9e8'; ctx.shadowBlur=3; ctx.shadowOffsetX=0; ctx.shadowOffsetY=0;
         ctx.drawImage(image,...frame,-width/2,-height+1,width,height); ctx.restore();
+      } else if(plant.type==='star') {
+        star(ctx,0,-25,27,look.color,look.dark,2);
+        ellipse(ctx,-6,-27,2,3,'#755823');ellipse(ctx,6,-27,2,3,'#755823');
+        line(ctx,-3,-19,3,-19,look.dark,1.5);
       } else {
         ellipse(ctx,0,-25,19,22,look.color,look.dark,2);
         ellipse(ctx,-6,-28,2.5,3,'#fff8db'); ellipse(ctx,7,-28,2.5,3,'#fff8db');
@@ -378,6 +392,12 @@
         }
         if(pulse>.05) sparkle(ctx,39,-17,8*pulse,plant.type==='ice'?'#e8fcff':'#fff9a4');
       }
+      if(plant.type==='star') {
+        for(let i=0;i<5;i++) {
+          const angle=i*TAU/5-Math.PI/2, radius=29+pulse*9;
+          star(ctx,Math.cos(angle)*radius,-24+Math.sin(angle)*radius,3+pulse*4,'#fff4b4','#d2a248',.7);
+        }
+      }
       ctx.restore();
       if(hurt>0) {
         sparkle(ctx,18,-32,10*hurt,'#fff5b6');
@@ -391,7 +411,113 @@
       ctx.restore();
     }
 
+    _enemyPhoto(type) {
+      const info=this.enemyForms[type],image=info&&this.images.get(info.image);
+      if(!image?.complete || !image.naturalWidth || !info.rig)return null;
+      if(['head','torso','nearArm','farArm','nearLeg','farLeg'].some(name=>{
+        const part=info.rig[name];
+        return !part?.polygon?.length || !Array.isArray(part.pivot) || part.pivot.length!==2;
+      }))return null;
+      const frame=info.frame || [0,0,image.naturalWidth,image.naturalHeight];
+      const height=74,width=height*frame[2]/frame[3];
+      return {info,image,frame,width,height};
+    }
+
+    _photoPart(ctx,photo,name,angle=0,shiftX=0,shiftY=0) {
+      const part=photo.info.rig[name];
+      if(!part?.polygon?.length || !part.pivot)return false;
+      const {width:w,height:h}=photo,px=(part.pivot[0]-.5)*w,py=(part.pivot[1]-1)*h;
+      ctx.save();ctx.translate(px+shiftX,py+shiftY);ctx.rotate(angle);ctx.translate(-px,-py);
+      ctx.beginPath();
+      part.polygon.forEach(([x,y],i)=>i?ctx.lineTo((x-.5)*w,(y-1)*h):ctx.moveTo((x-.5)*w,(y-1)*h));
+      ctx.closePath();ctx.clip();
+      ctx.drawImage(photo.image,...photo.frame,-w/2,-h,w,h);
+      ctx.restore();return true;
+    }
+
+    _photoHeadPosition(photo) {
+      const points=photo.info.rig.head?.polygon || [[.3,0],[.7,.22]];
+      const xs=points.map(point=>point[0]),ys=points.map(point=>point[1]);
+      const left=Math.min(...xs),right=Math.max(...xs),top=Math.min(...ys),bottom=Math.max(...ys);
+      return {x:((left+right)/2-.5)*photo.width,
+        y:((top+bottom)/2-1)*photo.height,
+        armorScale:clamp((right-left)*photo.width/36,.2,.46)};
+    }
+
+    _photoPose(ctx,photo,enemy,pose={}) {
+      const stride=finite(pose.stride),reach=finite(pose.reach),bite=finite(pose.bite);
+      const still=this.reducedMotion,legSwing=still?0:stride*.13;
+      this._photoPart(ctx,photo,'farLeg',-legSwing);
+      this._photoPart(ctx,photo,'nearLeg',legSwing);
+      ctx.save();ctx.translate(0,-finite(pose.bob));
+      // Arms and legs are independent photo pieces. A removed part is never painted into the torso.
+      this._photoPart(ctx,photo,'farArm',.34+reach*.35+(still?0:stride*.08));
+      this._photoPart(ctx,photo,'torso',-.035+(still?0:stride*.012));
+      if(!enemy.headless)this._photoPart(ctx,photo,'head',-.04-bite*.07,-bite*.6,0);
+      if(!enemy.armLost)this._photoPart(ctx,photo,'nearArm',.55+reach*.43-(still?0:stride*.09));
+      if(!enemy.headless&&finite(enemy.armorHp)>0&&['helmet','brute','bucket','cone','armor','armored'].includes(enemy.type)) {
+        const p=this._photoHeadPosition(photo);
+        ctx.save();ctx.translate(p.x,p.y);ctx.scale(p.armorScale,p.armorScale);visitorArmor(ctx,enemy.type);ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    _photoEnemy(ctx,enemy,time) {
+      const photo=this._enemyPhoto(enemy.type);if(!photo)return false;
+      const g=this.geometry,p=this._world(enemy.x,enemy.row+.72);
+      const hasPole=enemy.type==='runner'&&!enemy.headless&&(enemy.hasPole??(!enemy.usedPole&&!enemy.hasVaulted));
+      const vaulting=hasPole&&!!enemy.vaulting,progress=clamp(finite(enemy.vaultProgress),0,1);
+      const jump=vaulting?Math.sin(progress*Math.PI)*49:0;
+      const fast=hasPole||enemy.type==='flag',cold=finite(enemy.slowTime)>0;
+      const seed=typeof enemy.id==='number'?enemy.id:Array.from(String(enemy.id||enemy.row))
+        .reduce((value,character)=>value+character.charCodeAt(0),0);
+      const phase=this.reducedMotion?0:time*(fast?12:5)*(cold?.5:1)+seed*1.7;
+      const stride=this.reducedMotion?0:Math.sin(phase),hit=clamp(finite(enemy.hitPulse)/180,0,1);
+      const eating=!enemy.headless&&!vaulting&&(enemy.eating||enemy.attacking||enemy.state==='attacking');
+      const bite=this.reducedMotion?0:eating?(1+Math.sin(phase*2))*.5:0;
+      const scale=Math.min(g.cellWidth/69,g.cellHeight/80);
+      ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);
+      ellipse(ctx,1,5,22-jump*.16,7-jump*.045,'#2e4b2e3b');
+      if(hasPole) {
+        if(vaulting) {
+          const grip=-32+progress*60;
+          line(ctx,grip,4,grip+10-progress*55,-70-jump,'#6e8052',3.2);
+        } else line(ctx,-45,-61,30,-13,'#6e8052',3.2);
+      }
+      ctx.save();ctx.translate(this.reducedMotion?0:hit*4,-jump);ctx.rotate(this.reducedMotion?0:-hit*.045);
+      this._photoPose(ctx,photo,enemy,{stride:vaulting?-.65:eating?stride*.2:stride,
+        bob:this.reducedMotion?0:Math.abs(stride)*(eating?.55:1.7),reach:eating?1:0,bite});
+      if(enemy.type==='flag') {
+        line(ctx,16,0,16,-82,'#697750',2.7);
+        poly(ctx,[[17,-80],[42,-77],[38,-65],[43,-52],[17,-56]],'#cc6a53','#914e3c',1.5);
+        sparkle(ctx,29,-66,6,'#f5dfa1');
+      }
+      if(cold) {
+        sparkle(ctx,-20,-37,5,'#d6f8ff');sparkle(ctx,20,-18,4,'#d6f8ff');
+        ellipse(ctx,0,4,23,7,'#a9e3ed33','#9adee6',1);
+      }
+      if(hit>0) {
+        sparkle(ctx,-19,-40,14*hit,'#fff4ae');
+        line(ctx,-29,-50,-35,-58,'#fff3c7',1.8*hit);
+      }
+      if(enemy.hp<enemy.maxHp||finite(enemy.armorHp)>0) {
+        const head=this._photoHeadPosition(photo);
+        const y=enemy.headless?-62:finite(enemy.armorHp)>0?head.y-head.armorScale*52-7:-84;
+        round(ctx,-18,y,36,4,2,'#445342b0');
+        round(ctx,-17,y+1,34*clamp(enemy.hp/enemy.maxHp,0,1),2,1,'#f1d08a');
+      }
+      ctx.restore();ctx.restore();return true;
+    }
+
+    _photoLoosePart(ctx,photo,name) {
+      const part=photo.info.rig[name];if(!part?.pivot)return false;
+      const px=(part.pivot[0]-.5)*photo.width,py=(part.pivot[1]-1)*photo.height;
+      ctx.save();ctx.translate(-px,-py);const drawn=this._photoPart(ctx,photo,name);ctx.restore();
+      return drawn;
+    }
+
     _enemy(ctx, enemy, time) {
+      if(this._photoEnemy(ctx,enemy,time))return;
       const g=this.geometry,p=this._world(enemy.x,enemy.row+.72);
       const runner=['runner','fast'].includes(enemy.type);
       const hasPole=runner&&!enemy.headless&&(enemy.hasPole ?? (!enemy.usedPole&&!enemy.hasVaulted));
@@ -516,9 +642,17 @@
       ctx.restore();
     }
 
-    _projectile(ctx,projectile) {
-      const p=this._world(projectile.x,projectile.row+.44),g=this.geometry;
+    _projectile(ctx,projectile,time=0) {
+      const p=this._world(projectile.x,finite(projectile.y,projectile.row+.44)),g=this.geometry;
       const r=Math.max(3.2,Math.min(g.cellWidth*.105,7));
+      if(projectile.type==='star') {
+        const dx=finite(projectile.vx,-1)*g.cellWidth,dy=finite(projectile.vy)*g.cellHeight;
+        const distance=Math.max(.01,Math.hypot(dx,dy));
+        line(ctx,p.x-dx/distance*r*3.5,p.y-dy/distance*r*3.5,p.x,p.y,'#ffe18885',r*.75);
+        ctx.save();ctx.translate(p.x,p.y);ctx.rotate(this.reducedMotion?0:time*7+projectile.x*1.4+finite(projectile.y));
+        star(ctx,0,0,r*1.35,'#ffe883','#c29439',Math.max(.8,r*.16));
+        sparkle(ctx,-r*.15,-r*.2,r*.38,'#fffbed');ctx.restore();return;
+      }
       const ice=projectile.type==='ice',burst=projectile.type==='burst';
       const color=ice?'#c6f6ff':burst?'#e1d9ff':'#e5f6a7';
       line(ctx,p.x-r*3.4,p.y,p.x-r,p.y,ice?'#a9e5f46b':burst?'#c1b1e97a':'#cfeb8b7d',r*.85);
@@ -547,21 +681,41 @@
     _effect(ctx,effect,time) {
       const g=this.geometry,p=this._world(effect.x,finite(effect.y,finite(effect.row)+.55));
       const life=finite(effect.life,0),max=Math.max(.01,finite(effect.maxLife,life || 1));
-      const progress=clamp(1-life/max,0,1),scale=Math.min(g.cellWidth/70,g.cellHeight/76);
+      const photo=this._enemyPhoto(effect.enemyType);
+      const progress=clamp(1-life/max,0,1),scale=photo?Math.min(g.cellWidth/69,g.cellHeight/80):Math.min(g.cellWidth/70,g.cellHeight/76);
+      const photoBaseline=.17*g.cellHeight/scale;
       const type=effect.type || '';
       ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);ctx.globalAlpha=1-progress;
       if(type==='armLost') {
         const fall=this.reducedMotion?1:progress;
-        ctx.save();ctx.translate(-14-fall*19,-16-Math.sin(fall*Math.PI)*12+fall*30);
-        ctx.rotate(.2+fall*2.1);visitorLooseArm(ctx,effect.enemyType);ctx.restore();
+        ctx.save();
+        if(photo) {
+          const pivot=photo.info.rig.nearArm.pivot;
+          ctx.translate((pivot[0]-.5)*photo.width-fall*19,(pivot[1]-1)*photo.height+photoBaseline-Math.sin(fall*Math.PI)*12+fall*35);
+          ctx.rotate(.55+fall*2.1);this._photoLoosePart(ctx,photo,'nearArm');
+        } else {
+          ctx.translate(-14-fall*19,-16-Math.sin(fall*Math.PI)*12+fall*30);
+          ctx.rotate(.2+fall*2.1);visitorLooseArm(ctx,effect.enemyType);
+        }
+        ctx.restore();
         if(progress>.58)ellipse(ctx,-30,15,8+progress*8,2,'#e8ddbc8c');
       } else if(type==='armorBreak') {
-        ctx.save();ctx.translate(12+progress*31,-47-Math.sin(progress*Math.PI)*21+progress*43);
-        ctx.rotate(.2+progress*2.5);visitorArmor(ctx,effect.enemyType || 'helmet');ctx.restore();
+        const anchor=photo?this._photoHeadPosition(photo):{x:12,y:-47};
+        ctx.save();ctx.translate(anchor.x+progress*31,anchor.y+(photo?photoBaseline:0)-Math.sin(progress*Math.PI)*21+progress*43);
+        ctx.rotate(.2+progress*2.5);if(photo)ctx.scale(anchor.armorScale,anchor.armorScale);
+        visitorArmor(ctx,effect.enemyType || 'helmet');ctx.restore();
         for(let i=0;i<3;i++)sparkle(ctx,-7+i*10,-40-progress*20,4*(1-progress),'#f9e9ba');
       } else if(type==='headless') {
-        ctx.save();ctx.translate(-12-progress*29,-35-Math.sin(progress*Math.PI)*18+progress*39);
-        ctx.rotate(-progress*2.7);visitorHead(ctx);ctx.restore();
+        ctx.save();
+        if(photo) {
+          const pivot=photo.info.rig.head.pivot;
+          ctx.translate((pivot[0]-.5)*photo.width-progress*29,(pivot[1]-1)*photo.height+photoBaseline-Math.sin(progress*Math.PI)*18+progress*55);
+          ctx.rotate(-progress*2.7);this._photoLoosePart(ctx,photo,'head');
+        } else {
+          ctx.translate(-12-progress*29,-35-Math.sin(progress*Math.PI)*18+progress*39);
+          ctx.rotate(-progress*2.7);visitorHead(ctx);
+        }
+        ctx.restore();
         if(progress>.45)ellipse(ctx,-12-progress*29,13,7+progress*7,2,'#e8ddbc8c');
       } else if(type==='vault' || type==='land') {
         ellipse(ctx,0,14,9+progress*22,3+progress*6,null,'#eee8be',2);
@@ -577,9 +731,11 @@
         const thrown=effect.source==='bomb'||effect.source==='mower';
         const drop=this.reducedMotion?1:1-Math.pow(1-clamp(progress*1.45,0,1),2);
         ctx.globalAlpha=clamp((1-progress)*2,0,1);
-        ctx.save();ctx.translate(thrown?drop*18:0,12+(thrown?-Math.sin(progress*Math.PI)*20:0));
+        ctx.save();ctx.translate(thrown?drop*18:0,(photo?photoBaseline:12)+(thrown?-Math.sin(progress*Math.PI)*20:0));
         ctx.rotate((thrown?1.85:1.48)*drop);ctx.scale(1,1-drop*.08);
-        visitorFallenBody(ctx,effect);ctx.restore();
+        if(photo)this._photoPose(ctx,photo,{...effect,type:effect.enemyType},{stride:0,reach:0,bite:0});
+        else visitorFallenBody(ctx,effect);
+        ctx.restore();
         if(progress>.25||this.reducedMotion)for(let i=0;i<6;i++) {
           const a=i*TAU/6,spread=clamp((progress-.25)/.75,0,1);
           ellipse(ctx,16+Math.cos(a)*(8+spread*26),14+Math.sin(a)*(3+spread*5),
@@ -644,7 +800,10 @@
         for(const enemy of state.enemies || [])if(enemy.row===row)actors.push({kind:'enemy',value:enemy,x:enemy.x});
         actors.sort((a,b)=>a.x-b.x);
         for(const actor of actors)actor.kind==='plant'?this._plant(ctx,actor.value,time):this._enemy(ctx,actor.value,time);
-        for(const projectile of state.projectiles || [])if(projectile.row===row)this._projectile(ctx,projectile);
+        for(const projectile of state.projectiles || []) {
+          const drawRow=Number.isFinite(projectile.y)?clamp(Math.floor(projectile.y),0,4):projectile.row;
+          if(drawRow===row)this._projectile(ctx,projectile,time);
+        }
       }
       for(const effect of state.effects || [])this._effect(ctx,effect,time);
       for(const sun of state.suns || [])this._sun(ctx,sun,time);

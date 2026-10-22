@@ -6,9 +6,10 @@
     { id: 'sun', name: '日光伙伴', cost: 50, cooldown: 7500, photoIndex: 1, color: '#f3bc42', description: '首产约7秒，之后每24秒产出25阳光', hp: 300, production: 24000 },
     { id: 'shooter', name: '飞叶射手', cost: 100, cooldown: 7500, photoIndex: 3, color: '#6d9f55', description: '约1.4秒一发，每发20伤害', hp: 300, damage: 20, attackInterval: 1425 },
     { id: 'wall', name: '磐石守卫', cost: 50, cooldown: 30000, initialCooldown: 15000, photoIndex: 5, color: '#bc8d59', description: '4000生命，挡住入侵者', hp: 4000 },
-    { id: 'ice', name: '冰霜伙伴', cost: 175, cooldown: 7500, photoIndex: 7, color: '#75c2da', description: '20伤害，移动和啃咬减半10秒', hp: 300, damage: 20, attackInterval: 1425 },
-    { id: 'burst', name: '双星射手', cost: 200, cooldown: 7500, photoIndex: 9, color: '#ac78b5', description: '连续两发，每发20伤害', hp: 300, damage: 20, attackInterval: 1425 },
+    { id: 'ice', name: '寒冰射手', cost: 175, cooldown: 7500, photoIndex: 7, color: '#75c2da', description: '20伤害，移动和啃咬减半10秒', hp: 300, damage: 20, attackInterval: 1425 },
+    { id: 'burst', name: '双发射手', cost: 200, cooldown: 7500, photoIndex: 9, color: '#ac78b5', description: '连续两发，每发20伤害', hp: 300, damage: 20, attackInterval: 1425 },
     { id: 'bomb', name: '焰火伙伴', cost: 150, cooldown: 50000, initialCooldown: 25000, photoIndex: 11, color: '#e17a5e', description: '1.2秒后在3×3范围造成1800伤害', hp: 300, fuse: 1200, damage: 1800 },
+    { id: 'star', name: '星星射手', cost: 125, cooldown: 7500, color: '#e8b83f', description: '约1.5秒向左、上下和右侧斜向发射五颗星，每颗20伤害', hp: 300, damage: 20, attackInterval: 1500 },
   ].map(Object.freeze);
   const PLANT_BY_ID = Object.fromEntries(PLANTS.map(plant => [plant.id, plant]));
   const ENEMIES = Object.freeze({
@@ -43,7 +44,7 @@
       { at: 100000, count: 3, spacing: 3000, pool: ['walker', 'helmet'] },
       { at: 126000, count: 6, spacing: 1000, pool: ['helmet', 'walker'], flag: true },
     ] },
-    { id: 'practice', title: '自由演练', subtitle: '五行草坪，六名伙伴与所有白天来客', practice: true, cards: ['sun', 'shooter', 'wall', 'ice', 'burst', 'bomb'], activeRows: [0, 1, 2, 3, 4], shovel: true, reward: null, startSun: 50, duration: 300000, waves: [
+    { id: 'practice', title: '自由演练', subtitle: '五行草坪，七名伙伴与所有白天来客', practice: true, cards: ['sun', 'shooter', 'wall', 'ice', 'burst', 'bomb', 'star'], activeRows: [0, 1, 2, 3, 4], shovel: true, reward: null, startSun: 50, duration: 300000, waves: [
       { at: 25000, count: 2, spacing: 20000, pool: ['walker'] },
       { at: 65000, count: 3, spacing: 15000, pool: ['walker'] },
       { at: 115000, count: 3, spacing: 12000, pool: ['walker', 'helmet'] },
@@ -53,6 +54,25 @@
     ] },
   ].map(level => Object.freeze({ ...level, cards: Object.freeze(level.cards), activeRows: Object.freeze(level.activeRows), tutorialGate: level.tutorialGate ? Object.freeze(level.tutorialGate) : null, waves: Object.freeze(level.waves.map(wave => Object.freeze({ ...wave, pool: Object.freeze(wave.pool) }))) }));
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+  const STAR_DIRECTIONS = Object.freeze([[-1, 0], [0, -1], [0, 1], [Math.SQRT1_2, -Math.SQRT1_2], [Math.SQRT1_2, Math.SQRT1_2]].map(Object.freeze));
+
+  // Earliest contact along a swept segment, including vertical and leftward shots.
+  function starContact(fromX, fromY, toX, toY, enemy) {
+    let entry = 0, exit = 1;
+    for (const [from, delta, center, radius] of [
+      [fromX, toX - fromX, enemy.x, .24],
+      [fromY, toY - fromY, enemy.row + .44, .26],
+    ]) {
+      if (Math.abs(delta) < 1e-9) {
+        if (from < center - radius || from > center + radius) return null;
+      } else {
+        const first = (center - radius - from) / delta, last = (center + radius - from) / delta;
+        entry = Math.max(entry, Math.min(first, last)); exit = Math.min(exit, Math.max(first, last));
+        if (entry > exit) return null;
+      }
+    }
+    return entry;
+  }
 
   class GardenGame {
     constructor(options = {}) {
@@ -111,7 +131,7 @@
       for (const id of ids) if (!this.level.cards.includes(id)) return false;
       if (this.level.tutorialGate && !ids.includes(this.level.tutorialGate.type)) return false;
       if (this.level.cards.includes('sun') && !ids.includes('sun')) return false;
-      if (!ids.some(id => ['shooter', 'ice', 'burst'].includes(id))) return false;
+      if (!ids.some(id => ['shooter', 'ice', 'burst', 'star'].includes(id))) return false;
       this.deck = [...ids]; this._notify(); return true;
     }
 
@@ -205,7 +225,8 @@
       }
       for (const plant of this.plants.slice()) this._stepPlant(plant, dt);
       for (const projectile of this.projectiles) this._stepProjectile(projectile, dt);
-      this.projectiles = this.projectiles.filter(projectile => !projectile.dead && projectile.x <= COLS + 1);
+      this.projectiles = this.projectiles.filter(projectile => !projectile.dead && projectile.x <= COLS + 1 &&
+        (projectile.type !== 'star' || (projectile.x >= -1 && projectile.y >= -1 && projectile.y <= ROWS + 1)));
       for (const mower of this.mowers) this._stepMower(mower, dt);
       for (const enemy of this.enemies) {
         if (enemy.hp <= 0 || this.status !== 'running') continue;
@@ -243,10 +264,16 @@
           if (plant.burstTimer <= 1e-7) { plant.pendingShot = false; this._shoot(plant); }
         }
         plant.attackTimer = Math.max(0, plant.attackTimer - dt);
-        const target = this.enemies.some(enemy => enemy.hp > 0 && !enemy.headless && enemy.row === plant.row && enemy.x >= plant.col + .35 && enemy.x <= COLS + .5);
+        const target = this.enemies.some(enemy => {
+          if (enemy.hp <= 0 || enemy.headless || enemy.x > COLS + .5) return false;
+          if (plant.type !== 'star') return enemy.row === plant.row && enemy.x >= plant.col + .35;
+          if (enemy.vaulting || enemy.x < -.5) return false;
+          const x = plant.col + .5, y = plant.row + .44;
+          return STAR_DIRECTIONS.some(([vx, vy]) => starContact(x, y, x + vx * 14, y + vy * 14, enemy) !== null);
+        });
         if (target && plant.attackTimer <= 1e-7) {
           plant.attackTimer = config.attackInterval - 75 + this._random() * 150; plant.attackPulse = 230;
-          const count = plant.type === 'burst' ? 2 : 1;
+          const count = plant.type === 'star' ? 5 : plant.type === 'burst' ? 2 : 1;
           this._shoot(plant);
           if (count === 2) { plant.pendingShot = true; plant.burstTimer = 150; }
           this._emit('shot', { plant, row: plant.row, x: plant.col + .5, count });
@@ -256,11 +283,30 @@
 
     _shoot(plant) {
       const config = PLANT_BY_ID[plant.type];
+      if (plant.type === 'star') {
+        for (const [dx, dy] of STAR_DIRECTIONS) this.projectiles.push({ id: this._id('shot'), type: 'star', row: plant.row,
+          x: plant.col + .5, y: plant.row + .44, vx: dx * 5.1, vy: dy * 5.1, damage: config.damage, speed: 5.1 });
+        return;
+      }
       this.projectiles.push({ id: this._id('shot'), type: plant.type, row: plant.row, x: plant.col + .78, damage: config.damage, speed: 5.1 });
     }
 
     _stepProjectile(projectile, dt) {
       if (projectile.dead) return;
+      if (projectile.type === 'star') {
+        const toX = projectile.x + projectile.vx * dt / 1000, toY = projectile.y + projectile.vy * dt / 1000;
+        let hit = null, firstContact = Infinity;
+        for (const enemy of this.enemies) {
+          if (enemy.hp <= 0 || enemy.vaulting) continue;
+          const contact = starContact(projectile.x, projectile.y, toX, toY, enemy);
+          if (contact !== null && contact < firstContact) { hit = enemy; firstContact = contact; }
+        }
+        if (hit) {
+          projectile.x += (toX - projectile.x) * firstContact; projectile.y += (toY - projectile.y) * firstContact;
+          projectile.dead = true; this._damage(hit, projectile.damage, 'star');
+        } else { projectile.x = toX; projectile.y = toY; }
+        return;
+      }
       const from = projectile.x, to = from + projectile.speed * dt / 1000;
       const hit = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.vaulting && enemy.row === projectile.row && enemy.x + .24 >= from && enemy.x - .24 <= to).sort((a, b) => a.x - b.x)[0];
       if (hit) {

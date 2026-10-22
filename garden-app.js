@@ -28,12 +28,14 @@
     function portraitFor(plant) {
       const portrait = document.createElement('span'); portrait.className = 'garden-portrait';
       const form = window.GardenForms?.[plant.id] || window.GameLevels?.levels?.[plant.photoIndex];
-      if (form) {
+      if (form?.image) {
         const img = document.createElement('img'); img.src = form.image; img.alt = ''; img.draggable = false;
         const [x, y, w, h] = form.frame || [0, 0, 1, 1], [iw, ih] = form.imageSize || [w, h], side = Math.max(w, h);
         img.style.width = `${iw / side * 100}%`; img.style.height = `${ih / side * 100}%`;
         img.style.left = `${((side - w) / 2 - x) / side * 100}%`; img.style.top = `${((side - h) / 2 - y) / side * 100}%`;
         portrait.appendChild(img);
+      } else if (plant.id === 'star') {
+        portrait.className += ' garden-star-portrait'; portrait.textContent = '★';
       }
       return portrait;
     }
@@ -41,7 +43,7 @@
       const config = level();
       if (!deckSelection.size) return '种子盒还是空的，先选几位伙伴。';
       if (config.cards.includes('sun') && !deckSelection.has('sun')) return '记得带上日光伙伴，保持阳光供给。';
-      if (![...deckSelection].some(id => ['shooter', 'ice', 'burst'].includes(id))) return '至少带上一位能持续射击的伙伴。';
+      if (![...deckSelection].some(id => ['shooter', 'ice', 'burst', 'star'].includes(id))) return '至少带上一位能持续射击的伙伴。';
       if (config.tutorialGate && !deckSelection.has(config.tutorialGate.type)) return '带上本关教学需要的伙伴。';
       return '';
     }
@@ -170,7 +172,7 @@
       const secondary = $('garden-overlay-secondary'); secondary.hidden = !['won', 'lost'].includes(state.status);
       text('garden-overlay-secondary', state.status === 'lost' ? '重新布阵' : '再玩本关');
       if (state.status === 'ready') {
-        text('garden-overlay-kicker', config.practice ? '自由演练 / 六位同伴全部开放' : `第 ${state.levelIndex + 1} 关 / ${config.title.replace(/^\d+\s*·\s*/, '')}`);
+        text('garden-overlay-kicker', config.practice ? `自由演练 / ${config.cards.length} 位同伴全部开放` : `第 ${state.levelIndex + 1} 关 / ${config.title.replace(/^\d+\s*·\s*/, '')}`);
         text('garden-overlay-title', '今天，守住花园。');
         text('garden-overlay-copy', config.subtitle || '先种采光员收集阳光，再在每条小路安排射手。'); text('garden-start', '开始种植 ↗');
       } else if (state.status === 'paused') {
@@ -179,7 +181,7 @@
       } else if (state.status === 'won') {
         text('garden-overlay-kicker', `第 ${state.levelIndex + 1} 关完成 · 击退 ${state.kills}`); text('garden-overlay-title', '这一片晴天，守住了。');
         const next = window.GardenGame.LEVELS[state.levelIndex + 1];
-        text('garden-overlay-copy', next ? next.practice ? '基础关卡已完成。自由演练开放五行草地、六位同伴和铲除工具。' : `获得新同伴，下一关：${next.subtitle}` : '六位同伴都已登场。可以重试演练，或回到前面的关卡。');
+        text('garden-overlay-copy', next ? next.practice ? '基础关卡已完成。自由演练开放五行草地、全部伙伴和铲除工具。' : `获得新同伴，下一关：${next.subtitle}` : '所有同伴都已登场。可以重试演练，或回到前面的关卡。');
         text('garden-start', next ? next.practice ? '进入自由演练 ↗' : '进入下一关 ↗' : '再守一轮 ↗');
       } else if (state.status === 'lost') {
         text('garden-overlay-kicker', `击退 ${state.kills} 位入侵者`); text('garden-overlay-title', '花园需要你再试一次。');
@@ -304,7 +306,7 @@
       if (key === 'r') { event.preventDefault(); if (!event.repeat) requestReset(state.levelIndex); return; }
       if (blocked() || state.status !== 'running') return;
       unlock();
-      if (/^[1-6]$/.test(key)) { event.preventDefault(); if (!event.repeat) choose(window.GardenGame.PLANTS[Number(key) - 1].id); }
+      if (/^[1-9]$/.test(key) && window.GardenGame.PLANTS[Number(key) - 1]) { event.preventDefault(); if (!event.repeat) choose(window.GardenGame.PLANTS[Number(key) - 1].id); }
       else if (key === 'c') { event.preventDefault(); for (const sun of [...state.suns]) game.collectSun(sun.id); refresh(); draw(); }
       else if (key.startsWith('arrow')) { event.preventDefault(); const cell = hover || { row: 2, col: 0 }; hover = { row: Math.max(0, Math.min(4, cell.row + (key === 'arrowdown' ? 1 : key === 'arrowup' ? -1 : 0))), col: Math.max(0, Math.min(8, cell.col + (key === 'arrowright' ? 1 : key === 'arrowleft' ? -1 : 0))) }; draw(); }
       else if (key === 'enter' || key === ' ') { event.preventDefault(); if (!event.repeat) act(hover || { row: 2, col: 0 }); }

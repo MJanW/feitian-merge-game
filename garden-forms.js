@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  // Independent garden role mapping: other game modes retain their numbered forms.
+  // Independent garden role mapping; numbered forms in other modes are unchanged.
   const forms = {
   "sun": {
     "image": "assets/photo-00.png",
@@ -48,19 +48,20 @@
     "sourceImage": "4:小坚果.jpg"
   },
   "ice": {
-    "image": "assets/photo-07.png",
+    "image": "assets/garden/ice-blue.png",
     "frame": [
-      128,
-      47,
-      1006,
-      1180
+      145,
+      12,
+      892,
+      1334
     ],
     "imageSize": [
-      1254,
-      1254
+      1124,
+      1399
     ],
-    "imageHash": "0e2e0a984218fab5030790db0b1117d4d09315c85c48407c7a52804e0a524d12",
-    "sourceImage": "6:寒冰射手.jpg"
+    "imageHash": "81f8f536aa9a95bec10523a8dabea3f08e8777730ef5481eec8ee96b2eb35e83",
+    "sourceImage": "codex-clipboard-e754060e-ecd6-449b-b295-67efd0d55b99.jpg",
+    "subject": "蓝衣人物（单人）"
   },
   "burst": {
     "image": "assets/garden/new-77.png",
