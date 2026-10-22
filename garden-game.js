@@ -2,6 +2,20 @@
   'use strict';
 
   const ROWS = 5, COLS = 9, STEP_MS = 1000 / 60;
+  const ULTIMATES = {
+    sun: ['灿烂日光', '喷出8颗阳光，共200点，记得点击收集'],
+    shooter: ['飞叶风暴', '连续发射20发强化飞叶'],
+    wall: ['坚不可摧', '回满生命，并获得10秒护盾'],
+    ice: ['极寒时刻', '冻结全场4秒，并连续发射寒冰弹'],
+    burst: ['双重狂潮', '连续发射30发强化飞叶'],
+    bomb: ['盛大焰火', '立即引爆更大范围的强化焰火'],
+    star: ['满天星雨', '向四周连续释放3轮星星弹幕'],
+    corn: ['黄油盛宴', '连续投出黄油，命中定身4秒'],
+    tallwall: ['城墙守护', '回满生命，获得更厚的10秒护盾'],
+    torch: ['烈焰长廊', '焚烧整行来客，并持续灼烧5秒'],
+    cannon: ['重炮齐鸣', '连续投出3枚大范围重炮弹'],
+    lightning: ['雷霆风暴', '雷击全场来客并短暂定身'],
+  };
   const PLANTS = [
     { id: 'sun', name: '日光伙伴', cost: 50, cooldown: 7500, photoIndex: 1, color: '#f3bc42', description: '首产约7秒，之后每24秒产出25阳光', hp: 300, production: 24000 },
     { id: 'shooter', name: '飞叶射手', cost: 100, cooldown: 7500, photoIndex: 3, color: '#6d9f55', description: '约1.4秒一发，每发20伤害', hp: 300, damage: 20, attackInterval: 1425 },
@@ -10,7 +24,12 @@
     { id: 'burst', name: '双发射手', cost: 200, cooldown: 7500, photoIndex: 9, color: '#ac78b5', description: '连续两发，每发20伤害', hp: 300, damage: 20, attackInterval: 1425 },
     { id: 'bomb', name: '焰火伙伴', cost: 150, cooldown: 50000, initialCooldown: 25000, photoIndex: 11, color: '#e17a5e', description: '1.2秒后在3×3范围造成1800伤害', hp: 300, fuse: 1200, damage: 1800 },
     { id: 'star', name: '星星射手', cost: 125, cooldown: 7500, color: '#e8b83f', description: '约1.5秒向左、上下和右侧斜向发射五颗星，每颗20伤害', hp: 300, damage: 20, attackInterval: 1500 },
-  ].map(Object.freeze);
+    { id: 'corn', name: '玉米投手', cost: 100, cooldown: 7500, color: '#dfb547', description: '抛射20伤害玉米；25%概率投出40伤害黄油并定身4秒', hp: 300, damage: 20, attackInterval: 3000 },
+    { id: 'tallwall', name: '高坚果守卫', cost: 125, cooldown: 30000, initialCooldown: 15000, color: '#9c7752', description: '8000生命，拦住撑杆跳跃', hp: 8000 },
+    { id: 'torch', name: '火炬伙伴', cost: 175, cooldown: 7500, color: '#e7803e', description: '穿过的普通飞叶伤害翻倍，并灼烧前方近处敌人', hp: 500, damage: 25, attackInterval: 1200 },
+    { id: 'cannon', name: '重炮投手', cost: 325, cooldown: 15000, color: '#b78c61', description: '每4.5秒投出90伤害炮弹，波及邻近行', hp: 300, damage: 90, attackInterval: 4500 },
+    { id: 'lightning', name: '闪电伙伴', cost: 200, cooldown: 7500, color: '#a68cdb', description: '每2.2秒释放35伤害闪电，最多连锁3名相邻来客', hp: 300, damage: 35, attackInterval: 2200 },
+  ].map(plant => Object.freeze({ ...plant, ultimateName: ULTIMATES[plant.id][0], ultimateDescription: ULTIMATES[plant.id][1] }));
   const PLANT_BY_ID = Object.fromEntries(PLANTS.map(plant => [plant.id, plant]));
   const ENEMIES = Object.freeze({
     walker: Object.freeze({ name: '迷路来客', hp: 270, armor: 0, speed: .2, bite: 100 }),
@@ -44,7 +63,7 @@
       { at: 100000, count: 3, spacing: 3000, pool: ['walker', 'helmet'] },
       { at: 126000, count: 6, spacing: 1000, pool: ['helmet', 'walker'], flag: true },
     ] },
-    { id: 'practice', title: '自由演练', subtitle: '五行草坪，七名伙伴与所有白天来客', practice: true, cards: ['sun', 'shooter', 'wall', 'ice', 'burst', 'bomb', 'star'], activeRows: [0, 1, 2, 3, 4], shovel: true, reward: null, startSun: 50, duration: 300000, waves: [
+    { id: 'practice', title: '自由演练', subtitle: '十二名伙伴自由搭配，练习能量豆与组合布阵', practice: true, cards: PLANTS.map(plant => plant.id), activeRows: [0, 1, 2, 3, 4], shovel: true, reward: null, startSun: 50, duration: 300000, waves: [
       { at: 25000, count: 2, spacing: 20000, pool: ['walker'] },
       { at: 65000, count: 3, spacing: 15000, pool: ['walker'] },
       { at: 115000, count: 3, spacing: 12000, pool: ['walker', 'helmet'] },
@@ -52,7 +71,24 @@
       { at: 215000, count: 4, spacing: 8000, pool: ['helmet', 'runner', 'brute', 'walker'] },
       { at: 275000, count: 8, spacing: 1000, pool: ['helmet', 'walker', 'brute'], flag: true },
     ] },
-  ].map(level => Object.freeze({ ...level, cards: Object.freeze(level.cards), activeRows: Object.freeze(level.activeRows), tutorialGate: level.tutorialGate ? Object.freeze(level.tutorialGate) : null, waves: Object.freeze(level.waves.map(wave => Object.freeze({ ...wave, pool: Object.freeze(wave.pool) }))) }));
+    ...[
+      { id: 'courtyard-gate', title: '04 · 花园的大门', subtitle: '撑杆来客首次现身，前后两层防线更安全', chapter: 'courtyard', reward: 'ice', cards: ['sun', 'shooter', 'wall', 'bomb'], activeRows: [1, 2, 3], startSun: 75, pools: [['walker'], ['walker', 'helmet'], ['walker', 'runner'], ['helmet', 'runner', 'walker']], counts: [2, 3, 4, 7] },
+      { id: 'dunes-frost', title: '05 · 沙丘里的寒流', subtitle: '五行战场开放，用寒冰减缓来客推进', chapter: 'dunes', reward: 'corn', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice'], pools: [['walker'], ['walker', 'helmet'], ['runner', 'walker'], ['helmet', 'runner', 'walker']], counts: [3, 4, 5, 8] },
+      { id: 'dunes-butter', title: '06 · 黄油时刻', subtitle: '投射物越过人群，黄油留下最危险的目标', chapter: 'dunes', reward: 'star', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn'], pools: [['walker'], ['helmet', 'walker'], ['brute', 'walker'], ['helmet', 'brute', 'walker']], counts: [3, 4, 5, 8] },
+      { id: 'dunes-stars', title: '07 · 沙海星阵', subtitle: '把星星放在中央，让斜向弹幕照顾多行', chapter: 'dunes', reward: 'tallwall', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star'], pools: [['walker'], ['runner', 'walker'], ['helmet', 'runner'], ['brute', 'runner', 'walker']], counts: [3, 5, 6, 9] },
+      { id: 'dunes-wall', title: '08 · 不可逾越', subtitle: '撑杆来客成队出现，高坚果守住跳跃路线', chapter: 'dunes', reward: 'torch', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star', 'tallwall'], pools: [['walker', 'runner'], ['runner', 'walker'], ['helmet', 'runner'], ['runner', 'brute', 'walker']], counts: [3, 5, 6, 10] },
+      { id: 'harbor-fire', title: '09 · 港口的灯火', subtitle: '射手后排、火炬前排，尝试火焰飞叶组合', chapter: 'harbor', reward: 'cannon', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star', 'tallwall', 'torch'], pools: [['walker'], ['helmet', 'walker'], ['brute', 'helmet'], ['brute', 'runner', 'walker']], counts: [4, 5, 7, 10] },
+      { id: 'harbor-cannon', title: '10 · 重炮迎潮', subtitle: '来客越来越密集，范围炮击可以同时打穿护甲', chapter: 'harbor', reward: 'lightning', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star', 'tallwall', 'torch', 'cannon'], pools: [['walker', 'helmet'], ['helmet', 'walker'], ['brute', 'helmet'], ['brute', 'helmet', 'walker']], counts: [4, 6, 8, 11] },
+      { id: 'harbor-storm', title: '11 · 雷云集结', subtitle: '相邻敌人可以传导闪电，留住密集人群再出手', chapter: 'harbor', reward: 'burst', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star', 'tallwall', 'torch', 'cannon', 'lightning'], pools: [['walker'], ['runner', 'helmet'], ['helmet', 'walker', 'runner'], ['brute', 'helmet', 'runner', 'walker']], counts: [4, 7, 8, 12] },
+      { id: 'harbor-finale', title: '12 · 守住最后一波', subtitle: '十二名伙伴集结，把每局唯一的能量豆留给关键时刻', chapter: 'harbor', reward: null, cards: PLANTS.map(plant => plant.id), pools: [['walker', 'helmet'], ['runner', 'helmet'], ['brute', 'runner', 'walker'], ['brute', 'helmet', 'runner']], counts: [4, 7, 9, 14] },
+    ].map((stage, index) => {
+      const { pools, counts, ...details } = stage;
+      return { ...details, activeRows: stage.activeRows || [0, 1, 2, 3, 4], shovel: true, startSun: stage.startSun || 100,
+        duration: 245000 + index * 5000,
+        waves: pools.map((pool, wave) => ({ at: [25000, 85000, 140000, 205000][wave] + index * 2000,
+          count: counts[wave], spacing: wave === 3 ? 1400 : Math.max(4500, 10000 - index * 400), pool, flag: wave === 3 })) };
+    }),
+  ].map((level, index) => Object.freeze({ ...level, chapter: level.chapter || 'courtyard', campaignOrder: level.practice ? null : index < 3 ? index + 1 : index, cards: Object.freeze(level.cards), activeRows: Object.freeze(level.activeRows), tutorialGate: level.tutorialGate ? Object.freeze(level.tutorialGate) : null, waves: Object.freeze(level.waves.map(wave => Object.freeze({ ...wave, pool: Object.freeze(wave.pool) }))) }));
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const STAR_DIRECTIONS = Object.freeze([[-1, 0], [0, -1], [0, 1], [Math.SQRT1_2, -Math.SQRT1_2], [Math.SQRT1_2, Math.SQRT1_2]].map(Object.freeze));
 
@@ -86,7 +122,7 @@
       this.levelIndex = Number.isInteger(levelIndex) ? clamp(levelIndex, 0, LEVELS.length - 1) : 0;
       this.level = LEVELS[this.levelIndex];
       this.deck = [...this.level.cards];
-      this.status = 'ready'; this.sun = this.level.startSun; this.kills = 0;
+      this.status = 'ready'; this.sun = this.level.startSun; this.kills = 0; this.plantFood = 1;
       this.elapsed = 0; this.wave = 0; this.totalWaves = this.level.waves.length;
       this.spawnElapsed = 0; this.tutorialReady = !this.level.tutorialGate;
       this._plantedCounts = Object.fromEntries(PLANTS.map(plant => [plant.id, 0]));
@@ -117,7 +153,7 @@
         tutorialHint: this.tutorialReady ? '' : this.level.tutorialGate.hint,
         spawnElapsed: this.spawnElapsed,
         nextWaveIn: this.tutorialReady && this._spawnIndex < this._spawnSchedule.length ? Math.max(0, this._spawnSchedule[this._spawnIndex].at - this.spawnElapsed) : null,
-        sun: this.sun, kills: this.kills, elapsed: this.elapsed,
+        sun: this.sun, plantFood: this.plantFood, kills: this.kills, elapsed: this.elapsed,
         wave: this.wave, totalWaves: this.totalWaves, spawned: this._spawnIndex,
         totalEnemies: this.totalEnemies, remainingEnemies: this.totalEnemies - this.kills,
         spawnProgress: this.totalEnemies ? this._spawnIndex / this.totalEnemies : 0,
@@ -131,7 +167,7 @@
       for (const id of ids) if (!this.level.cards.includes(id)) return false;
       if (this.level.tutorialGate && !ids.includes(this.level.tutorialGate.type)) return false;
       if (this.level.cards.includes('sun') && !ids.includes('sun')) return false;
-      if (!ids.some(id => ['shooter', 'ice', 'burst', 'star'].includes(id))) return false;
+      if (!ids.some(id => ['shooter', 'ice', 'burst', 'star', 'corn', 'cannon', 'lightning'].includes(id))) return false;
       this.deck = [...ids]; this._notify(); return true;
     }
 
@@ -154,6 +190,7 @@
       const plant = {
         id: this._id('plant'), type, row, col, hp: config.hp, maxHp: config.hp, attackPulse: 0, hurtPulse: 0,
         attackTimer: 200, burstTimer: 0, pendingShot: false, sunTimer: 7000, fuse: config.fuse || 0,
+        powerTime: 0, powerShots: 0, powerTimer: 0, shieldHp: 0, shieldTime: 0,
       };
       this.sun -= config.cost; this.cooldowns[type] = config.cooldown; this.plants.push(plant);
       this._plantedCounts[type]++;
@@ -180,7 +217,51 @@
       const [sun] = this.suns.splice(index, 1);
       this.sun += sun.value;
       this._effect('collect', Math.floor(sun.y), sun.x, 650, { value: sun.value, y: sun.y });
-      this._emit('collect', { sun, value: sun.value }); this._notify(); return true;
+      this._emit('collect', { sun, x: sun.x, y: sun.y, value: sun.value }); this._notify(); return true;
+    }
+
+    usePlantFood(row, col) {
+      if (this.status !== 'running' || this.plantFood < 1 || !this._validCell(row, col)) return false;
+      const plant = this._plantAt(row, col);
+      if (!plant) return false;
+      this.plantFood--; plant.powerTime = 2800; plant.attackPulse = 600;
+      const x = plant.col + .5, y = plant.row + .44;
+      this._effect('power', row, x, 2800, { plantType: plant.type, y });
+      switch (plant.type) {
+        case 'sun':
+          for (let i = 0; i < 8; i++) this._sun(x, y, 'power', { offsetX: (i % 4 - 1.5) * .45, offsetY: .2 + Math.floor(i / 4) * .45 });
+          break;
+        case 'wall': case 'tallwall':
+          plant.hp = plant.maxHp; plant.shieldHp = plant.type === 'tallwall' ? 4000 : 2000;
+          plant.shieldTime = plant.powerTime = 10000;
+          break;
+        case 'ice':
+          for (const enemy of this.enemies) if (enemy.hp > 0 && !enemy.headless) {
+            enemy.freezeTime = 4000; enemy.slowTime = 10000;
+            this._effect('ice', enemy.row, enemy.x, 700, { power: true });
+          }
+          plant.powerShots = 10; plant.powerShotInterval = 140;
+          break;
+        case 'star': plant.powerShots = 3; plant.powerShotInterval = 400; break;
+        case 'bomb': plant.boosted = true; plant.fuse = 100; break;
+        case 'torch':
+          for (const enemy of this.enemies) if (enemy.hp > 0 && enemy.row === row) {
+            this._damage(enemy, 700, 'fire'); if (enemy.hp > 0) { enemy.burnTime = 5000; enemy.burnDamage = 75; }
+          }
+          this._effect('flame', row, x, 1300, { y, radius: COLS, power: true });
+          break;
+        case 'lightning': {
+          const targets = this.enemies.filter(enemy => enemy.hp > 0);
+          for (const enemy of targets) { this._damage(enemy, 250, 'lightning'); enemy.stunTime = 1500; }
+          this._effect('lightning', row, x, 1100, { power: true, points: [{ x, y }, ...targets.map(enemy => ({ x: enemy.x, y: enemy.row + .44 }))] });
+          break;
+        }
+        default:
+          plant.powerShots = { shooter: 20, burst: 30, corn: 8, cannon: 3 }[plant.type] || 0;
+          plant.powerShotInterval = { shooter: 95, burst: 70, corn: 200, cannon: 550 }[plant.type] || 100;
+      }
+      plant.powerTimer = 0;
+      this._emit('plantFood', { plant, plantType: plant.type }); this._notify(); return true;
     }
 
     step(milliseconds) {
@@ -204,9 +285,13 @@
       this.effects.forEach(effect => { effect.life -= dt; });
       this.effects = this.effects.filter(effect => effect.life > 0);
       this.suns.forEach(sun => {
-        if (sun.falling) {
-          sun.y = Math.min(sun.targetY, sun.y + .65 * dt / 1000);
-          sun.falling = sun.y < sun.targetY;
+        sun.age += dt;
+        if (!sun.landed) {
+          const progress = Math.min(1, sun.age / sun.flightDuration);
+          const easing = sun.source === 'sky' ? progress : 1 - Math.pow(1 - progress, 2);
+          sun.x = sun.startX + (sun.targetX - sun.startX) * easing;
+          sun.y = sun.startY + (sun.targetY - sun.startY) * easing - (sun.source === 'sky' ? 0 : Math.sin(progress * Math.PI) * .72);
+          if (progress >= 1) { sun.landed = true; sun.falling = false; sun.x = sun.targetX; sun.y = sun.targetY; }
         } else sun.life -= dt;
       });
       this.suns = this.suns.filter(sun => sun.life > 0);
@@ -244,6 +329,17 @@
       const config = PLANT_BY_ID[plant.type];
       plant.attackPulse = Math.max(0, plant.attackPulse - dt);
       plant.hurtPulse = Math.max(0, plant.hurtPulse - dt);
+      plant.powerTime = Math.max(0, (plant.powerTime || 0) - dt);
+      plant.shieldTime = Math.max(0, (plant.shieldTime || 0) - dt);
+      if (!plant.shieldTime) plant.shieldHp = 0;
+      if (plant.powerShots > 0) {
+        plant.powerTimer -= dt;
+        while (plant.powerTimer <= 1e-7 && plant.powerShots > 0) {
+          plant.powerTimer += plant.powerShotInterval; plant.powerShots--; plant.attackPulse = 220;
+          this._shoot(plant, { power: true });
+          this._emit('shot', { plant, row: plant.row, x: plant.col + .5, count: plant.type === 'star' ? 12 : 1, power: true });
+        }
+      }
       if (plant.type === 'sun') {
         plant.sunTimer -= dt;
         if (plant.sunTimer <= 1e-7) {
@@ -254,8 +350,8 @@
         plant.fuse -= dt;
         if (plant.fuse <= 1e-7) {
           const x = plant.col + .5;
-          for (const enemy of this.enemies) if (enemy.hp > 0 && Math.abs(enemy.row - plant.row) <= 1 && Math.abs(enemy.x - x) <= 1.5) this._damage(enemy, config.damage, 'bomb');
-          plant.hp = 0; this._effect('explode', plant.row, x, 850, { radius: 1.5 });
+          for (const enemy of this.enemies) if (enemy.hp > 0 && Math.abs(enemy.row - plant.row) <= (plant.boosted ? 2 : 1) && Math.abs(enemy.x - x) <= (plant.boosted ? 2.5 : 1.5)) this._damage(enemy, plant.boosted ? 3000 : config.damage, 'bomb');
+          plant.hp = 0; this._effect('explode', plant.row, x, 850, { radius: plant.boosted ? 2.5 : 1.5, power: Boolean(plant.boosted) });
           this._emit('explode', { row: plant.row, x });
         }
       } else if (config.attackInterval) {
@@ -266,7 +362,7 @@
         plant.attackTimer = Math.max(0, plant.attackTimer - dt);
         const target = this.enemies.some(enemy => {
           if (enemy.hp <= 0 || enemy.headless || enemy.x > COLS + .5) return false;
-          if (plant.type !== 'star') return enemy.row === plant.row && enemy.x >= plant.col + .35;
+          if (plant.type !== 'star') return enemy.row === plant.row && enemy.x >= plant.col + .35 && (plant.type !== 'torch' || enemy.x <= plant.col + 1.95);
           if (enemy.vaulting || enemy.x < -.5) return false;
           const x = plant.col + .5, y = plant.row + .44;
           return STAR_DIRECTIONS.some(([vx, vy]) => starContact(x, y, x + vx * 14, y + vy * 14, enemy) !== null);
@@ -281,18 +377,69 @@
       }
     }
 
-    _shoot(plant) {
-      const config = PLANT_BY_ID[plant.type];
+    _shoot(plant, options = {}) {
+      const config = PLANT_BY_ID[plant.type], power = Boolean(options.power);
+      const x = plant.col + .5, y = plant.row + .44;
       if (plant.type === 'star') {
-        for (const [dx, dy] of STAR_DIRECTIONS) this.projectiles.push({ id: this._id('shot'), type: 'star', row: plant.row,
-          x: plant.col + .5, y: plant.row + .44, vx: dx * 5.1, vy: dy * 5.1, damage: config.damage, speed: 5.1 });
+        const directions = power ? Array.from({ length: 12 }, (_, i) => [Math.cos(i * Math.PI / 6), Math.sin(i * Math.PI / 6)]) : STAR_DIRECTIONS;
+        for (const [dx, dy] of directions) this.projectiles.push({ id: this._id('shot'), type: 'star', row: plant.row,
+          x, y, vx: dx * 5.1, vy: dy * 5.1, damage: power ? 40 : config.damage, speed: 5.1, power });
         return;
       }
-      this.projectiles.push({ id: this._id('shot'), type: plant.type, row: plant.row, x: plant.col + .78, damage: config.damage, speed: 5.1 });
+      const targets = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.headless && enemy.row === plant.row && enemy.x >= plant.col + .35 && enemy.x <= COLS + .5).sort((a, b) => a.x - b.x);
+      if (plant.type === 'lightning') {
+        if (!targets.length) return;
+        const hit = new Set(), points = [{ x, y }]; let target = targets[0];
+        for (let hop = 0; hop < 3 && target; hop++) {
+          hit.add(target); points.push({ x: target.x, y: target.row + .44 });
+          this._damage(target, Math.round(config.damage * Math.pow(.8, hop)), 'lightning');
+          const previous = target;
+          target = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.headless && !hit.has(enemy) && Math.hypot(enemy.x - previous.x, enemy.row - previous.row) <= 1.7)
+            .sort((a, b) => Math.hypot(a.x - previous.x, a.row - previous.row) - Math.hypot(b.x - previous.x, b.row - previous.row))[0];
+        }
+        this._effect('lightning', plant.row, x, 380, { points }); return;
+      }
+      if (plant.type === 'torch') {
+        for (const enemy of targets) if (enemy.x <= plant.col + 1.95) {
+          this._damage(enemy, config.damage, 'fire'); if (enemy.hp > 0) { enemy.burnTime = Math.max(enemy.burnTime, 2200); enemy.burnDamage = Math.max(enemy.burnDamage, 15); }
+        }
+        this._effect('flame', plant.row, x, 450, { y, radius: 1.45 }); return;
+      }
+      if (plant.type === 'corn' || plant.type === 'cannon') {
+        // Powered lobs still fly visibly when their previous target has fallen.
+        const target = targets[0], flightDuration = plant.type === 'corn' ? 850 : 1100;
+        const targetX = target ? Math.max(x + .2, target.x - target.speed * flightDuration / 1000 * (target.slowTime > 0 ? .5 : 1)) : Math.min(COLS - .3, x + 4);
+        const butter = plant.type === 'corn' && (power || this._random() < .25);
+        this.projectiles.push({ id: this._id('shot'), type: plant.type, row: plant.row, lob: true,
+          x, y: y - .3, startX: x, startY: y - .3, targetX, targetY: y, age: 0, flightDuration,
+          arcHeight: plant.type === 'corn' ? 1.2 : 1.65, damage: plant.type === 'cannon' ? (power ? 450 : config.damage) : butter ? 40 : config.damage,
+          radius: plant.type === 'cannon' ? (power ? 1.85 : 1.25) : .45, butter, power });
+        return;
+      }
+      this.projectiles.push({ id: this._id('shot'), type: plant.type, row: plant.row, x: plant.col + .78, y,
+        damage: power ? (plant.type === 'ice' ? 30 : 35) : config.damage, speed: power ? 6.4 : 5.1, power });
     }
 
     _stepProjectile(projectile, dt) {
       if (projectile.dead) return;
+      if (projectile.lob) {
+        projectile.age += dt;
+        const t = Math.min(1, projectile.age / projectile.flightDuration);
+        projectile.x = projectile.startX + (projectile.targetX - projectile.startX) * t;
+        projectile.y = projectile.startY + (projectile.targetY - projectile.startY) * t - Math.sin(t * Math.PI) * projectile.arcHeight;
+        if (t >= 1) {
+          projectile.dead = true;
+          const targets = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.vaulting && Math.hypot(enemy.x - projectile.x, enemy.row - projectile.row) <= projectile.radius)
+            .sort((a, b) => Math.hypot(a.x - projectile.x, a.row - projectile.row) - Math.hypot(b.x - projectile.x, b.row - projectile.row));
+          for (const enemy of (projectile.type === 'corn' ? targets.slice(0, 1) : targets)) {
+            this._damage(enemy, projectile.damage, projectile.type);
+            if (projectile.butter && enemy.hp > 0) { enemy.stunTime = 4000; this._effect('butter', enemy.row, enemy.x, 500); }
+          }
+          this._effect(projectile.type === 'cannon' ? 'explode' : 'kernel', projectile.row, projectile.x, projectile.type === 'cannon' ? 600 : 250,
+            { radius: projectile.radius, power: projectile.power, butter: projectile.butter, y: projectile.y });
+        }
+        return;
+      }
       if (projectile.type === 'star') {
         const toX = projectile.x + projectile.vx * dt / 1000, toY = projectile.y + projectile.vy * dt / 1000;
         let hit = null, firstContact = Infinity;
@@ -309,6 +456,12 @@
       }
       const from = projectile.x, to = from + projectile.speed * dt / 1000;
       const hit = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.vaulting && enemy.row === projectile.row && enemy.x + .24 >= from && enemy.x - .24 <= to).sort((a, b) => a.x - b.x)[0];
+      // Convert a pea once, and only if the torch was crossed before contact.
+      const travelEnd = hit ? Math.min(to, hit.x - .24) : to;
+      if (projectile.type === 'shooter' || projectile.type === 'burst') {
+        const torch = this.plants.find(plant => plant.hp > 0 && plant.type === 'torch' && plant.row === projectile.row && plant.col + .5 >= from && plant.col + .5 <= travelEnd);
+        if (torch) { projectile.type = 'fire'; projectile.damage *= 2; this._effect('flame', torch.row, torch.col + .5, 200, { radius: .25 }); }
+      }
       if (hit) {
         projectile.x = hit.x; projectile.dead = true;
         this._damage(hit, projectile.damage, projectile.type);
@@ -323,6 +476,19 @@
       const slow = enemy.slowTime > 0 ? .5 : 1;
       enemy.slowTime = Math.max(0, enemy.slowTime - dt);
       const config = ENEMIES[enemy.type];
+      if (enemy.burnTime > 0) {
+        const burnSlice = Math.min(dt, enemy.burnTime); enemy.burnTime -= burnSlice;
+        enemy.burnAccumulator = (enemy.burnAccumulator || 0) + burnSlice;
+        if (enemy.burnAccumulator >= 250 - 1e-7 || enemy.burnTime <= 0) {
+          this._damage(enemy, (enemy.burnDamage || 15) * enemy.burnAccumulator / 1000, 'fire'); enemy.burnAccumulator = 0;
+          if (enemy.hp <= 0) return;
+        }
+        if (enemy.burnTime <= 0) enemy.burnDamage = 0;
+      }
+      const immobilized = (enemy.stunTime || 0) > 0 || (enemy.freezeTime || 0) > 0;
+      enemy.stunTime = Math.max(0, (enemy.stunTime || 0) - dt);
+      enemy.freezeTime = Math.max(0, (enemy.freezeTime || 0) - dt);
+      if (immobilized && !enemy.headless) { enemy.eating = false; return; }
       if (enemy.headless) {
         enemy.eating = false; enemy.dyingTime = Math.max(0, enemy.dyingTime - dt);
         enemy.x -= enemy.speed * slow * dt / 1000;
@@ -342,6 +508,10 @@
       const nextX = enemy.x - enemy.speed * slow * dt / 1000;
       const target = this.plants.filter(plant => plant.hp > 0 && plant.row === enemy.row && plant.col + .86 >= nextX && plant.col + .2 <= enemy.x).sort((a, b) => b.col - a.col)[0];
       enemy.eating = Boolean(target);
+      if (target && enemy.hasPole && target.type === 'tallwall') {
+        enemy.hasPole = false; enemy.speed = enemy.walkSpeed;
+        this._effect('blocked', enemy.row, enemy.x, 500); this._emit('vaultBlocked', { enemy, plant: target });
+      }
       if (target && enemy.hasPole) {
         enemy.eating = false; enemy.vaulting = true; enemy.vaultProgress = 0;
         enemy.vaultFrom = enemy.x; enemy.vaultTo = target.col - .15;
@@ -349,7 +519,9 @@
       } else if (target) {
         enemy.x = Math.max(enemy.x, target.col + .86);
         if (target.type !== 'bomb') {
-          target.hp = Math.max(0, target.hp - config.bite * slow * dt / 1000);
+          const damage = config.bite * slow * dt / 1000, shield = Math.min(target.shieldHp || 0, damage);
+          target.shieldHp = Math.max(0, (target.shieldHp || 0) - shield);
+          target.hp = Math.max(0, target.hp - (damage - shield));
           target.hurtPulse = 180;
         }
       } else enemy.x = nextX;
@@ -411,12 +583,18 @@
       const enemy = { id: this._id('enemy'), type, row, x: COLS + .35, hp: config.hp, maxHp: config.hp,
         armorHp: config.armor, maxArmorHp: config.armor, bodyHp: config.hp - config.armor,
         speed, walkSpeed, hasPole: Boolean(config.vault), vaulting: false, vaultProgress: 0,
-        armLost: false, headless: false, dyingTime: 0, slowTime: 0, hitPulse: 0, eating: false };
+        armLost: false, headless: false, dyingTime: 0, slowTime: 0, stunTime: 0, freezeTime: 0, burnTime: 0, burnDamage: 0, hitPulse: 0, eating: false };
       this.enemies.push(enemy); return enemy;
     }
 
-    _sun(x, y, source) {
-      const sun = { id: this._id('sun'), x, y: source === 'sky' ? -.35 : y, targetY: y, falling: source === 'sky', value: 25, life: 7500, maxLife: 7500, source };
+    _sun(x, y, source, options = {}) {
+      const sky = source === 'sky', pop = source === 'plant' || source === 'power';
+      const targetX = clamp(x + (pop ? options.offsetX ?? (.35 + this._random() * .3) * (this._random() < .5 ? -1 : 1) : 0), .25, COLS - .25);
+      const targetY = clamp(y + (pop ? options.offsetY ?? .55 : 0), .25, ROWS - .25);
+      const startY = sky ? -.35 : y;
+      const flightDuration = sky ? Math.max(500, (targetY - startY) / .65 * 1000) : pop ? 900 : 0;
+      const sun = { id: this._id('sun'), x, y: startY, startX: x, startY, targetX, targetY, age: 0, flightDuration,
+        landed: flightDuration === 0, falling: sky, value: 25, life: 7500, maxLife: 7500, source };
       this.suns.push(sun); this._effect('sun', Math.floor(y), x, 500, { y }); return sun;
     }
 

@@ -122,6 +122,81 @@
     ],
     "imageHash": "883c5dccc9e32df64cea695d6caa44e4b5df96292f09b1c5ce37b8d98e93333d",
     "sourceImage": "星星射手.jpg"
+  },
+  "corn": {
+    "image": "assets/photo-02.png",
+    "frame": [
+      14,
+      173,
+      1231,
+      989
+    ],
+    "imageSize": [
+      1254,
+      1254
+    ],
+    "imageHash": "9a78bc83953447e8af9031bbfbc729188b880064ff21c0f37c61d5b81ead43de",
+    "sourceImage": "1:玉米投手.jpg"
+  },
+  "tallwall": {
+    "image": "assets/photo-minus-one.png",
+    "frame": [
+      173,
+      58,
+      681,
+      1435
+    ],
+    "imageSize": [
+      1024,
+      1536
+    ],
+    "imageHash": "4c81627d659b0c2b5777e124fc8a5be60b79581e9f5c9e55d4a6b54d28eb404e",
+    "sourceImage": "-1:高坚果.jpg"
+  },
+  "torch": {
+    "image": "assets/photo-09-v2.png",
+    "frame": [
+      280,
+      0,
+      945,
+      1254
+    ],
+    "imageSize": [
+      1254,
+      1254
+    ],
+    "imageHash": "4bfbd73a1b0dcff4a17350d68ef9181e20d2337beea9cb17f6d9c934d3296aab",
+    "sourceImage": "9:火炬.jpg"
+  },
+  "cannon": {
+    "image": "assets/photo-04.png",
+    "frame": [
+      26,
+      113,
+      1220,
+      1116
+    ],
+    "imageSize": [
+      1254,
+      1254
+    ],
+    "imageHash": "402b3df480ab204b99935744efb16d93cf6296fa021cd0cb6869fcca23b59d6a",
+    "sourceImage": "5:玉米加农炮.jpg"
+  },
+  "lightning": {
+    "image": "assets/garden/new-80.png",
+    "imageSize": [
+      1086,
+      1448
+    ],
+    "frame": [
+      7,
+      67,
+      1078,
+      1381
+    ],
+    "imageHash": "e066ee620e9d26d0d546e3ef7a6d2e522b833f37472a5636501664d3b7b6c80e",
+    "sourceImage": "Weixin Image_20261022144001_80.jpg"
   }
 };
   for (const form of Object.values(forms)) { Object.freeze(form.frame); Object.freeze(form.imageSize); Object.freeze(form); }

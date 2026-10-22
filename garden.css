@@ -202,3 +202,44 @@
 /* Seven seed packets stay readable on narrow screens; scroll only the tray. */
 .garden-star-portrait { display: grid; place-items: center; color: #ffc954; font: 900 44px/1 Georgia,serif; text-shadow: 0 2px #a86d28; }
 @media (max-width: 779px) { .garden-seeds { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 62px; overflow-x: auto; overscroll-behavior-x: contain; padding: 5px 2px 8px; scrollbar-width: thin; touch-action: pan-x; } .garden-seed > strong { font-size: 10px; } }
+
+/* Adventure chapters and the once-per-round plant-food seed. */
+.garden-chapters { position: relative; display: flex; flex-wrap: wrap; gap: 8px; margin: 30px 35px 0; z-index: 1; }
+.garden-chapters button { flex: 1; min-height: 44px; padding: 10px 12px; border: 2px solid #577442; border-radius: 18px 18px 6px 6px; background: #edf0d0; color: #46613a; box-shadow: 0 3px #54713c40; font-size: 13px; font-weight: 800; }
+.garden-chapters button[aria-pressed="true"] { color: #fff4c6; background: #4f733d; border-color: #345a31; box-shadow: inset 0 2px #72965a,0 3px #345a31; }
+.garden-chapter-detail { margin: 15px 38px 0; color: #365536; font-size: 12px; font-weight: 700; }
+.garden-levels { margin-top: 18px; }
+.garden-levels .garden-level-stop:nth-child(n) { margin-top: 0; transform: none; }
+.garden-levels .garden-level-stop:nth-child(n):hover { transform: translateY(-4px); }
+.garden-map[data-chapter="dunes"] { background: linear-gradient(#d4e7df,#f4db9e 46%,#d5ad65); border-color: #997348; }
+.garden-map[data-chapter="dunes"] .garden-hill { background: #ddba75; box-shadow: inset 0 8px #eed49c; }
+.garden-map[data-chapter="dunes"] .hill-two { background: #cbaa69; }
+.garden-map[data-chapter="harbor"] { background: linear-gradient(#afdbe1,#e6e7bb 46%,#75b8ba); border-color: #417c80; }
+.garden-map[data-chapter="harbor"] .garden-hill { background: #88c4c0; box-shadow: inset 0 8px #bcdbcc; }
+.garden-map[data-chapter="harbor"] .hill-two { background: #6aacae; }
+.garden-map[data-chapter="practice"] .garden-levels { grid-template-columns: minmax(0,380px); justify-content: center; }
+.garden-map[data-chapter="practice"] .garden-levels::before { transform: none; }
+.garden-deck-card > .garden-deck-power { margin-top: 9px; padding-top: 8px; border-top: 1px dashed #b8c089; color: #50773f; min-height: 36px; max-width: 180px; font-size: 10px; }
+.garden-seeds { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(76px,1fr); overflow-x: auto; overscroll-behavior-x: contain; padding: 5px 2px 8px; scrollbar-width: thin; touch-action: pan-x; }
+.garden-seed-key { text-transform: uppercase; }
+.garden-power-bar { display: flex; align-items: center; gap: 16px; padding: 12px 0 0; }
+.garden-food { display: flex; align-items: center; gap: 12px; min-width: 205px; min-height: 61px; padding: 6px 16px 6px 8px; border: 2px solid #527138; border-radius: 34px 12px 12px 34px; background: #e5edbe; color: #3f612f; box-shadow: 0 4px #a0b276,inset 0 2px #f9ffd8; text-align: left; }
+.garden-bean-icon { display: grid; place-items: center; width: 40px; height: 42px; flex-shrink: 0; transform: rotate(-25deg); border-radius: 70% 35% 65% 40%; background: linear-gradient(120deg,#c3ee5e,#57a847); border: 2px solid #4c8b39; color: #f5ffc4; box-shadow: inset 4px 3px #edff9770,2px 3px #42662d30; font-size: 24px; }
+.garden-food b { display: block; font-size: 15px; }.garden-food i { display: inline-grid; place-items: center; border-radius: 50%; width: 20px; height: 20px; background: #506e38; color: #fff8c7; font: 700 12px var(--font-mono); margin-left: 5px; }
+.garden-food small { display: block; margin-top: 3px; font-size: 10px; }
+.garden-food[aria-pressed="true"] { background: #cff184; box-shadow: 0 0 0 3px #b4dc5b55,0 4px #789648; }
+.garden-food[aria-pressed="true"] .garden-bean-icon { animation: garden-bean-glow 800ms ease-in-out infinite alternate; }
+.garden-food:disabled { opacity: .5; filter: saturate(.35); cursor: default; }
+.garden-power-bar > p { font-size: 12px; color: #718358; }.garden-power-bar > p > span { display: block; margin-top: 5px; font-size: 10px; color: #8b9275; }
+.garden-collected-sun { position: fixed; z-index: 1000; pointer-events: none; user-select: none; font: 40px/1 Georgia,serif; color: #ffd552; text-shadow: 0 0 10px #ffd452,0 2px #a77327; will-change: transform,opacity; }
+@keyframes garden-bean-glow { from { transform: rotate(-25deg) scale(.96); } to { transform: rotate(-13deg) scale(1.06); } }
+@media (min-width: 1000px) { .garden-deck-cards { grid-template-columns: repeat(4,minmax(0,1fr)); }.garden-deck-body { grid-template-columns: minmax(0,1fr) 190px; gap: 15px; } }
+@media (max-width: 779px) { .garden-seeds { grid-auto-columns: 68px; }.garden-chapters { margin-inline: 22px; gap: 6px; }.garden-chapters button { font-size: 11px; padding-inline: 8px; }.garden-chapter-detail { margin-inline: 25px; } }
+@media (max-width: 540px) {
+ .garden-chapters { margin: 28px 16px 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+ .garden-chapters button { border-radius: 10px; font-size: 12px; }.garden-chapter-detail { margin: 13px 20px 0; font-size: 10px; line-height: 1.6; }
+ .garden-welcome-friends { top: 145px; }.garden-levels { margin-top: 17px; gap: 14px; }.garden-levels .garden-level-stop:nth-child(n) { margin-top: 0; }
+ .garden-seeds { grid-auto-columns: 62px; }.garden-power-bar { gap: 10px; padding-top: 9px; }.garden-food { min-width: 188px; min-height: 54px; gap: 8px; padding-right: 9px; }.garden-food b { font-size: 13px; }.garden-bean-icon { width: 34px; height: 36px; }.garden-food small { font-size: 9px; }
+ .garden-power-bar > p { font-size: 10px; line-height: 1.5; }.garden-power-bar > p > span { font-size: 9px; }.garden-deck-card > .garden-deck-power { min-height: 42px; font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) { .garden-food[aria-pressed="true"] .garden-bean-icon { animation: none; } }

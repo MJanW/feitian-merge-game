@@ -32,12 +32,12 @@
   <script defer src="defense-sound.js?v=20261021-elements1"></script>
   <script defer src="defense-leaderboard.js?v=20261022-defenseboard1"></script>
   <script defer src="defense-app.js?v=20261022-swap1"></script>
-  <link rel="stylesheet" href="garden.css?v=20261022-gardenphotos1">
-  <script defer src="garden-forms.js?v=20261022-starphoto1"></script>
+  <link rel="stylesheet" href="garden.css?v=20261022-adventure1">
+  <script defer src="garden-forms.js?v=20261022-adventure1"></script>
   <script defer src="garden-enemy-forms.js?v=20261022-gardenphotos1"></script>
-  <script defer src="garden-game.js?v=20261022-gardenphotos1"></script>
-  <script defer src="garden-renderer.js?v=20261022-gardenphotos1"></script>
-  <script defer src="garden-app.js?v=20261022-gardenphotos1"></script>
+  <script defer src="garden-game.js?v=20261022-adventure1"></script>
+  <script defer src="garden-renderer.js?v=20261022-adventure1"></script>
+  <script defer src="garden-app.js?v=20261022-adventure1"></script>
   <script defer src="modes.js?v=20261022-garden1"></script>
 </head>
 <body>
@@ -198,40 +198,43 @@
   <section id="garden-panel" role="tabpanel" aria-labelledby="mode-garden" hidden>
     <main id="garden-layout" class="garden-layout" aria-label="飞天花园小游戏" data-phase="map">
       <header class="garden-heading">
-        <div><span class="garden-eyebrow">THE SUNNY SIDE · 第五周目</span><h1>飞天花园<span>庭院作战</span></h1></div>
+        <div><span class="garden-eyebrow">THE SUNNY SIDE · 第五周目</span><h1>飞天花园<span>时光冒险</span></h1></div>
         <button id="garden-map-button" class="garden-map-button" type="button" hidden>← 庭院地图</button>
       </header>
       <section id="garden-map" class="garden-map" aria-label="庭院关卡地图">
         <div class="garden-map-sky" aria-hidden="true"><i class="garden-map-sun"></i><i class="garden-cloud cloud-one"></i><i class="garden-cloud cloud-two"></i><i class="garden-hill hill-one"></i><i class="garden-hill hill-two"></i></div>
         <div class="garden-map-intro"><span class="garden-wood-label">欢迎回家</span><h2>今天，守住<br><em>这片晴天。</em></h2><p>挑一块草地，带上熟悉的脸。<br>门外的来客，已经在路上了。</p></div>
         <div id="garden-welcome-friends" class="garden-welcome-friends" aria-hidden="true"></div>
+        <nav id="garden-chapters" class="garden-chapters" aria-label="选择冒险章节"></nav>
+        <p id="garden-chapter-detail" class="garden-chapter-detail"></p>
         <nav id="garden-levels" class="garden-levels" aria-label="选择花园关卡"></nav>
-        <p class="garden-map-footnote">从一行草坪开始 · 已完成的关卡会留下小花标记</p>
+        <p class="garden-map-footnote">三段旅程，十二道防线 · 已完成的关卡会留下小花标记</p>
       </section>
       <section id="garden-deck" class="garden-deck" aria-labelledby="garden-deck-title" hidden>
         <div class="garden-deck-heading"><div><span id="garden-deck-level" class="garden-wood-label">第一束阳光</span><h2 id="garden-deck-title" tabindex="-1">带上你的伙伴</h2><p>点击卡片装进种子盒，再出发。</p></div><button id="garden-deck-back" class="garden-paper-button" type="button">← 换一块草地</button></div>
-        <div class="garden-deck-body"><div id="garden-deck-cards" class="garden-deck-cards" role="group" aria-label="选择本局出战角色"></div><aside class="garden-deck-brief"><span class="garden-brief-label">门外来客</span><div id="garden-deck-enemies" class="garden-deck-enemies"></div><p id="garden-deck-goal"></p><div class="garden-deck-tip"><b>园丁的小纸条</b><p>先保证阳光，再安排火力。盾卫挡在前面，焰火留给拥挤的路口。</p></div></aside></div>
+        <div class="garden-deck-body"><div id="garden-deck-cards" class="garden-deck-cards" role="group" aria-label="选择本局出战角色"></div><aside class="garden-deck-brief"><span class="garden-brief-label">门外来客</span><div id="garden-deck-enemies" class="garden-deck-enemies"></div><p id="garden-deck-goal"></p><div class="garden-deck-tip"><b>园丁的小纸条</b><p>每局一颗能量豆：点豆子，再点场上植物。日光伙伴会喷出阳光，其他植物各有大招；留给关键一波，也可以开局发展经济。</p></div></aside></div>
         <div class="garden-deck-footer"><div><strong id="garden-deck-count">已携带 0 位伙伴</strong><p id="garden-deck-message" role="status">选择出战伙伴</p></div><button id="garden-deck-recommended" class="garden-paper-button" type="button">带上全部</button><button id="garden-deck-start" class="garden-primary-button" type="button">出发守护 →</button></div>
       </section>
       <section id="garden-play" aria-label="花园战场" hidden>
       <div class="garden-workbench">
         <div class="garden-sun-counter" aria-label="可用阳光"><span aria-hidden="true">☀</span><strong id="garden-sun">150</strong><small>阳光</small></div>
-        <div class="garden-seeds" id="garden-seeds" aria-label="角色种子盒，手机可左右滑动选卡" role="group"></div>
+        <div class="garden-seeds" id="garden-seeds" aria-label="角色种子盒，左右滑动查看全部角色" role="group"></div>
       </div>
       <div class="garden-field-head"><span><b id="garden-level-name">01 · 第一片草坪</b><span id="garden-level-goal">从中间一条草坪开始</span></span><span id="garden-wave">准备种植</span></div>
       <div class="garden-board" id="garden-board">
-        <canvas id="garden-canvas" width="960" height="540" tabindex="0" aria-label="五行九列花园。选择角色后点击空格种植，点击阳光收集。方向键选择格子，回车种植，C收集阳光，P暂停。" aria-describedby="garden-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
+        <canvas id="garden-canvas" width="960" height="540" tabindex="0" aria-label="五行九列花园。选择角色后点击空格种植，点击阳光收集。方向键选择格子，回车种植，C收集阳光，F选择能量豆后回车对选中格释放大招，P暂停。" aria-describedby="garden-status">请使用支持 Canvas 的浏览器来玩游戏。</canvas>
         <div id="garden-intro" class="garden-intro" hidden><span id="garden-intro-kicker">来客已经在路上</span><strong id="garden-intro-title" role="status">看看门外！</strong><button id="garden-intro-resume" class="garden-primary-button" type="button" hidden>继续开场</button><button id="garden-intro-skip" class="garden-intro-skip" type="button">跳过开场 →</button></div>
         <div class="garden-overlay" id="garden-overlay">
           <div class="garden-overlay-content"><span id="garden-overlay-kicker">一小块草地，一整队熟悉的脸</span><h2 id="garden-overlay-title">今天，守住花园。</h2><p id="garden-overlay-copy">收集阳光，种下同伴。别让入侵者走到左边的家门。</p><button id="garden-start" type="button">开始种植 <span aria-hidden="true">↗</span></button><button id="garden-overlay-secondary" class="garden-quiet" type="button" hidden>再玩本关</button></div>
         </div>
       </div>
+      <div class="garden-power-bar"><button id="garden-food" class="garden-food" type="button" aria-pressed="false" disabled><span class="garden-bean-icon" aria-hidden="true">✦</span><span><b>能量豆 <i id="garden-food-count">1</i></b><small id="garden-food-hint">每局 1 颗 · 点此使用</small></span></button><p>给一位植物，一次闪耀的机会。<span>点击豆子 → 点击场上植物</span></p></div>
       <div class="garden-bottom">
         <div class="garden-current"><strong id="garden-selected-name">先种一位射手</strong><p id="garden-status" role="status">点击阳光收集，再选角色、点草地种植。</p></div>
         <div class="garden-controls" aria-label="花园操作"><button id="garden-shovel" type="button" aria-pressed="false">铲除</button><button id="garden-pause" type="button" aria-pressed="false" disabled>暂停</button><button id="garden-restart" type="button">重开</button><button id="garden-sound" type="button" aria-pressed="true">音效开</button></div>
       </div>
-      <footer class="garden-footnote"><span>阳光会消失，记得及时收取。每条小路有一次清扫车救场。</span><span>1–7 选卡 · 方向键选格 · Enter 种植 · C 收阳光</span></footer>
-      <details class="garden-rule-note"><summary>白天草坪 · 玩法说明</summary><p>先在种子盒里选好本局伙伴，再点角色卡、点空地种植；点太阳收集 25 阳光。卡片变暗时需要等待冷却或补足阳光。普通射手攻击前方同一行，星星射手向左、上、下和右侧两条斜线发射，敌人靠近后会停下啃咬。</p><p>日光伙伴约 7 秒首产，随后约 24 秒产出；冰霜同时减慢移动与啃咬；双发射手分两次射击；焰火引燃后炸开周围 3×3 区域。护甲破损后仍有本体；受伤会掉落手臂，失去头部后不再啃咬。</p><p>前三关依次开放中间一行、三行及新角色；自由演练开放五行、全部七卡和铲子。清扫车每条路只用一次。当前为白天玩法 Demo，使用自己的美术和演示出怪脚本。</p></details>
+      <footer class="garden-footnote"><span>阳光会消失，记得及时收取。每条小路有一次清扫车救场。</span><span>1–9 / 0 / Q / E 选卡 · F 能量豆 · C 收阳光</span></footer>
+      <details class="garden-rule-note"><summary>白天草坪 · 玩法说明</summary><p>先在种子盒里选好本局伙伴，再点角色卡、点空地种植；点太阳收集 25 阳光。卡片变暗时需要等待冷却或补足阳光。普通射手攻击前方同一行，星星射手向左、上、下和右侧两条斜线发射，敌人靠近后会停下啃咬。</p><p>日光伙伴约 7 秒首产，随后约 24 秒产出；冰霜同时减慢移动与啃咬；双发射手分两次射击；焰火引燃后炸开周围 3×3 区域。护甲破损后仍有本体；受伤会掉落手臂，失去头部后不再啃咬。</p><p>十二个冒险关卡依次引入新植物与混合敌群；自由演练开放全部十二张卡。玉米黄油定身、高坚果防跳跃、火炬强化飞叶、重炮溅射、闪电连锁，可组合布阵。每局只有一颗能量豆，点豆子后点击已种植的植物释放其大招；点击空地不会消耗。清扫车每条路只用一次。</p></details>
       </section>
     </main>
   </section>
