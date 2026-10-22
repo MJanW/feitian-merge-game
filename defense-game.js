@@ -147,7 +147,7 @@
   const goldenProgress = unit => {
     if (!unit?.isGolden) return null;
     const rank = Math.max(1, levelNumber(unit.goldenRank));
-    return { rank, progress: safe(unit.goldenFeed || 0), required: safe(10 * Math.pow(2, Math.min(50, rank - 1))) };
+    return { rank, progress: safe(unit.goldenFeed || 0), required: safe(30 * Math.pow(2, Math.min(50, rank - 1))) };
   };
   const routeRanks = routes => Object.fromEntries(ROUTES.map(route => [route, Number.isSafeInteger(routes?.[route]) && routes[route] > 0 ? routes[route] : 0]));
   const evolutionChance = level => Math.max(0.55, 0.95 - levelNumber(level) * 0.03);
@@ -949,8 +949,9 @@
       if (supply.hp > 0) return;
       this.supplies.splice(this.supplies.indexOf(supply), 1); this.hatched++;
       const slot = SLOTS.filter(value => !this._unitAt(value.id)).sort((a, b) => Math.hypot(a.x - supply.x, a.y - supply.y) - Math.hypot(b.x - supply.x, b.y - supply.y) || a.id - b.id)[0];
-      const level = attacker?.isGolden ? 0 : Math.max(0, levelNumber(attacker?.level) - 2);
-      const routeChoices = Object.fromEntries(evolutionPath(attacker).filter(entry => entry.level <= level).map(entry => [entry.level, entry.route]));
+      // Internal levels are zero-based: golden rank 1 hatches Lv.10, rank 2 Lv.11, etc.
+      const level = attacker?.isGolden ? Math.min(SAFE_LIMIT - 1, goldenProgress(attacker).rank + 8) : Math.max(0, levelNumber(attacker?.level) - 2);
+      const routeChoices = attacker?.isGolden ? {} : Object.fromEntries(evolutionPath(attacker).filter(entry => entry.level <= level).map(entry => [entry.level, entry.route]));
       const blueprint = { level, routeChoices };
       let details;
       if (slot) {

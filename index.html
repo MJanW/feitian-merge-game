@@ -27,8 +27,8 @@
   <script defer src="jump-app.js?v=20261017-softjump1"></script>
   <script defer src="defense-forms.js?v=20261021-elements1"></script>
   <script defer src="defense-enemies.js?v=20261019-paths1"></script>
-  <script defer src="defense-game.js?v=20261022-golden3"></script>
-  <script defer src="defense-renderer.js?v=20261022-builds1"></script>
+  <script defer src="defense-game.js?v=20261022-goldenfeed1"></script>
+  <script defer src="defense-renderer.js?v=20261022-goldenfeed1"></script>
   <script defer src="defense-sound.js?v=20261021-elements1"></script>
   <script defer src="defense-leaderboard.js?v=20261022-defenseboard1"></script>
   <script defer src="defense-app.js?v=20261022-defenseboard1"></script>
@@ -180,7 +180,7 @@
         <p class="defense-record">本机最高 <strong id="defense-best">0</strong><span id="defense-reserve">待命 0 位</span></p>
         <div id="defense-tools" class="defense-tools" data-golden="false">
           <div class="defense-selection-row"><div class="defense-selection-copy"><p id="defense-selection" tabindex="0">选择一位守卫</p><p id="defense-unit-stats">Lv.1 每次命中造成 1 点伤害</p></div><button id="defense-trash" type="button" data-state="idle" aria-label="垃圾筐：拖入普通守卫丢弃，或选中守卫后点击确认丢弃" title="拖入普通守卫，松手丢弃；也可选中后点击垃圾筐。丢弃无奖励。"><svg class="defense-trash-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true"><ellipse cx="24" cy="43" rx="15" ry="3" fill="currentColor" opacity=".12"/><path d="M11 16l3 23c.2 2 3.5 3 10 3s9.8-1 10-3l3-23" fill="#e5ce99" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M14 20c6 1.8 14 1.8 20 0M16 27c5.2 1.3 10.8 1.3 16 0M17 34c4.5 1 9.5 1 14 0M19 19l1 19M29 19l-1 19" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".55"/><g class="defense-trash-lid"><path d="M19 9l1-4h8l1 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 12c5-3 24-3 30 0l-1 5c-8 2-20 2-28 0z" fill="#f4dfad" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M14 12c6-1 14-1 20 0" stroke="#fff5d6" stroke-width="2" stroke-linecap="round"/></g></svg><span id="defense-trash-label">垃圾筐</span></button></div>
-          <div id="defense-golden-progress" class="defense-golden-progress" hidden><label id="defense-golden-progress-label" for="defense-golden-meter">拖入普通守卫投喂</label><progress id="defense-golden-meter" max="10" value="0" aria-label="黄金战士升阶进度"></progress></div>
+          <div id="defense-golden-progress" class="defense-golden-progress" hidden><label id="defense-golden-progress-label" for="defense-golden-meter">拖入普通守卫投喂</label><progress id="defense-golden-meter" max="30" value="0" aria-label="黄金战士升阶进度"></progress></div>
           <p id="defense-evolution-risk" class="defense-evolution-risk">选择守卫查看合成成功率。失败仅消耗拖入者，原守卫等级与路线保留。</p>
           <div class="defense-controls" role="group" aria-label="守卫飞天操作"><button id="defense-pause" class="secondary-button" type="button" aria-pressed="false">暂停</button><button id="defense-restart" class="secondary-button" type="button">重开</button><button id="defense-sound" class="secondary-button" type="button" aria-pressed="true">音效开</button><button id="defense-guide-open" class="secondary-button" type="button" aria-haspopup="dialog">图鉴</button></div>
         </div>
@@ -200,7 +200,7 @@
       <h3>垃圾筐，腾出阵位</h3><p>把普通守卫拖到垃圾筐上松手，即可丢弃；也可以先选中守卫，再点击垃圾筐确认。丢弃不会获得分数或材料。黄金战士不能丢弃，没有待命同伴时也会保留最后一位守卫。</p>
       <h3>五种元素与黄金，十五种反应</h3><p>冰霜命中附加 3 秒减速，基础减速 25%，触发元素反应后消除。草木每次命中缠绕定身 0.2 秒，再次命中刷新时长。不同元素或黄金接力击中同一只酒瓶，不分先后，都能触发对应反应。印记持续3秒，同一目标两次反应至少间隔0.75秒；黄金不能与黄金或未觉醒守卫反应。</p><ul id="defense-reactions" class="defense-reactions"></ul>
       <h3>Lv.16 起，十五种元素强化</h3><p>Lv.4 觉醒元素、Lv.8 选择高阶属性、Lv.12 学习技能。Lv.16、20、24…每次从本元素的三种强化中选择一项。重复选择逐步提升额外伤害或范围，命中门槛、目标数量、控制时长与冷却保持不变；卡片展示当前值和下一次的变化。</p><ul id="defense-enhancements" class="defense-reactions"></ul>
-      <h3>隐藏进化 · 黄金战士</h3><p>第21波起，两名Lv.10及以上、同级同元素且符合合成规则的守卫合成时，有独立3%概率觉醒黄金战士，每局只出现一次。</p><p>把任意普通守卫拖到黄金战士上，按其显示等级积累进度。每次升阶需要10、20、40、80、160…级材料，溢出进度保留。黄金1阶基础攻击30，之后每升一阶乘3。原有飞剑从1阶5把成长至2阶6把。</p>
+      <h3>隐藏进化 · 黄金战士</h3><p>第21波起，两名Lv.10及以上、同级同元素且符合合成规则的守卫合成时，有独立3%概率觉醒黄金战士，每局只出现一次。</p><p>把任意普通守卫拖到黄金战士上，按其显示等级积累进度。每次升阶需要30、60、120、240、480…级材料，溢出进度保留。黄金1阶基础攻击30，之后每升一阶乘3。原有飞剑从1阶5把成长至2阶6把。</p><p>黄金1阶击破孵化蛋召出Lv.10普通守卫，每升1阶，召出等级增加1级（2阶Lv.11、3阶Lv.12……）。召出的同伴无元素，不复制黄金属性或天赋。</p>
       <h3>黄金第3、5、7…阶，天赋三选一</h3><p><b>万剑归宗：</b>每次增加1把参与攻击的飞剑，最多12把。满12把后改为“剑意精修”，每次另加原基础攻击的8%。</p><p><b>天域剑阵：</b>首次解锁半径100的领域，每2.6秒造成单剑攻击40%的范围伤害；后续每次半径加15，最多160。满160后每次再提高10个百分点领域伤害。</p><p><b>炼金共鸣：</b>首次让黄金反应倍率额外+0.8。重复选择r次后的总额外加成为4r/(r+4)，逐步趋近+4，反应频率不变。</p><p>一次投喂跨越多个天赋节点时，先结算全部阶数与余粮，再逐个选择天赋。选择期间战场冻结；切换玩法或离开页面后，点击“继续”返回原选择。</p>
       <h3>四十阵位，完整布阵</h3><p>上下两区各4列、5行，共40个阵位，全部显示在同一战场。拖动可跨区移动、合成或投喂；方向键选择阵位，回车部署待命守卫。</p>
     </div>

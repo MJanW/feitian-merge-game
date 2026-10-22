@@ -478,8 +478,8 @@
     round(ctx, x - width / 2, y + 19, width, 15, 5, ability === 'normal' ? '#365e35' : '#354c43', ability === 'normal' ? '#d6e59b' : ABILITY[ability], 1.4);
     text(ctx, label, x, y + 27, 8, '#fffce6', '800', 'center', MONO);
     if (unit.isGolden) {
-      const progress = engine()?.goldenProgress?.(unit) || { progress: 0, required: 10 };
-      const ratio = clamp(number(progress.progress) / Math.max(1, number(progress.required, 10)), 0, 1);
+      const progress = engine()?.goldenProgress?.(unit) || { progress: 0, required: 30 };
+      const ratio = clamp(number(progress.progress) / Math.max(1, number(progress.required, 30)), 0, 1);
       round(ctx, x - 22, y + 35, 44, 4, 2, '#755524', '#fff0bb', .7);
       if (ratio > 0) { ctx.fillStyle = '#ffde77'; ctx.fillRect(x - 21, y + 36, 42 * ratio, 2); }
     } else if (ability !== 'normal') {
