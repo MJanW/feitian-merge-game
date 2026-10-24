@@ -32,14 +32,14 @@
   <script defer src="defense-sound.js?v=20261021-elements1"></script>
   <script defer src="defense-leaderboard.js?v=20261022-defenseboard1"></script>
   <script defer src="defense-app.js?v=20261022-swap1"></script>
-  <link rel="stylesheet" href="garden.css?v=20261024-speed1">
+  <link rel="stylesheet" href="garden.css?v=20261024-belt1">
   <script defer src="garden-forms.js?v=20261024-worlds1"></script>
   <script defer src="garden-enemy-forms.js?v=20261022-gardenphotos1"></script>
   <script defer src="garden-game.js?v=20261024-worlds1"></script>
   <script defer src="garden-renderer.js?v=20261024-worlds1"></script>
   <script defer src="garden-sound.js?v=20261024-worlds1"></script>
   <script defer src="garden-progress.js?v=20261024-save1"></script>
-  <script defer src="garden-app.js?v=20261024-speed1"></script>
+  <script defer src="garden-app.js?v=20261024-belt1"></script>
   <script defer src="modes.js?v=20261022-garden1"></script>
 </head>
 <body>
@@ -233,7 +233,7 @@
       <div id="garden-workbench" class="garden-workbench">
         <div id="garden-sun-counter" class="garden-sun-counter" aria-label="可用阳光"><span aria-hidden="true">☀</span><strong id="garden-sun">150</strong><small>阳光</small></div>
         <div id="garden-belt-label" class="garden-belt-label" hidden><b>传送带</b><small id="garden-belt-status">种子正在送来</small></div>
-        <div id="garden-conveyor" class="garden-conveyor" role="group" aria-label="传送带种子，选择后点空地免费种植" hidden></div>
+        <div id="garden-conveyor" class="garden-conveyor" role="group" aria-label="传送带种子，选择后点空地免费种植；左右滑动查看更多" hidden><div id="garden-conveyor-track" class="garden-conveyor-track"></div></div>
         <div class="garden-seeds" id="garden-seeds" aria-label="角色种子盒，左右滑动查看全部角色" role="group"></div>
       </div>
       <div class="garden-field-head"><span><b id="garden-level-name">01 · 第一片草坪</b><span id="garden-level-goal">从中间一条草坪开始</span></span><span id="garden-wave">准备种植</span><div id="garden-speed-controls" class="garden-speed" role="group" aria-label="战斗速度" aria-describedby="garden-speed-hint"><span id="garden-speed-hint">通关第 3 关解锁快进</span><button id="garden-speed-1" type="button" aria-label="1 倍速度" aria-pressed="true">1×</button><button id="garden-speed-15" type="button" aria-label="1.5 倍速度" aria-pressed="false" disabled>1.5×</button><button id="garden-speed-2" type="button" aria-label="2 倍速度" aria-pressed="false" disabled>2×</button></div></div>

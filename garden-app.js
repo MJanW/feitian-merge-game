@@ -7,6 +7,8 @@
     let selected = 'shooter', shovel = false, plantFoodSelected = false, mapChapter = 'garden', hover = null, pointer = null, pendingLevel = null, pendingDestination = 'deck';
     let phase = 'map', introElapsed = 0, previewElapsed = 0, endingElapsed = -1, deckSelection = new Set(), selectedPacket = null, traySignature = '', selectedCart = null, cartMode = false;
     const traySlots = [], packetSlots = [];
+    // Positions are in card pitches, so responsive resizing never restarts delivery.
+    let beltElapsed = 0, beltTravel = 0, beltSignature = '', beltWidth = 80, beltGap = 8, beltViewport = 0;
     const INTRO_MS = 2400;
     const SPEED_KEY = 'feitian-garden-speed';
     const SPEEDS = [['garden-speed-1', 1], ['garden-speed-15', 1.5], ['garden-speed-2', 2]];
@@ -64,7 +66,7 @@
         if (destroyed) return;
         progress.importData(data); syncProgress();
         if (game && phase === 'map') {
-          const index = resumeIndex(); game.reset(index); state = game.getState(); mapChapter = game.level.chapter;
+          const index = resumeIndex(); clearConveyor(); game.reset(index); state = game.getState(); mapChapter = game.level.chapter;
           deckSelection = new Set(recommendedDeck()); refreshMap(); refresh();
         }
         text('garden-backup-message', progress.getStatus().saved ? '存档已合并，原有通关记录全部保留。' : '存档已读入，但浏览器仍无法保存。离开前请导出合并后的存档。');
@@ -95,8 +97,6 @@
         attr(button, 'aria-pressed', value === rate);
         attr(button, 'title', value !== 1 && !unlocked ? '通关花园第 3 关后解锁' : `${value} 倍战斗速度`);
       }
-      const duration = `${2.8 / rate}s`;
-      if ($('garden-conveyor').style.animationDuration !== duration) $('garden-conveyor').style.animationDuration = duration;
     }
     function chooseSpeed(rate) {
       if (destroyed || !canChangeSpeed() || ![1, 1.5, 2].includes(rate) || rate !== 1 && !speedUnlocked()) return;
@@ -274,8 +274,9 @@
         $('garden-selected-seeds').appendChild(button); traySlots.push({ button });
         listen(button, 'click', () => toggleDeck([...deckSelection][index]));
         const packet = document.createElement('button'); packet.type = 'button'; packet.className = 'garden-seed garden-packet'; packet.hidden = true;
-        $('garden-conveyor').appendChild(packet); packetSlots.push({ button: packet, id: null });
-        listen(packet, 'click', () => choosePacket(state?.conveyor?.[index]?.id));
+        const slot = { button: packet, id: null, x: index };
+        $('garden-conveyor-track').appendChild(packet); packetSlots.push(slot);
+        listen(packet, 'click', () => choosePacket(slot.id));
       }
       for (const chapter of CHAPTERS) {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'garden-world-tab'; attr(button, 'data-world', chapter.id); const icon = document.createElement('span'); icon.textContent = chapter.symbol; attr(icon, 'aria-hidden', true); const label = document.createElement('b'); label.textContent = chapter.name; const count = document.createElement('small'); count.textContent = '10 道防线'; button.append(icon, label, count);
@@ -315,6 +316,8 @@
       pointer = null; hover = null;
       const target = phase === 'deck' ? $('garden-prep-canvas') : canvas, painter = phase === 'deck' ? prepRenderer : renderer;
       const rect = target.getBoundingClientRect(); if (rect.width > 0 && rect.height > 0) painter?.resize(rect.width, rect.height, Math.min(2, window.devicePixelRatio || 1));
+      measureConveyor();
+      if (isConveyor()) refreshConveyor();
       draw();
     }
     function refresh() {
@@ -410,23 +413,62 @@
       if (isConveyor() || !active || phase !== 'battle' || !game || !available(id) || document.querySelector('dialog[open]')) return;
       unlock(); audioCall('play', { type: 'select' }); selectedCart = null; cartMode = false; selectedPacket = null; selected = selected === id && !shovel && !plantFoodSelected ? null : id; shovel = false; plantFoodSelected = false; refresh(); draw();
     }
+    function clearConveyor() {
+      beltElapsed = 0; beltTravel = 0; beltSignature = '';
+      for (const slot of packetSlots) { slot.id = null; slot.type = null; slot.button.hidden = true; }
+      $('garden-conveyor').scrollLeft = 0;
+    }
+    function measureConveyor() {
+      const belt = $('garden-conveyor'), style = window.getComputedStyle?.(belt);
+      beltWidth = parseFloat(style?.getPropertyValue('--packet-width')) || 80;
+      beltGap = parseFloat(style?.getPropertyValue('--packet-gap')) || 8;
+      if (belt.clientWidth > 0) beltViewport = belt.clientWidth;
+    }
     function refreshConveyor() {
-      const packets = state.conveyor || [];
-      attr($('garden-conveyor'), 'data-moving', state.status === 'running' && packets.length < 8);
-      if (!packets.some(packet => packet.id === selectedPacket)) { selectedPacket = null; if (!shovel && !plantFoodSelected) selected = null; }
+      const belt = $('garden-conveyor'), track = $('garden-conveyor-track'), packets = state.conveyor || [];
+      const pitch = beltWidth + beltGap, railWidth = Math.max(beltViewport, 8 * pitch + 12);
+      const elapsed = state.elapsed || 0, dt = Math.max(0, elapsed - beltElapsed) / 1000;
+      beltElapsed = elapsed;
+      const ids = new Set(packets.map(packet => packet.id));
+      for (const slot of packetSlots) if (!ids.has(slot.id)) { slot.id = null; slot.type = null; slot.button.hidden = true; }
+      if (!ids.has(selectedPacket)) { selectedPacket = null; if (!shovel && !plantFoodSelected) selected = null; }
       text('garden-belt-status', packets.length >= 8 ? '已满 · 种下后继续' : `下一张 ${Math.ceil((state.conveyorNextIn || 0) / 1000)}s`);
-      packetSlots.forEach((slot, index) => {
-        const packet = packets[index], plant = packet && cards.get(packet.type)?.plant;
-        slot.button.hidden = !packet; slot.button.disabled = state.status !== 'running';
-        attr(slot.button, 'aria-pressed', Boolean(packet && selectedPacket === packet.id && !shovel && !plantFoodSelected));
-        if (!packet || slot.id === packet.id && slot.type === packet.type) return;
-        slot.id = packet.id; slot.type = packet.type; slot.button.replaceChildren();
-        const name = document.createElement('strong'); name.textContent = plant.name;
-        const label = document.createElement('small'); label.textContent = '免费 · 一次';
-        slot.button.append(portraitFor(plant), name, label);
+      const ordered = packets.map((packet, index) => {
+        const slot = packetSlots.find(item => item.id === packet.id) || packetSlots.find(item => item.id === null);
+        const plant = cards.get(packet.type).plant, fresh = slot.id !== packet.id || slot.type !== packet.type;
+        if (fresh) {
+          slot.id = packet.id; slot.type = packet.type;
+          // Starting supplies are already on the belt. Later deliveries emerge from its right mouth.
+          slot.x = reducedMotion || elapsed === 0 ? index : railWidth / pitch + .15;
+          const name = document.createElement('strong'); name.textContent = plant.name;
+          const label = document.createElement('small'); label.textContent = '免费 · 一次';
+          slot.button.replaceChildren(portraitFor(plant), name, label);
+          attr(slot.button, 'data-packet-id', packet.id);
+        }
+        const distance = Math.max(0, slot.x - index);
+        // Constant transport speed, then a short gentle stop instead of snapping into a slot.
+        const travelTime = fresh ? Math.min(dt, (packet.age || 0) / 1000) : dt;
+        const step = Math.min(distance, 2 * travelTime, distance * (1 - Math.exp(-9 * travelTime)));
+        slot.x = reducedMotion || distance < .002 ? index : slot.x - step;
+        slot.button.hidden = false; slot.button.disabled = state.status !== 'running' || blocked();
+        const chosen = selectedPacket === packet.id && !shovel && !plantFoodSelected;
+        attr(slot.button, 'aria-pressed', chosen);
         attr(slot.button, 'aria-label', `${plant.name}，免费种植一次，快捷键 ${index + 1}`);
-        if (!reducedMotion) slot.button.animate?.([{ transform: 'translateX(38px)', opacity: 0 }, { transform: 'translateX(0)', opacity: 1 }], { duration: 340, easing: 'cubic-bezier(.2,.7,.3,1)' });
+        slot.button.style.transform = `translate3d(${(8 + slot.x * pitch).toFixed(2)}px, ${chosen ? -3 : 0}px, 0)`;
+        return slot;
       });
+      const signature = packets.map(packet => packet.id).join('|');
+      if (signature !== beltSignature) {
+        // Preserve packet identity and keyboard focus when native DOM moves reorder the queue.
+        const focused = ordered.find(slot => slot.button === document.activeElement)?.button;
+        for (const slot of [...ordered, ...packetSlots.filter(item => item.id === null)]) track.appendChild(slot.button);
+        if (focused && document.activeElement !== focused) focused.focus({ preventScroll: true });
+        beltSignature = signature;
+      }
+      const moving = state.status === 'running' && !blocked() && (packets.length < 8 || ordered.some((slot, index) => slot.x > index + .002));
+      if (moving && !reducedMotion) beltTravel = (beltTravel + dt * 2) % 10000;
+      track.style.backgroundPositionX = `${(-beltTravel * pitch % 54).toFixed(2)}px`;
+      attr(belt, 'data-moving', moving);
     }
     function choosePacket(id) {
       if (destroyed || !active || phase !== 'battle' || !isConveyor() || blocked() || state.status !== 'running') return;
@@ -438,7 +480,7 @@
     function reset(index) {
       stopFrame(); audioCall('pause'); manualPaused = false; pointer = null; hover = null; shovel = false; notice = ''; noticeUntil = 0;
       introElapsed = 0; previewElapsed = 0; endingElapsed = -1; selectedPacket = null; traySignature = ''; selectedCart = null; cartMode = false; plantFoodSelected = false; clearSunFlights();
-      game.reset(index); state = game.getState(); mapChapter = game.level.practice ? 'practice' : game.level.chapter || 'garden'; deckSelection = new Set(recommendedDeck(game.level)); selected = game.level.cards.includes('sun') ? 'sun' : 'shooter'; showPhase('deck', true);
+      clearConveyor(); game.reset(index); state = game.getState(); mapChapter = game.level.practice ? 'practice' : game.level.chapter || 'garden'; deckSelection = new Set(recommendedDeck(game.level)); selected = game.level.cards.includes('sun') ? 'sun' : 'shooter'; showPhase('deck', true);
     }
     function requestReset(index, destination = 'deck') {
       if (!active || !game || document.querySelector('dialog[open]') || !isUnlocked(index)) return;
