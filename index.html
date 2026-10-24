@@ -32,13 +32,14 @@
   <script defer src="defense-sound.js?v=20261021-elements1"></script>
   <script defer src="defense-leaderboard.js?v=20261022-defenseboard1"></script>
   <script defer src="defense-app.js?v=20261022-swap1"></script>
-  <link rel="stylesheet" href="garden.css?v=20261024-worlds1">
+  <link rel="stylesheet" href="garden.css?v=20261024-save1">
   <script defer src="garden-forms.js?v=20261024-worlds1"></script>
   <script defer src="garden-enemy-forms.js?v=20261022-gardenphotos1"></script>
   <script defer src="garden-game.js?v=20261024-worlds1"></script>
   <script defer src="garden-renderer.js?v=20261024-worlds1"></script>
   <script defer src="garden-sound.js?v=20261024-worlds1"></script>
-  <script defer src="garden-app.js?v=20261024-worlds1"></script>
+  <script defer src="garden-progress.js?v=20261024-save1"></script>
+  <script defer src="garden-app.js?v=20261024-save1"></script>
   <script defer src="modes.js?v=20261022-garden1"></script>
 </head>
 <body>
@@ -202,6 +203,7 @@
         <div><span class="garden-eyebrow">THE SUNNY SIDE · 第五周目</span><h1>飞天花园<span>三个世界</span></h1></div>
         <button id="garden-map-button" class="garden-map-button" type="button" hidden>← 世界地图</button>
       </header>
+      <p id="garden-save-status" class="garden-save-status" role="status" aria-live="polite"></p>
       <section id="garden-map" class="garden-map" aria-label="三个世界关卡地图">
         <div class="garden-map-sky" aria-hidden="true"><i class="garden-map-sun"></i><i class="garden-cloud cloud-one"></i><i class="garden-cloud cloud-two"></i><i class="garden-hill hill-one"></i><i class="garden-hill hill-two"></i></div>
         <div class="garden-map-intro"><span class="garden-wood-label">一场新的远行</span><h2>从小小花园，<br><em>走向更远的地方。</em></h2><p>花园的阳光、泳池的涟漪、西部的列车。<br>带上熟悉的脸，一关一关出发。</p><span class="garden-journey-progress">旅程足迹 <b id="garden-world-progress">0 / 30</b></span></div>
@@ -210,6 +212,13 @@
         <p id="garden-chapter-detail" class="garden-chapter-detail"></p><p id="garden-world-note" class="garden-world-note"></p>
         <nav id="garden-levels" class="garden-levels" aria-label="选择花园关卡"></nav>
         <p class="garden-map-footnote">三个世界，各 10 关 · 趣味挑战随旅程随机穿插 · 通关解锁下一关</p>
+        <details class="garden-backup" id="garden-backup">
+          <summary>存档与备份</summary>
+          <p>通关后自动保存，更新游戏会接续进度。记录保存在当前浏览器；换设备、换浏览器或清理网站数据前，请导出一份存档。</p>
+          <div class="garden-backup-actions"><button id="garden-export" type="button">导出存档</button><button id="garden-import" type="button">导入存档</button><button id="garden-save-retry" type="button">重新保存</button></div>
+          <input id="garden-import-file" type="file" accept="application/json,.json" hidden aria-label="选择飞天花园存档文件">
+          <p id="garden-backup-message" role="status">导入只补充进度，不会覆盖已有通关记录。</p>
+        </details>
       </section>
       <section id="garden-deck" class="garden-deck" aria-labelledby="garden-deck-title" hidden>
         <div class="garden-deck-heading"><div><span id="garden-deck-level" class="garden-wood-label">第一束阳光</span><h2 id="garden-deck-title" tabindex="-1">挑选你的植物</h2></div><button id="garden-deck-back" class="garden-paper-button" type="button">← 返回地图</button></div>

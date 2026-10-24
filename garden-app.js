@@ -14,26 +14,59 @@
       { id: 'pool', name: '泳池', symbol: '≈', detail: '02 / 泳池 · 10 关，莲叶托起水上防线' },
       { id: 'western', name: '沙漠西部', symbol: '♧', detail: '03 / 沙漠西部 · 10 关，矿车沿铁轨调动火力' },
     ];
-    const PROGRESS_KEY = 'feitian-garden-world-completed-v1', SEED_KEY = 'feitian-garden-world-seed-v1';
-    let campaignSeed = Number(read(SEED_KEY, '0'));
-    if (!Number.isSafeInteger(campaignSeed) || campaignSeed <= 0 || campaignSeed > 4294967295) {
-      campaignSeed = Math.floor(Math.random() * 4294967294) + 1; write(SEED_KEY, campaignSeed);
-    }
+    let storage;
+    try { storage = window.localStorage; } catch (_) {}
+    const progress = window.GardenProgress?.create({ storage });
+    let progressSnapshot = progress?.getSnapshot(), campaignSeed = progressSnapshot?.campaignSeed;
     const chapterButtons = new Map(), sunFlights = new Set();
     let frame = null, lastFrame = null, destroyed = false, notice = '', noticeUntil = 0;
     const cards = new Map(), deckCards = new Map(), levelButtons = [], listeners = [], completed = new Set();
     const reducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
     let soundEnabled = typeof window.GameSoundEnabled === 'boolean' ? window.GameSoundEnabled : read('photo-merge-sound', 'on') !== 'off';
-    try {
-      const saved = JSON.parse(read(PROGRESS_KEY, 'null'));
-      if (Array.isArray(saved)) saved.filter(id => /^(garden|pool|western)-(10|[1-9])$/.test(id)).forEach(id => completed.add(id));
-      else {
-        // Only the original three tutorials have direct equivalents in the new journey.
-        const old = JSON.parse(read('feitian-garden-classic-completed-v1', '[]'));
-        if (Array.isArray(old)) for (let i = 0; i < 3 && old.includes(i); i++) completed.add('garden-' + (i + 1));
-        write(PROGRESS_KEY, JSON.stringify([...completed]));
-      }
-    } catch (_) {}
+    if (progressSnapshot) for (const id of progressSnapshot.completed) completed.add(id);
+    function syncProgress(event) {
+      if (!progress) return;
+      progress.refresh(event); progressSnapshot = progress.getSnapshot();
+      for (const id of progressSnapshot.completed) completed.add(id);
+      saveStatus();
+      if (game) { refreshMap(); refresh(); }
+    }
+    function saveStatus(message) {
+      const status = progress?.getStatus();
+      attr($('garden-save-status'), 'data-error', !status?.saved);
+      text('garden-save-status', message || (!progress ? '存档模块未加载，请刷新页面后继续。' : status.message ? status.message : !status.saved ? '通关进度暂未保存。请在世界地图导出存档，再尝试重新保存。' : status.recovered ? '已从本机备份恢复进度，通关记录已保存。' : status.migrated ? '旧版通关记录已接续，进度已自动保存。' : '通关记录已自动保存，更新会接续进度。'));
+    }
+    function exportProgress() {
+      if (!progress || phase !== 'map') return;
+      let url, link;
+      try {
+        const data = progress.exportData();
+        url = window.URL.createObjectURL(new window.Blob([data], { type: 'application/json' }));
+        link = document.createElement('a'); link.href = url;
+        link.download = `飞天花园存档-${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(link); link.click();
+        text('garden-backup-message', '已生成存档文件，请确认已下载或保存到“文件”。导入旧存档也不会减少进度。');
+      } catch (_) { text('garden-backup-message', '下载未完成，请用 Safari 或 Chrome 打开同一网址后重试。'); }
+      finally { link?.remove(); if (url) window.setTimeout(() => window.URL.revokeObjectURL(url), 60000); }
+      syncProgress();
+    }
+    async function importProgress() {
+      const input = $('garden-import-file'), file = input?.files?.[0];
+      if (!file || !progress || phase !== 'map') return;
+      const button = $('garden-import'); button.disabled = true;
+      try {
+        if (file.size > 262144) throw new Error('存档文件过大，请选择飞天花园导出的 JSON 文件。');
+        const data = await file.text();
+        if (destroyed) return;
+        progress.importData(data); syncProgress();
+        if (game && phase === 'map') {
+          const index = resumeIndex(); game.reset(index); state = game.getState(); mapChapter = game.level.chapter;
+          deckSelection = new Set(recommendedDeck()); refreshMap(); refresh();
+        }
+        text('garden-backup-message', progress.getStatus().saved ? '存档已合并，原有通关记录全部保留。' : '存档已读入，但浏览器仍无法保存。离开前请导出合并后的存档。');
+      } catch (error) { text('garden-backup-message', error.message || '无法读取存档，现有记录未改变。'); }
+      finally { input.value = ''; button.disabled = false; }
+    }
     function read(key, fallback) { try { return window.localStorage.getItem(key) ?? fallback; } catch (_) { return fallback; } }
     function write(key, value) { try { window.localStorage.setItem(key, value); } catch (_) {} }
     function listen(target, type, fn, opts) { target?.addEventListener(type, fn, opts); listeners.push([target, type, fn, opts]); }
@@ -48,7 +81,8 @@
     function campaignLevels() { return game?.levels || window.GardenGame.LEVELS; }
     function campaignNumber(config = level()) { return config.campaignOrder; }
     function nextCampaignIndex() { const next = state.levelIndex + 1; return next < campaignLevels().length ? next : -1; }
-    function isUnlocked(index) { return index === 0 || index > 0 && index < campaignLevels().length && completed.has(campaignLevels()[index - 1].id); }
+    function isUnlocked(index) { const config = campaignLevels()[index]; return Boolean(config && (completed.has(config.id) || config.campaignOrder <= (progressSnapshot?.unlockedThrough || 1))); }
+    function resumeIndex() { const levels = campaignLevels(); const next = levels.findIndex(l => l.campaignOrder >= (progressSnapshot?.unlockedThrough || 1)); return next >= 0 ? next : levels.length - 1; }
     function rewardText(config) {
       const rewards = Array.isArray(config.reward) ? config.reward : config.reward ? [config.reward] : [];
       return rewards.map(id => window.GardenGame.PLANTS.find(p => p.id === id)?.name || ({ shovel: '铲除工具', plantFood: '能量豆' }[id] || id)).join('、');
@@ -179,7 +213,8 @@
       if (event.type === 'collect') flyCollectedSun(event);
       if (event.type === 'win') {
         const index = game?.levelIndex ?? state?.levelIndex ?? 0;
-        completed.add(campaignLevels()[index].id); write(PROGRESS_KEY, JSON.stringify([...completed]));
+        const config = campaignLevels()[index];
+        progress.saveCompleted(config.id, config.campaignOrder); syncProgress();
       }
       if (event.type === 'win' || event.type === 'lose') endingElapsed = 0;
       if (event.type === 'wave' && game) showNotice('新一波入侵者来了，检查每条小路的防线。');
@@ -237,13 +272,12 @@
     }
     function ensure() {
       if (game) return true;
-      if (!window.GardenGame || !window.GardenRenderer) { text('garden-status', '花园加载失败，请刷新页面重试。'); return false; }
+      if (!progress || !window.GardenGame || !window.GardenRenderer) { text('garden-status', '花园加载失败，请刷新页面重试。'); return false; }
       game = new window.GardenGame({ onEvent, campaignSeed }); state = game.getState();
       renderer = new window.GardenRenderer(canvas, { levels: window.GameLevels?.levels || [], forms: window.GardenForms, reducedMotion, onReady: () => { if (active) draw(); } });
       prepRenderer = new window.GardenRenderer($('garden-prep-canvas'), { levels: window.GameLevels?.levels || [], forms: window.GardenForms, reducedMotion, onReady: () => { if (active && phase === 'deck') draw(); } });
       try { if (window.GardenAudio) audio = new window.GardenAudio({ enabled: soundEnabled }); } catch (_) {}
-      const resume = campaignLevels().findIndex((l, i) => isUnlocked(i) && !completed.has(l.id));
-      game.reset(resume < 0 ? 29 : resume); state = game.getState(); mapChapter = game.level.chapter;
+      game.reset(resumeIndex()); state = game.getState(); mapChapter = game.level.chapter;
       makeDeck(); deckSelection = new Set(recommendedDeck(game.level)); showPhase('map'); return true;
     }
     function draw() {
@@ -505,12 +539,20 @@
       const wasActive = active; active = event.detail?.mode === 'garden'; pointer = null; hover = null; plantFoodSelected = false;
       if (wasActive && !active && (state?.status === 'running' || phase === 'intro')) manualPaused = true;
       if (!active && $('garden-confirm').open) $('garden-confirm').close();
+      if (active) syncProgress();
       if (active && ensure()) resize(); syncPause();
     });
     const loseFocus = () => { pointer = null; if (active && (state?.status === 'running' || phase === 'intro')) manualPaused = true; syncPause(); };
-    listen(window, 'blur', loseFocus); listen(document, 'visibilitychange', () => { if (document.hidden) loseFocus(); else syncPause(); });
+    listen(window, 'blur', loseFocus); listen(document, 'visibilitychange', () => { if (document.hidden) loseFocus(); else { syncProgress(); syncPause(); } });
+    listen(window, 'storage', event => { if (event.key === null || event.key?.startsWith('feitian-garden-')) syncProgress(event); });
+    listen(window, 'pageshow', () => syncProgress());
+    listen(window, 'focus', () => syncProgress());
+    listen($('garden-export'), 'click', exportProgress);
+    listen($('garden-import'), 'click', () => { if (phase === 'map' && progress) $('garden-import-file').click(); });
+    listen($('garden-import-file'), 'change', importProgress);
+    listen($('garden-save-retry'), 'click', () => { syncProgress(); text('garden-backup-message', progress?.getStatus().saved ? '保存成功，已接续全部通关记录。' : '浏览器仍无法保存，请先导出存档。'); });
     listen(window, 'resize', resize); listen(window, 'orientationchange', resize); listen(window.visualViewport, 'resize', resize);
-    soundUI();
+    saveStatus(); soundUI();
     return { get game() { return game; }, destroy() { destroyed = true; active = false; clearSunFlights(); stopFrame(); audioCall('destroy'); game?.pause(true); for (const [target, type, fn, opts] of listeners) target?.removeEventListener?.(type, fn, opts); } };
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = initGarden;

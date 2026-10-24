@@ -349,3 +349,15 @@
  .garden-chapter-detail { margin: 19px 16px 0; font-size: 11px; }.garden-world-note { margin: 6px 16px 0; font-size: 10px; }.garden-map .garden-levels { grid-template-columns: repeat(2,minmax(0,1fr)); margin: 16px 13px 22px; gap: 11px; }.garden-map .garden-levels .garden-level-stop { min-height: 138px; }.garden-level-stop b { font-size: 14px; }.garden-level-stop em { font-size: 9px; }
  .garden-controls { width: 100%; }.garden-controls button { flex: 1; min-width: 50px; }.garden-bottom { flex-wrap: wrap; }.garden-layout[data-chapter="pool"] #garden-canvas { aspect-ratio: .95; }
 }
+
+/* Save status stays visible; optional portable backups live on the world map. */
+.garden-save-status { margin: -4px 0 14px; font-size: 11px; line-height: 1.7; color: #53704a; }
+.garden-save-status[data-error="true"] { color: #984d29; background: #fff1d4; padding: 8px 12px; border-left: 3px solid #bc7846; }
+.garden-backup { position: relative; margin: 0 32px 26px; padding-top: 13px; border-top: 1px dashed #526c4960; color: #3f5638; font-size: 12px; }
+.garden-backup summary { cursor: pointer; font-weight: 700; padding: 8px 0; }
+.garden-backup p { max-width: 680px; line-height: 1.8; margin: 7px 0 12px; }
+.garden-backup-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.garden-backup-actions button { min-height: 44px; border: 1px solid #71805a; padding: 8px 15px; border-radius: 5px; background: #fff5d3; color: #3f5638; font: inherit; cursor: pointer; }
+.garden-backup-actions button:hover { background: #fffbe8; }.garden-backup-actions button:focus-visible { outline: 3px solid #a15d39; outline-offset: 3px; }
+#garden-backup-message { font-size: 11px; }
+@media (max-width: 699px) { .garden-backup { margin: 0 16px 22px; }.garden-save-status { font-size: 10px; margin-bottom: 10px; }.garden-backup-actions button { flex: 1; padding-inline: 9px; } }
