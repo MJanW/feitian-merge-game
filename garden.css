@@ -373,3 +373,8 @@
 .garden-speed button[aria-pressed="true"] { background: #f3e2a3; color: #37502b; border-color: #fff2bb; box-shadow: inset 0 -2px #d4bc76; }
 .garden-speed button:disabled { opacity: .45; cursor: default; }
 @media (max-width: 779px) { .garden-speed { width: 100%; border-top: 1px solid #d5e2ba38; padding-top: 5px; }.garden-speed > span { flex: 1; }.garden-speed button { min-width: 50px; } }
+
+/* Mine cards show the same buried portrait and trigger light as the field model. */
+.garden-mine-portrait { isolation: isolate; border-radius: 45%; }
+.garden-mine-portrait::before { content: ''; position: absolute; z-index: 1; bottom: 0; left: 1%; width: 98%; height: 24%; background: radial-gradient(ellipse at 50% 0,#c79758,#88613b); border-radius: 50% 50% 20% 20%; box-shadow: inset 0 2px #e5bc7b; }
+.garden-mine-portrait::after { content: ''; position: absolute; z-index: 2; top: 4%; left: 66%; width: 12%; height: 12%; border-radius: 50%; background: #d85f39; border: 1px solid #694833; box-shadow: 0 0 4px #eab75c; }

@@ -11,6 +11,7 @@
     sun: ['灿烂日光', '喷出8颗阳光，共200点，记得点击收集'],
     shooter: ['飞叶风暴', '连续发射20发强化飞叶'],
     wall: ['坚不可摧', '回满生命，并获得10秒护盾'],
+    mine: ['快速布雷', '立即完成埋伏准备，触发时对同排近处造成2400伤害'],
     ice: ['极寒时刻', '冻结全场4秒，并连续发射寒冰弹'],
     burst: ['双重狂潮', '连续发射30发强化飞叶'],
     bomb: ['盛大焰火', '立即引爆更大范围的强化焰火'],
@@ -25,6 +26,7 @@
     { id: 'sun', name: '日光伙伴', cost: 50, cooldown: 7500, photoIndex: 1, color: '#f3bc42', description: '首产约7秒，之后每24秒产出25阳光', hp: 300, production: 24000 },
     { id: 'shooter', name: '飞叶射手', cost: 100, cooldown: 7500, photoIndex: 3, color: '#6d9f55', description: '约1.4秒一发，每发20伤害', hp: 300, damage: 20, attackInterval: 1425 },
     { id: 'wall', name: '磐石守卫', cost: 50, cooldown: 30000, initialCooldown: 15000, photoIndex: 5, color: '#bc8d59', description: '4000生命，挡住入侵者', hp: 4000 },
+    { id: 'mine', name: '土豆地雷', cost: 25, cooldown: 30000, initialCooldown: 15000, color: '#b18a52', description: '埋伏15秒后就绪，接触来客时对同排近处造成1800伤害；只能种在陆地', hp: 300, armTime: 15000, damage: 1800, landOnly: true },
     { id: 'ice', name: '寒冰射手', cost: 175, cooldown: 7500, photoIndex: 7, color: '#75c2da', description: '20伤害，移动和啃咬减半10秒', hp: 300, damage: 20, attackInterval: 1425 },
     { id: 'burst', name: '双发射手', cost: 200, cooldown: 7500, photoIndex: 9, color: '#ac78b5', description: '连续两发，每发20伤害', hp: 300, damage: 20, attackInterval: 1425 },
     { id: 'bomb', name: '焰火伙伴', cost: 150, cooldown: 50000, initialCooldown: 25000, photoIndex: 11, color: '#e17a5e', description: '1.2秒后在3×3范围造成1800伤害', hp: 300, fuse: 1200, damage: 1800 },
@@ -68,11 +70,11 @@
   }
   function createCampaign(seed = DEFAULT_CAMPAIGN_SEED) {
     const random = campaignRandom(seed), levels = [], unlocked = ['shooter'];
-    const rewards = ['sun', 'wall', 'bomb', 'ice', 'star', 'corn', 'burst', 'tallwall', null, 'lily',
+    const rewards = ['sun', 'wall', 'mine', 'ice', 'star', 'corn', 'burst', 'tallwall', 'bomb', 'lily',
       'kelp', 'tide', 'torch', 'cannon', 'lightning', null, null, null, null, 'cactus',
       null, null, null, null, null, null, null, null, null, null];
     const titles = {
-      garden: ['第一束阳光', '日光伙伴', '稳稳的防线', '焰火迎客', '冰凉的午后', '星光花坛', '黄油时刻', '双发的默契', '高墙之后', '花园告别礼'],
+      garden: ['第一束阳光', '日光伙伴', '稳稳的防线', '埋伏迎客', '冰凉的午后', '星光花坛', '黄油时刻', '双发的默契', '高墙之后', '花园告别礼'],
       pool: ['池畔初见', '水下的拥抱', '碧波初鸣', '池畔灯火', '重炮迎潮', '水面雷光', '两岸守望', '涟漪派对', '浪花快车', '夏日终曲'],
       western: ['第一辆矿车', '荒原针阵', '轨道换防', '驿站来信', '落日哨所', '仙人掌峡谷', '铁轨交响', '沙丘快车', '荒原夜话', '西部大巡游'],
     };
@@ -97,10 +99,10 @@
         let cards = unlocked.filter(id => chapter === 'pool' || !PLANT_BY_ID[id].aquatic);
         // Pool companions stay unlocked in the collection, but are unavailable on dry maps.
         const preferred = chapter === 'pool' ? ['sun', 'lily', 'tide', 'shooter', 'ice', 'kelp', 'bomb', 'tallwall', 'wall', 'star'] :
-          chapter === 'western' ? ['sun', 'cactus', 'shooter', 'ice', 'bomb', 'tallwall', 'torch', 'cannon', 'wall'] : ['sun', 'shooter', 'wall', 'bomb', 'ice', 'star', 'corn', 'burst', 'tallwall'];
+          chapter === 'western' ? ['sun', 'cactus', 'shooter', 'ice', 'bomb', 'tallwall', 'torch', 'cannon', 'wall', 'mine'] : ['sun', 'shooter', 'wall', 'mine', 'bomb', 'ice', 'star', 'corn', 'burst', 'tallwall'];
         let recommendedDeck = preferred.filter(id => cards.includes(id)).slice(0, MAX_DECK_SIZE);
         if (stage === 1 && chapter === 'garden') recommendedDeck = ['shooter'];
-        const featureIntro = chapter === 'garden' && stage === 4 ? '铲子已解锁：移走伙伴，重新安排阵型。' : chapter === 'garden' && stage === 5 ? '能量豆已解锁：每局一颗，点击伙伴释放大招。' :
+        const featureIntro = chapter === 'garden' && stage === 4 ? '土豆地雷需要15秒准备，请提前埋伏；铲子也已解锁，可移走伙伴重新布阵。' : chapter === 'garden' && stage === 5 ? '能量豆已解锁：每局一颗，点击伙伴释放大招。' : chapter === 'garden' && stage === 10 ? '焰火伙伴已解锁：在来客密集时，用3×3范围爆炸化解危机。' :
           chapter === 'pool' && stage === 1 ? '水路需要莲叶承载陆生伙伴；莲叶上还能再种一名伙伴。' : chapter === 'pool' && stage === 2 ? '海草可直接种在水里，一次拖走一名靠近的来客。' : chapter === 'pool' && stage === 3 ? '碧波射手可直接在水上射击。' :
           chapter === 'western' && stage === 1 ? '先把伙伴种在矿车上；选择矿车，再点同一轨道的目标行换防。' : chapter === 'western' && stage === 3 ? '第二条轨道开放，矿车可以带着伙伴一起换行。' : chapter === 'western' ? ({
             4: '上下两段短轨道在中路交接，分别照顾两侧来客。',
@@ -124,7 +126,7 @@
           waves: [10000, 25000, 40000, 60000, 80000, 104000].map((at, wave) => ({ at, count: [1, 1, 2, 2, 3, 5][wave], spacing: wave === 5 ? 900 : 3500, pool: ['walker'], flag: wave === 5 })) });
         if (mode === 'conveyor') {
           cards = cards.filter(id => id !== 'sun');
-          const core = ['shooter', 'shooter', 'shooter', 'wall', 'ice', 'star', 'burst', 'bomb', 'cactus'].filter(id => cards.includes(id));
+          const core = ['shooter', 'shooter', 'shooter', 'wall', 'mine', 'ice', 'star', 'burst', 'bomb', 'cactus'].filter(id => cards.includes(id));
           const waterSupply = chapter === 'pool' ? ['tide', 'tide', 'lily', 'lily', 'kelp'] : [];
           level = { ...level, cards, recommendedDeck: [], startSun: 0, skySun: false, conveyorInterval: chapter === 'garden' ? 6500 : 5000,
             conveyorInitial: chapter === 'pool' ? ['shooter', 'shooter', 'tide', 'tide', 'lily', 'lily'] : ['shooter', 'shooter', 'wall'],
@@ -263,6 +265,7 @@
       if (!config || !this._validCell(row, col)) return false;
       const water = this.waterRows.includes(row), living = this.plants.filter(plant => plant.hp > 0 && plant.row === row && plant.col === col);
       if (config.aquatic && !water) return false;
+      if (config.landOnly && water) return false;
       if (type === 'lily') { if (living.length) return false; }
       else {
         if (living.some(plant => plant.type !== 'lily')) return false;
@@ -293,6 +296,7 @@
         id: this._id('plant'), type, row, col, hp: config.hp, maxHp: config.hp, attackPulse: 0, hurtPulse: 0,
         attackTimer: 200, burstTimer: 0, pendingShot: false, sunTimer: 7000, fuse: config.fuse || 0,
         powerTime: 0, powerShots: 0, powerTimer: 0, shieldHp: 0, shieldTime: 0,
+        ...(type === 'mine' ? { armRemaining: config.armTime, armed: false, boosted: false } : {}),
       };
       this.plants.push(plant);
       this._plantedCounts[type]++;
@@ -353,6 +357,7 @@
           plant.powerShots = 10; plant.powerShotInterval = 140;
           break;
         case 'star': plant.powerShots = 3; plant.powerShotInterval = 400; break;
+        case 'mine': plant.boosted = true; this._armMine(plant); break;
         case 'bomb': plant.boosted = true; plant.fuse = 100; break;
         case 'torch':
           for (const enemy of this.enemies) if (enemy.hp > 0 && enemy.row === row) {
@@ -481,6 +486,20 @@
           plant.sunTimer += config.production; plant.attackPulse = 450;
           this._sun(plant.col + .5, plant.row + .3, 'plant');
         }
+      } else if (plant.type === 'mine') {
+        if (!plant.armed) {
+          plant.armRemaining = Math.max(0, plant.armRemaining - dt);
+          if (plant.armRemaining <= 1e-7) this._armMine(plant);
+        }
+        const x = plant.col + .5;
+        if (plant.armed && this.enemies.some(enemy => enemy.hp > 0 && !enemy.headless && !enemy.vaulting && !enemy.hasPole && enemy.row === plant.row && Math.abs(enemy.x - x) <= .5)) {
+          const radius = plant.boosted ? 1.1 : .8, damage = plant.boosted ? 2400 : config.damage;
+          // Remove the trigger before applying damage: a crowded lane spends only one mine.
+          plant.hp = 0;
+          for (const enemy of this.enemies) if (enemy.hp > 0 && !enemy.vaulting && enemy.row === plant.row && Math.abs(enemy.x - x) <= radius) this._damage(enemy, damage, 'mine');
+          this._effect('mineExplosion', plant.row, x, 900, { radius, power: plant.boosted });
+          this._emit('mineExplosion', { row: plant.row, x, damage, radius, power: plant.boosted });
+        }
       } else if (plant.type === 'bomb') {
         plant.fuse -= dt;
         if (plant.fuse <= 1e-7) {
@@ -510,6 +529,14 @@
           this._emit('shot', { plant, row: plant.row, x: plant.col + .5, count });
         }
       }
+    }
+
+    _armMine(plant) {
+      if (plant.armed) return;
+      plant.armRemaining = 0; plant.armed = true; plant.attackPulse = 400;
+      const x = plant.col + .5;
+      this._effect('mineArm', plant.row, x, 550);
+      this._emit('mineArm', { plant, row: plant.row, x });
     }
 
     _shoot(plant, options = {}) {

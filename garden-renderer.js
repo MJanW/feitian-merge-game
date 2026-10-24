@@ -8,6 +8,7 @@
     sun: { photo: 1, color: '#ffcf56', dark: '#aa712f', symbol: '☀' },
     shooter: { photo: 3, color: '#9fd560', dark: '#46732c', symbol: '•' },
     wall: { photo: 5, color: '#d7a87b', dark: '#825942', symbol: '盾' },
+    mine: { photo: null, color: '#c49a63', dark: '#735033', symbol: '雷' },
     ice: { photo: 7, color: '#9ce3f2', dark: '#3d8ca1', symbol: '❄' },
     burst: { photo: 9, color: '#b8adf0', dark: '#6b629c', symbol: '••' },
     bomb: { photo: 11, color: '#fa9674', dark: '#b84b36', symbol: '✦' },
@@ -735,8 +736,60 @@
       for(const enemy of placements.sort((a,b)=>a.row-b.row))this._enemy(ctx,enemy,time);
     }
 
+    _mine(ctx, plant, time, ghost = false) {
+      const g=this.geometry,p=this._world(plant.col+.5,finite(plant.drawRow,plant.row)+.66);
+      const scale=Math.min(g.cellWidth/70,g.cellHeight/76);
+      const armed=plant.armed===true,remaining=Math.max(0,finite(plant.armRemaining,15000));
+      const progress=armed?1:clamp(1-remaining/15000,0,1),emerge=progress*progress*(3-2*progress);
+      const breathing=this.reducedMotion?0:Math.sin(time*2.6+plant.col)*.65;
+      const lamp=armed?(this.reducedMotion?1:.62+.38*Math.sin(time*7)**2):.25;
+      ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);if(ghost)ctx.globalAlpha=.53;
+      ellipse(ctx,0,9,29,8,'#345b2d36');
+      ellipse(ctx,0,5,27,10,'#8c653e','#684b31',1.4);
+      ellipse(ctx,-2,1,24,9,'#be925e');
+      if(plant.boosted) {
+        const halo=ctx.createRadialGradient(0,-12,2,0,-12,39);
+        halo.addColorStop(0,'#fff3b899');halo.addColorStop(1,'#ffe7a100');
+        ctx.fillStyle=halo;ctx.fillRect(-40,-52,80,75);
+        ellipse(ctx,0,6,29,10,null,'#fff0ac',2);
+        sparkle(ctx,-23,-16,4,'#fff6ce');sparkle(ctx,23,-28,4,'#fff6ce');
+      }
+      // Keep the full source crop: the ground occludes its lower part as it grows out.
+      ctx.save();ctx.beginPath();ctx.moveTo(-25,-58);ctx.lineTo(25,-58);ctx.lineTo(25,4);ctx.lineTo(-25,4);ctx.closePath();ctx.clip();
+      const bottom=20-emerge*23+breathing*emerge;
+      const info=this._form('mine'),image=info&&this.images.get(info.image);
+      if(image?.complete&&image.naturalWidth) {
+        const frame=info.frame || [0,0,image.naturalWidth,image.naturalHeight];
+        const ratio=frame[2]/frame[3],height=Math.min(39,42/ratio),width=height*ratio;
+        ctx.drawImage(image,...frame,-width/2,bottom-height,width,height);
+      } else {
+        ellipse(ctx,0,bottom-15,20,17,'#c49a63','#735033',1.5);
+        ellipse(ctx,-6,bottom-20,2,2.5,'#423b27');ellipse(ctx,6,bottom-20,2,2.5,'#423b27');
+        ellipse(ctx,-11,bottom-11,2,1.2,'#dcb781');ellipse(ctx,10,bottom-7,2,1.2,'#a57948');
+      }
+      ctx.restore();
+      // Foreground clods hide the lower edge and keep this silhouette close to the soil.
+      for(let i=0;i<7;i++)ellipse(ctx,(i-3)*7,5+(i%2)*2,5.5,3.5,i%2?'#ad7f4f':'#c7a06c','#8d653e',.7);
+      line(ctx,19,0,19,-13-emerge*8,'#675d42',3);
+      ellipse(ctx,19,-16-emerge*8,6,5.5,armed?'#8c312d':'#887a54','#5c4c36',1.1);
+      ctx.save();ctx.globalAlpha*=lamp;
+      ellipse(ctx,19,-16-emerge*8,4.2,3.7,armed?'#ff6550':'#cfb976');
+      if(armed) {
+        ellipse(ctx,19,-16-emerge*8,8.5,8,'#ff7b4333');
+        ellipse(ctx,18,-17-emerge*8,1.4,1.1,'#ffe9bd');
+      }
+      ctx.restore();
+      if(!ghost&&!armed) {
+        round(ctx,-12,13,24,11,4,'#715334df');
+        label(ctx,`${Math.ceil(remaining/1000)}s`,0,18.5,8.5,'#fff1cf',700);
+      }
+      if(finite(plant.hurtPulse)>0)sparkle(ctx,-18,-18,8*clamp(plant.hurtPulse/180,0,1),'#fff5b6');
+      ctx.restore();
+    }
+
     _plant(ctx, plant, time, ghost = false) {
       if(plant.type==='lily') { this._lily(ctx,plant,time,ghost); return; }
+      if(plant.type==='mine') { this._mine(ctx,plant,time,ghost); return; }
       const g=this.geometry, look=LOOKS[plant.type] || LOOKS.shooter;
       const p=this._world(plant.col+.5,finite(plant.drawRow,plant.row)+.66);
       const scale=Math.min(g.cellWidth/70,g.cellHeight/76);
@@ -1317,6 +1370,37 @@
       } else if(type==='lilyPower') {
         ellipse(ctx,0,3,33+progress*11,14+progress*5,'#def7c12b','#e7ffcc',2.5);
         for(let i=0;i<8;i++)sparkle(ctx,Math.cos(i*TAU/8)*33,-15+Math.sin(i*TAU/8)*26,5*(1-progress)+1,'#f3ffdb');
+      } else if(type==='mineArm') {
+        const radius=this.reducedMotion?24:12+progress*22;
+        ellipse(ctx,0,10,radius,radius*.28,null,'#ffe0a1',2*(1-progress)+.5);
+        for(let i=0;i<5;i++) {
+          const x=(i-2)*(6+progress*4),rise=this.reducedMotion?0:Math.sin(progress*Math.PI)*(9+i%2*6);
+          ellipse(ctx,x,7-rise,3*(1-progress)+1.2,2,'#c29862');
+        }
+        sparkle(ctx,19,-24,6*(1-progress)+2,'#fff0b5');
+      } else if(type==='mineExplosion') {
+        // A flat shockwave reads as a ground trap and stays inside its single damage lane.
+        const reach=Math.max(32,finite(effect.radius,.8)*g.cellWidth/scale);
+        const spread=this.reducedMotion?.75:1-Math.pow(1-progress,3),r=12+reach*spread;
+        ellipse(ctx,0,9,r,8+progress*7,'#ddb47e49','#ffedbd',3*(1-progress)+.5);
+        const flash=this.reducedMotion?.32:Math.max(0,1-progress*2.5);
+        if(flash>0) {
+          ctx.save();ctx.globalAlpha*=flash;
+          star(ctx,0,-8,34+(effect.power?9:0),'#fff7c9','#ffbb61',2);
+          ellipse(ctx,0,-7,18,13,'#ffffff');ctx.restore();
+        }
+        for(let i=0;i<12;i++) {
+          const side=i%2?1:-1,v=(i+2)/14;
+          const x=side*r*(.28+v*.63),flight=this.reducedMotion?.4:progress;
+          const y=9-Math.sin(flight*Math.PI)*(14+v*23)+flight*9;
+          ctx.save();ctx.translate(x,y);ctx.rotate(side*flight*(2+i*.2));
+          const size=(i%3)+2;
+          poly(ctx,[[-size,-size*.6],[size*.3,-size],[size,size*.4],[-size*.4,size]],
+            i%2?'#a47242':'#d1a570','#745235',.7);ctx.restore();
+          if(i%3===0)sparkle(ctx,x*.7,y-6,4*(1-progress)+1,'#ffe3a0');
+        }
+        for(let i=0;i<4;i++)ellipse(ctx,(i-1.5)*r*.4,12-progress*9,
+          (6+progress*13)*(1-progress),3+progress*3,'#e0c3907d');
       } else if(type==='cartMove') {
         for(let i=0;i<5;i++)ellipse(ctx,(i-2)*(6+progress*7),15-progress*9,
           4*(1-progress)+1,2*(1-progress)+1,'#efdab2');
@@ -1382,7 +1466,7 @@
           sparkle(ctx,Math.cos(a)*rr,Math.sin(a)*rr*.7,12*(1-progress)+3,i%2?'#f5a455':'#fff3c3');
         }
       } else if(/death|defeat|kill/.test(type)) {
-        const thrown=effect.source==='bomb'||effect.source==='mower';
+        const thrown=effect.source==='bomb'||effect.source==='mine'||effect.source==='mower';
         const drop=this.reducedMotion?1:1-Math.pow(1-clamp(progress*1.45,0,1),2);
         ctx.globalAlpha=clamp((1-progress)*2,0,1);
         ctx.save();ctx.translate(thrown?drop*18:0,(photo?photoBaseline:12)+(thrown?-Math.sin(progress*Math.PI)*20:0));

@@ -4,7 +4,7 @@
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const MAX_VOICES = 16;
-  const LIMITS = Object.freeze({ shot: .105, hit: .075, collect: .065, plant: .06, select: .045, packet: .14, armorBreak: .1, armLost: .13, headless: .13, explode: .15, mower: .25, plantFood: .3, cartMove: .15, kelp: .2 });
+  const LIMITS = Object.freeze({ shot: .105, hit: .075, collect: .065, plant: .06, select: .045, packet: .14, armorBreak: .1, armLost: .13, headless: .13, explode: .15, mower: .25, plantFood: .3, cartMove: .15, kelp: .2, mineArm: .15, mineExplosion: .18 });
 
   // Original, short garden foley and melodic accents. All sources are made
   // locally; there are no music downloads, timers, or looping background nodes.
@@ -227,6 +227,12 @@
           return this._note(680, .035, .13, .015, 170, 'triangle') || base;
         }
         case 'armLost': case 'headless': return this._noise(.11, .023, 450);
+        case 'mineArm': return this._tones([440, 660], .055, .09, .016);
+        case 'mineExplosion': {
+          const earth = this._noise(.28, .048, 590);
+          const thud = this._note(145, 0, .29, .044, 45);
+          return this._noise(.09, .019, 1600, .1) || earth || thud;
+        }
         case 'explode': {
           const base = this._noise(.34, .052, 850);
           return this._note(115, 0, .37, .05, 45) || base;

@@ -2,6 +2,22 @@
   'use strict';
   // Independent garden role mapping; numbered forms in other modes are unchanged.
   const forms = {
+  "mine": {
+    "image": "assets/photo-04.png",
+    "frame": [
+        140,
+        650,
+        380,
+        340
+    ],
+    "imageSize": [
+        1254,
+        1254
+    ],
+    "imageHash": "402b3df480ab204b99935744efb16d93cf6296fa021cd0cb6869fcca23b59d6a",
+    "sourceImage": "5.jpg",
+    "subject": "已有躺卧人物的头肩部，配合埋土与触发灯建模"
+},
   "sun": {
     "image": "assets/photo-00.png",
     "frame": [

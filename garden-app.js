@@ -149,7 +149,7 @@
     function level() { return state?.level || game?.level || campaignLevels()[0]; }
     function available(type) { const config = level(); return (state?.deck || config.cards).includes(type) && (state?.tutorialReady !== false || type === config.tutorialGate?.type); }
     function portraitFor(plant) {
-      const portrait = document.createElement('span'); portrait.className = 'garden-portrait';
+      const portrait = document.createElement('span'); portrait.className = 'garden-portrait' + (plant.id === 'mine' ? ' garden-mine-portrait' : '');
       const form = window.GardenForms?.[plant.id] || window.GameLevels?.levels?.[plant.photoIndex];
       if (form?.image) {
         const img = document.createElement('img'); img.src = form.image; img.alt = ''; img.draggable = false;
@@ -551,6 +551,7 @@
       refresh(); draw();
     }
     function placementHint(cell) {
+      if (level().waterRows?.includes(cell.row) && selected === 'mine') return '土豆地雷只能埋在陆地，不能种在水面或莲叶上。';
       if (level().waterRows?.includes(cell.row)) return '水路先放莲叶，再种陆生植物；水生伙伴直接下水。一格只能有一位伙伴和一片莲叶。';
       if (level().tracks?.some(track => track.col === cell.col)) return '铁轨上只有矿车所在的格子可以种植。用“调动矿车”换行。';
       if (['lily','kelp','tide'].includes(selected)) return '这位伙伴只能种在水路。';
