@@ -124,6 +124,21 @@
     return clamp(finite(enemy.armorHp,total)/Math.max(1,total),0,1);
   }
 
+  function visitorBite(enemy, time, reducedMotion) {
+    const active=!enemy.headless&&!enemy.vaulting&&finite(enemy.freezeTime)<=0&&finite(enemy.stunTime)<=0&&
+      !!(enemy.eating||enemy.attacking||enemy.state==='attacking');
+    if(!active)return {active:false,lean:0,reach:0,jaw:0};
+    if(reducedMotion)return {active:true,lean:.3,reach:.6,jaw:0};
+    // Follow the simulation's 700 ms bite, including frost and fast-forward. The head
+    // reaches the plant at the same 210 ms contact as its flinch and crunch sound.
+    const clock=finite(enemy.biteTime,time*1000*(finite(enemy.slowTime)>0?.5:1));
+    const phase=(Math.max(0,clock)%700)/700;
+    const ease=value=>{const t=clamp(value,0,1);return t*t*(3-2*t);};
+    const lean=phase<=.3?ease(phase/.3):1-ease((phase-.3)/.42);
+    const jaw=phase<.3?Math.sin(phase/.3*Math.PI):phase<.7?Math.max(0,Math.sin((phase-.3)/.4*TAU))*.35:0;
+    return {active:true,lean,reach:.35+lean*.65,jaw};
+  }
+
   function visitorArmor(ctx, type, integrity = 1, wobble = 0) {
     const wear=1-clamp(integrity,0,1),creased=wear>.3,crushed=wear>.65;
     ctx.save();ctx.rotate(wear*.11+wobble);ctx.translate(wear*2,wear*3);
@@ -990,23 +1005,30 @@
     }
 
     _photoPose(ctx,photo,enemy,pose={}) {
-      const stride=finite(pose.stride),reach=finite(pose.reach),bite=finite(pose.bite);
+      const stride=finite(pose.stride),reach=finite(pose.reach),bite=finite(pose.bite),jaw=finite(pose.jaw);
       const still=this.reducedMotion,legSwing=still?0:stride*.17;
       const farLift=still?0:Math.pow(Math.max(0,-stride),2)*2;
       const nearLift=still?0:Math.pow(Math.max(0,stride),2)*2;
       this._photoPart(ctx,photo,'farLeg',-legSwing,0,-farLift);
       this._photoPart(ctx,photo,'nearLeg',legSwing,0,-nearLift);
-      ctx.save();ctx.translate(0,-finite(pose.bob));
+      ctx.save();ctx.translate(-bite*2,-finite(pose.bob));ctx.rotate(-bite*.055);
       // Arms and legs are independent photo pieces. A removed part is never painted into the torso.
-      this._photoPart(ctx,photo,'farArm',.34+reach*.35+(still?0:finite(pose.sway,stride)*.11));
+      this._photoPart(ctx,photo,'farArm',.34+reach*.47+(still?0:finite(pose.sway,stride)*.11));
       this._photoPart(ctx,photo,'torso',-.035+(still?0:stride*.018));
-      if(!enemy.headless)this._photoPart(ctx,photo,'head',-.04-bite*.11,-bite*1.1,still?0:-finite(pose.bob)*.25);
-      if(!enemy.armLost)this._photoPart(ctx,photo,'nearArm',.55+reach*.43-(still?0:finite(pose.sway,stride)*.13));
-      if(!enemy.headless&&finite(enemy.armorHp)>0&&['helmet','brute','bucket','cone','armor','armored'].includes(enemy.type)) {
-        const p=this._photoHeadPosition(photo);
-        ctx.save();ctx.translate(p.x,p.y);ctx.scale(p.armorScale,p.armorScale);
-        visitorArmor(ctx,enemy.type,armorIntegrity(enemy),still?0:stride*.02*(1-armorIntegrity(enemy)));ctx.restore();
+      if(!enemy.headless) {
+        const pivot=photo.info.rig.head.pivot,px=(pivot[0]-.5)*photo.width,py=(pivot[1]-1)*photo.height;
+        ctx.save();ctx.translate(px-bite*2.6,py+bite*.8+jaw*.55-finite(pose.bob)*.25);
+        ctx.rotate(-.04-bite*.17+jaw*.02);ctx.translate(-px,-py);
+        this._photoPart(ctx,photo,'head');
+        // The hat follows the same neck hinge, so it cannot float above a biting head.
+        if(finite(enemy.armorHp)>0&&['helmet','brute','bucket','cone','armor','armored'].includes(enemy.type)) {
+          const p=this._photoHeadPosition(photo);
+          ctx.save();ctx.translate(p.x,p.y);ctx.scale(p.armorScale,p.armorScale);
+          visitorArmor(ctx,enemy.type,armorIntegrity(enemy),still?0:stride*.02*(1-armorIntegrity(enemy)));ctx.restore();
+        }
+        ctx.restore();
       }
+      if(!enemy.armLost)this._photoPart(ctx,photo,'nearArm',.55+reach*.55-(still?0:finite(pose.sway,stride)*.13));
       ctx.restore();
     }
 
@@ -1023,8 +1045,7 @@
       const phase=this.reducedMotion||immobilized?0:time*(fast?12:5)*(cold?.5:1)+seed*1.7;
       const stride=this.reducedMotion||immobilized?0:Math.sin(phase),hit=clamp(finite(enemy.hitPulse)/180,0,1);
       const sway=this.reducedMotion||immobilized?0:Math.sin(phase-.7);
-      const eating=!immobilized&&!enemy.headless&&!vaulting&&(enemy.eating||enemy.attacking||enemy.state==='attacking');
-      const bite=this.reducedMotion?0:eating?Math.pow((1+Math.sin(phase*1.5))*.5,2):0;
+      const bite=visitorBite(enemy,time,this.reducedMotion),eating=bite.active;
       const scale=Math.min(g.cellWidth/69,g.cellHeight/80)*clamp(finite(enemy.displayScale,1),.5,2.4);
       ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);
       ellipse(ctx,1,5,22-jump*.16,7-jump*.045,'#2e4b2e3b');
@@ -1036,8 +1057,9 @@
       }
       const impact=this.reducedMotion?0:Math.sin(hit*Math.PI*.85)*hit;
       ctx.save();ctx.translate(impact*5,-jump);ctx.rotate(-impact*.06);
-      this._photoPose(ctx,photo,enemy,{stride:vaulting?-.65:eating?stride*.2:stride,
-        bob:this.reducedMotion?0:(1-Math.cos(phase*2))*(eating?.25:.7),sway,reach:eating?.7+bite*.3:0,bite});
+      this._photoPose(ctx,photo,enemy,{stride:vaulting?-.65:eating?0:stride,
+        bob:this.reducedMotion?0:eating?bite.lean*.5:(1-Math.cos(phase*2))*.7,
+        sway:eating?0:sway,reach:bite.reach,bite:bite.lean,jaw:bite.jaw});
       if(enemy.type==='flag') {
         line(ctx,16,0,16,-82,'#697750',2.7);
         poly(ctx,[[17,-80],[42,-77],[38,-65],[43,-52],[17,-56]],'#cc6a53','#914e3c',1.5);
@@ -1117,7 +1139,7 @@
       const armLost=!!enemy.armLost;
       const skin=isCold?'#a2d2ce':'#acc09a';
       const skinDark=isCold?'#5f9ba4':'#647a58';
-      const eating=!immobilized&&!headless&&!vaulting&&(enemy.eating || enemy.attacking || enemy.state==='attacking');
+      const bite=visitorBite(enemy,time,this.reducedMotion),eating=bite.active;
       ctx.save(); ctx.translate(p.x,p.y); ctx.scale(scale,scale);
       ellipse(ctx,1,5,22-jump*.16,7-jump*.045,'#2e4b2e3b');
       if(hasPole) {
@@ -1131,7 +1153,7 @@
         }
       }
       ctx.save();ctx.translate(flinch*4,-jump);ctx.rotate(-flinch*.045);
-      const walk=vaulting ? -.65 : eating ? stride*.18 : stride;
+      const walk=vaulting ? -.65 : eating ? 0 : stride;
       // Oversized boots and offset knees make the leftward shuffle readable.
       line(ctx,-9,-18,-12+walk*3,-10,'#64594d',9);
       line(ctx,-12+walk*3,-10,-12+walk*5,-2,'#64594d',8);
@@ -1139,13 +1161,14 @@
       line(ctx,12-walk*3,-9,10-walk*5,-1,'#6e6252',8);
       round(ctx,-23+walk*4,-4,17,9,3,'#483f37','#37392b',1.5);
       round(ctx,1-walk*4,-3,18,9,3,'#55483b','#37392b',1.5);
-      ctx.save(); ctx.translate(0,-bob); ctx.rotate(-.075+(this.reducedMotion?0:stride*.024));
+      ctx.save(); ctx.translate(eating?-bite.lean*2:0,eating?-bite.lean*.5:-bob);
+      ctx.rotate(-.075+(eating?-bite.lean*.08:this.reducedMotion?0:stride*.024));
       poly(ctx,[[-14,-38],[12,-40],[18,-17],[5,-13],[0,-19],[-12,-15],[-17,-26]],
         runner?'#a16b55':'#7d8290','#4e594b',2);
       poly(ctx,[[-2,-36],[5,-37],[7,-18],[2,-21],[-3,-17]],'#e6d4ad');
       poly(ctx,[[0,-35],[5,-35],[4,-28],[8,-21],[3,-18],[-1,-27]],fast?'#f4d775':'#b55d49');
       // Two-joint reaching arms follow the shuffle; the front sleeve remains after an arm is lost.
-      const reach=eating?Math.pow((1+Math.sin(phase*1.5))*.5,2)*4:Math.sin(phase-.7)*2.6;
+      const reach=eating?-bite.reach*6:Math.sin(phase-.7)*2.6;
       line(ctx,10,-34,-3+reach*.45,-24,'#727e72',8);
       line(ctx,-3+reach*.45,-24,-19+reach,-25-reach*.25,skin,6.5);
       ellipse(ctx,-20+reach,-25-reach*.25,4.5,3.7,skin,skinDark,.8);
@@ -1164,9 +1187,10 @@
         ellipse(ctx,16,-83,3,3,'#e9d088');
       }
       if(!headless) {
-        ctx.save(); ctx.translate(-3-(eating?reach*.2:0),-49); ctx.rotate(this.reducedMotion?0:Math.sin(phase*.55)*.04-(eating?reach*.02:0));
-        visitorHead(ctx,skin,skinDark,eating?reach*.25:0);
-        if(armored) visitorArmor(ctx,enemy.type,armorIntegrity(enemy),this.reducedMotion?0:stride*.02*(1-armorIntegrity(enemy)));
+        ctx.save(); ctx.translate(-3-bite.lean*5,-49+bite.jaw*.7);
+        ctx.rotate(eating?-bite.lean*.12:this.reducedMotion?0:Math.sin(phase*.55)*.04);
+        visitorHead(ctx,skin,skinDark,bite.jaw*1.4);
+        if(armored) visitorArmor(ctx,enemy.type,armorIntegrity(enemy),this.reducedMotion||eating?0:stride*.02*(1-armorIntegrity(enemy)));
         else if(runner) {
           poly(ctx,[[-18,-9],[-14,-20],[7,-22],[18,-10]],'#a85543','#774637',1.5);
           line(ctx,-18,-10,18,-10,'#e2a46c',4);
@@ -1356,7 +1380,37 @@
         ctx.restore();return;
       }
       ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);ctx.globalAlpha=1-progress;
-      if(type==='kelp') {
+      if(type==='bite') {
+        const flight=this.reducedMotion?.35:progress,impact=Math.max(0,1-progress*2.7);
+        if(effect.shielded) {
+          // A protected plant sheds light, not leaves. Keep this local to its contact point.
+          ellipse(ctx,0,0,6+flight*9,9+flight*7,null,'#dfffd9',1.7*(1-progress)+.5);
+          for(let i=0;i<3;i++)sparkle(ctx,(i-1)*(5+flight*10),-4-i%2*8-flight*6,
+            3.5*(1-progress)+.8,i%2?'#faffd7':'#b7efdb');
+        } else {
+          const earthy=['mine','wall','tallwall'].includes(effect.plantType);
+          const colors=earthy?['#be9664','#e3bc83','#997044']:['#a8d86d','#d3ec92','#6da44b'];
+          if(impact>0) {
+            ctx.save();ctx.globalAlpha*=impact;
+            sparkle(ctx,0,-1,7,'#fff5c0');ctx.restore();
+          }
+          for(let i=0;i<5;i++) {
+            const side=i%2?1:-1,travel=flight*(9+i*3);
+            const x=side*travel*.75,y=-Math.sin(flight*Math.PI)*(7+i*2)+flight*8;
+            const size=2.5+(i%2)*1.2;
+            ctx.save();ctx.translate(x,y);ctx.rotate(side*(.5+flight*2));
+            poly(ctx,[[-size,0],[0,-size*.7],[size,0],[0,size*.5]],colors[i%3]);
+            if(!earthy)line(ctx,-size*.55,0,size*.6,0,'#f1f8c5',.6);
+            ctx.restore();
+          }
+        }
+        if(progress<.45) {
+          for(const side of [-1,1]) {
+            ctx.beginPath();ctx.moveTo(side*9,-9);ctx.quadraticCurveTo(side*15,-3,side*9,3);
+            ctx.strokeStyle=effect.shielded?'#e9ffe5':'#fbf0c5';ctx.lineWidth=1.1;ctx.stroke();
+          }
+        }
+      } else if(type==='kelp') {
         const curl=this.reducedMotion?.8:Math.sin(progress*Math.PI);
         ellipse(ctx,0,10,17+progress*30,5+progress*8,null,'#d5fff2',2);
         for(let i=0;i<6;i++) {

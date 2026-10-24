@@ -313,6 +313,7 @@
       const plant = this._plantAt(row, col);
       if (!plant) return false;
       this.plants = this.plants.filter(item => item !== plant);
+      for (const enemy of this.enemies) if (enemy.biteTarget === plant.id) this._resetBite(enemy);
       this._effect('remove', row, col + .5, 400); this._emit('remove', { plant }); this._notify(); return true;
     }
 
@@ -641,6 +642,7 @@
     }
 
     _stepEnemy(enemy, dt) {
+      if (enemy.hp <= 0) { this._resetBite(enemy); return; }
       enemy.hitPulse = Math.max(0, enemy.hitPulse - dt);
       const slow = enemy.slowTime > 0 ? .5 : 1;
       enemy.slowTime = Math.max(0, enemy.slowTime - dt);
@@ -657,15 +659,16 @@
       const immobilized = (enemy.stunTime || 0) > 0 || (enemy.freezeTime || 0) > 0;
       enemy.stunTime = Math.max(0, (enemy.stunTime || 0) - dt);
       enemy.freezeTime = Math.max(0, (enemy.freezeTime || 0) - dt);
-      if (immobilized && !enemy.headless) { enemy.eating = false; return; }
+      if (immobilized && !enemy.headless) { this._resetBite(enemy); return; }
       if (enemy.headless) {
-        enemy.eating = false; enemy.dyingTime = Math.max(0, enemy.dyingTime - dt);
+        this._resetBite(enemy); enemy.dyingTime = Math.max(0, enemy.dyingTime - dt);
         enemy.x -= enemy.speed * slow * dt / 1000;
         if (enemy.dyingTime <= 0) this._damage(enemy, enemy.hp, 'decay');
         // A defeated body cannot eat plants, consume a mower, or enter the house.
         return;
       }
       if (enemy.vaulting) {
+        this._resetBite(enemy);
         enemy.vaultProgress = Math.min(1, enemy.vaultProgress + dt / 1200);
         enemy.x = enemy.vaultFrom + (enemy.vaultTo - enemy.vaultFrom) * enemy.vaultProgress;
         if (enemy.vaultProgress >= 1) {
@@ -676,13 +679,12 @@
       }
       const nextX = enemy.x - enemy.speed * slow * dt / 1000;
       const target = this.plants.filter(plant => plant.hp > 0 && plant.row === enemy.row && plant.col + .86 >= nextX && plant.col + .2 <= enemy.x).sort((a, b) => b.col - a.col || Number(a.type === 'lily') - Number(b.type === 'lily'))[0];
-      enemy.eating = Boolean(target);
       if (target && enemy.hasPole && target.type === 'tallwall') {
         enemy.hasPole = false; enemy.speed = enemy.walkSpeed;
         this._effect('blocked', enemy.row, enemy.x, 500); this._emit('vaultBlocked', { enemy, plant: target });
       }
       if (target && enemy.hasPole) {
-        enemy.eating = false; enemy.vaulting = true; enemy.vaultProgress = 0;
+        this._resetBite(enemy); enemy.vaulting = true; enemy.vaultProgress = 0;
         enemy.vaultFrom = enemy.x; enemy.vaultTo = target.col - .15;
         this._effect('vault', enemy.row, enemy.x, 450); this._emit('vault', { enemy });
       } else if (target) {
@@ -691,9 +693,11 @@
           const damage = config.bite * slow * dt / 1000, shield = Math.min(target.shieldHp || 0, damage);
           target.shieldHp = Math.max(0, (target.shieldHp || 0) - shield);
           target.hp = Math.max(0, target.hp - (damage - shield));
-          target.hurtPulse = 180;
-        }
-      } else enemy.x = nextX;
+          if (damage > 0) this._stepBite(enemy, target, dt * slow, shield > 0);
+          else this._resetBite(enemy);
+          if (target.hp <= 0) this._resetBite(enemy);
+        } else this._resetBite(enemy);
+      } else { this._resetBite(enemy); enemy.x = nextX; }
       const mower = this.mowers[enemy.row];
       if (!enemy.vaulting && mower.enabled && !mower.used && enemy.x <= .04) {
         mower.used = true; mower.active = true; mower.x = -.45;
@@ -702,6 +706,26 @@
       } else if (mower.active && enemy.x <= mower.x + .55) this._damage(enemy, enemy.hp, 'mower');
       else if (enemy.x < -.7) {
         this.status = 'lost'; this._emit('lose', { row: enemy.row, levelIndex: this.levelIndex });
+      }
+    }
+
+    _resetBite(enemy) {
+      enemy.eating = false; enemy.biteTarget = null; enemy.biteTime = 0; enemy.bitePulse = 0;
+    }
+
+    _stepBite(enemy, plant, dt, shielded) {
+      if (enemy.biteTarget !== plant.id) this._resetBite(enemy);
+      enemy.eating = true; enemy.biteTarget = plant.id;
+      const previous = enemy.biteTime;
+      enemy.biteTime += dt; enemy.bitePulse = Math.max(0, enemy.bitePulse - dt);
+      // Chewing has one contact per cycle; damage remains continuous and unchanged.
+      const lastContact = Math.floor((previous - 210 + 1e-7) / 700);
+      const nextContact = Math.floor((enemy.biteTime - 210 + 1e-7) / 700);
+      if (nextContact > lastContact) {
+        enemy.bitePulse = 180; plant.hurtPulse = 180;
+        this._effect('bite', plant.row, plant.col + .8, 320, { y: plant.row + .45,
+          enemyType: enemy.type, plantType: plant.type, shielded });
+        this._emit('bite', { enemy, plant, row: plant.row, x: plant.col + .5, plantType: plant.type, shielded });
       }
     }
 
@@ -729,7 +753,7 @@
         this._emit('armLost', { enemy });
       }
       if (enemy.hp > 0 && enemy.bodyHp < 90 && !enemy.headless) {
-        enemy.headless = true; enemy.eating = false; enemy.dyingTime = 3000;
+        enemy.headless = true; this._resetBite(enemy); enemy.dyingTime = 3000;
         enemy.vaulting = false; enemy.hasPole = false;
         this._effect('headless', enemy.row, enemy.x, 500, { enemyType: enemy.type });
         this._emit('headless', { enemy });
@@ -737,6 +761,7 @@
       this._effect('hit', enemy.row, enemy.x, 220, { value: amount, source });
       this._emit('hit', { enemy, damage: amount, source, armorDamage, armorImpact: hadArmor, killed: enemy.hp <= 0 });
       if (enemy.hp <= 0) {
+        this._resetBite(enemy);
         this.kills++;
         this._effect('defeat', enemy.row, enemy.x, 700, { enemyType: enemy.type, source,
           armLost: enemy.armLost, headless: enemy.headless, hasPole: enemy.hasPole, armorHp: enemy.armorHp });
@@ -753,7 +778,8 @@
       const enemy = { id: this._id('enemy'), type, row, aquatic, x: COLS + .35, hp: config.hp, maxHp: config.hp,
         armorHp: config.armor, maxArmorHp: config.armor, bodyHp: config.hp - config.armor,
         speed, walkSpeed, hasPole: Boolean(config.vault && !aquatic), vaulting: false, vaultProgress: 0,
-        armLost: false, headless: false, dyingTime: 0, slowTime: 0, stunTime: 0, freezeTime: 0, burnTime: 0, burnDamage: 0, hitPulse: 0, eating: false };
+        armLost: false, headless: false, dyingTime: 0, slowTime: 0, stunTime: 0, freezeTime: 0, burnTime: 0, burnDamage: 0, hitPulse: 0,
+        eating: false, biteTarget: null, biteTime: 0, bitePulse: 0 };
       this.enemies.push(enemy); return enemy;
     }
 

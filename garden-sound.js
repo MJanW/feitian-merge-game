@@ -4,7 +4,7 @@
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const MAX_VOICES = 16;
-  const LIMITS = Object.freeze({ shot: .105, hit: .075, collect: .065, plant: .06, select: .045, packet: .14, armorBreak: .1, armLost: .13, headless: .13, explode: .15, mower: .25, plantFood: .3, cartMove: .15, kelp: .2, mineArm: .15, mineExplosion: .18 });
+  const LIMITS = Object.freeze({ shot: .105, hit: .075, bite: .16, collect: .065, plant: .06, select: .045, packet: .14, armorBreak: .1, armLost: .13, headless: .13, explode: .15, mower: .25, plantFood: .3, cartMove: .15, kelp: .2, mineArm: .15, mineExplosion: .18 });
 
   // Original, short garden foley and melodic accents. All sources are made
   // locally; there are no music downloads, timers, or looping background nodes.
@@ -210,6 +210,19 @@
           }
           const base = this._noise(.055, .019, 650);
           return this._note(145, 0, .07, .014, 70) || base;
+        }
+        case 'bite': {
+          if (event?.shielded) {
+            const tap = this._note(510, 0, .07, .009, 640);
+            return this._note(820, .018, .06, .004, 690) || tap;
+          }
+          const plant = event?.plant?.type || event?.plantType;
+          const firm = plant === 'wall' || plant === 'tallwall' || plant === 'mine';
+          // A dry leaf crunch followed by a small, rounded chew. Short tails
+          // stay below attacks in the mix, even with several enemies eating.
+          const crunch = this._noise(firm ? .055 : .045, firm ? .014 : .013, firm ? 800 : 1700);
+          const chew = this._note(firm ? 205 : 180, .018, .085, .009, 95, 'triangle');
+          return this._noise(.028, .006, firm ? 1200 : 900, .07) || crunch || chew;
         }
         case 'plant': {
           const base = this._noise(.075, .025, 480);
