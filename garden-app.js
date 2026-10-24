@@ -8,6 +8,10 @@
     let phase = 'map', introElapsed = 0, previewElapsed = 0, endingElapsed = -1, deckSelection = new Set(), selectedPacket = null, traySignature = '', selectedCart = null, cartMode = false;
     const traySlots = [], packetSlots = [];
     const INTRO_MS = 2400;
+    const SPEED_KEY = 'feitian-garden-speed';
+    const SPEEDS = [['garden-speed-1', 1], ['garden-speed-15', 1.5], ['garden-speed-2', 2]];
+    const savedSpeed = Number(read(SPEED_KEY, '1'));
+    let preferredSpeed = [1, 1.5, 2].includes(savedSpeed) ? savedSpeed : 1;
     const SHORTCUTS = ['1','2','3','4','5','6','7','8'];
     const CHAPTERS = [
       { id: 'garden', name: '花园', symbol: '✿', detail: '01 / 花园 · 10 关，从第一束阳光学会布防' },
@@ -78,6 +82,26 @@
     function now() { return window.performance?.now?.() || Date.now(); }
     function showNotice(message) { notice = message; noticeUntil = now() + 2700; refresh(); }
     function soundUI() { text('garden-sound', soundEnabled ? '音效开' : '音效关'); attr($('garden-sound'), 'aria-pressed', soundEnabled); }
+    function speedUnlocked() { return completed.has('garden-3'); }
+    function playbackSpeed() { return speedUnlocked() ? preferredSpeed : 1; }
+    function canChangeSpeed() { return active && game && ['intro', 'battle'].includes(phase) && ['ready', 'running', 'paused'].includes(state?.status) && !document.hidden && !document.querySelector('dialog[open]'); }
+    function speedUI() {
+      const unlocked = speedUnlocked(), rate = playbackSpeed();
+      attr($('garden-speed-controls'), 'data-locked', !unlocked);
+      text('garden-speed-hint', unlocked ? '战斗速度' : '通关第 3 关解锁快进');
+      for (const [id, value] of SPEEDS) {
+        const button = $(id); if (!button) continue;
+        button.disabled = !canChangeSpeed() || value !== 1 && !unlocked;
+        attr(button, 'aria-pressed', value === rate);
+        attr(button, 'title', value !== 1 && !unlocked ? '通关花园第 3 关后解锁' : `${value} 倍战斗速度`);
+      }
+      const duration = `${2.8 / rate}s`;
+      if ($('garden-conveyor').style.animationDuration !== duration) $('garden-conveyor').style.animationDuration = duration;
+    }
+    function chooseSpeed(rate) {
+      if (destroyed || !canChangeSpeed() || ![1, 1.5, 2].includes(rate) || rate !== 1 && !speedUnlocked()) return;
+      preferredSpeed = rate; write(SPEED_KEY, String(rate)); speedUI();
+    }
     function campaignLevels() { return game?.levels || window.GardenGame.LEVELS; }
     function campaignNumber(config = level()) { return config.campaignOrder; }
     function nextCampaignIndex() { const next = state.levelIndex + 1; return next < campaignLevels().length ? next : -1; }
@@ -351,13 +375,14 @@
       } else if (state.status === 'won') {
         text('garden-overlay-kicker', `${config.practice ? '自由演练' : '第 ' + campaignNumber() + ' 关'}完成 · 击退 ${state.kills}`); text('garden-overlay-title', '这一片晴天，守住了。');
         const next = campaignLevels()[nextCampaignIndex()], reward = rewardText(config);
-        text('garden-overlay-copy', `${reward ? '新伙伴 / 功能已解锁：' + reward + '。' : ''}${next ? '下一关：' + next.title + '。' + next.subtitle : '花园、泳池、沙漠西部，30关旅程全部完成！回到世界地图，可以重玩喜欢的关卡。'}`);
+        const speedReward = config.id === 'garden-3' ? '快进已解锁：战场上方可选择 1.5× 或 2×。' : '';
+        text('garden-overlay-copy', `${reward ? '新伙伴 / 功能已解锁：' + reward + '。' : ''}${speedReward}${next ? '下一关：' + next.title + '。' + next.subtitle : '花园、泳池、沙漠西部，30关旅程全部完成！回到世界地图，可以重玩喜欢的关卡。'}`);
         text('garden-start', next ? '进入下一关 ↗' : '返回世界地图 ↗');
       } else if (state.status === 'lost') {
         text('garden-overlay-kicker', `击退 ${state.kills} 位入侵者`); text('garden-overlay-title', '花园需要你再试一次。');
         text('garden-overlay-copy', '先建立阳光供给，给每条小路配上射手，盾卫放在前面。'); text('garden-start', '再试一次 ↗');
       }
-      soundUI();
+      speedUI(); soundUI();
     }
     function stopFrame() { if (frame !== null) window.cancelAnimationFrame?.(frame); frame = null; lastFrame = null; }
     function schedule() { if (frame === null && active && !blocked() && (phase === 'deck' && !reducedMotion || phase === 'intro' || phase === 'battle' && (state?.status === 'running' || endingElapsed >= 0 && endingElapsed < 900)) && !destroyed) frame = window.requestAnimationFrame(tick); }
@@ -373,7 +398,7 @@
         introElapsed = Math.min(INTRO_MS, introElapsed + dt);
         if (introElapsed >= INTRO_MS) { completeIntro(); return; }
       } else if (endingElapsed >= 0) endingElapsed = Math.min(900, endingElapsed + dt);
-      else game.step(dt);
+      else game.step(dt * playbackSpeed());
       refresh(); draw(); schedule();
     }
     function syncPause() {
@@ -513,6 +538,7 @@
     listen($('garden-intro-resume'), 'click', () => { if (active && phase === 'intro') { manualPaused = false; unlock(); syncPause(); } });
     listen($('garden-overlay-secondary'), 'click', () => { if (active) reset(state.levelIndex); });
     listen($('garden-pause'), 'click', togglePause);
+    for (const [id, rate] of SPEEDS) listen($(id), 'click', () => chooseSpeed(rate));
     listen($('garden-food'), 'click', togglePlantFood);
     listen($('garden-restart'), 'click', () => requestReset(state.levelIndex));
     listen($('garden-cart'), 'click', () => { if (!active || phase !== 'battle' || blocked() || state?.status !== 'running' || !level().tracks?.length) return; cartMode = !cartMode; selectedCart = null; selected = null; selectedPacket = null; shovel = false; plantFoodSelected = false; noticeUntil = 0; refresh(); draw(); });
