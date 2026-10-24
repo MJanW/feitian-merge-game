@@ -1,7 +1,8 @@
 (function (root) {
   'use strict';
 
-  const ROWS = 5, COLS = 9, STEP_MS = 1000 / 60;
+  const ROWS = 5, COLS = 9, STEP_MS = 1000 / 60, MAX_DECK_SIZE = 8, MAX_CONVEYOR_PACKETS = 8;
+  const ATTACKERS = Object.freeze(['shooter', 'ice', 'burst', 'star', 'corn', 'cannon', 'lightning']);
   const ULTIMATES = {
     sun: ['灿烂日光', '喷出8颗阳光，共200点，记得点击收集'],
     shooter: ['飞叶风暴', '连续发射20发强化飞叶'],
@@ -88,7 +89,32 @@
         waves: pools.map((pool, wave) => ({ at: [25000, 85000, 140000, 205000][wave] + index * 2000,
           count: counts[wave], spacing: wave === 3 ? 1400 : Math.max(4500, 10000 - index * 400), pool, flag: wave === 3 })) };
     }),
-  ].map((level, index) => Object.freeze({ ...level, chapter: level.chapter || 'courtyard', campaignOrder: level.practice ? null : index < 3 ? index + 1 : index, cards: Object.freeze(level.cards), activeRows: Object.freeze(level.activeRows), tutorialGate: level.tutorialGate ? Object.freeze(level.tutorialGate) : null, waves: Object.freeze(level.waves.map(wave => Object.freeze({ ...wave, pool: Object.freeze(wave.pool) }))) }));
+    ...[
+      { id: 'fairground-belt', title: '13 · 传送带开张', subtitle: '卡片自动送来，不需要阳光；先守好三行草坪', mode: 'conveyor', modeLabel: '传送带', ruleSummary: '免费种植传送带卡片 · 最多保留8张',
+        cards: ['shooter', 'wall', 'ice', 'bomb'], activeRows: [1, 2, 3], startSun: 0, conveyorInterval: 6500, conveyorInitial: ['shooter', 'shooter', 'wall'], conveyorPool: ['shooter', 'shooter', 'shooter', 'ice', 'ice', 'wall', 'bomb'],
+        pools: [['walker'], ['walker', 'helmet'], ['walker', 'helmet'], ['helmet', 'walker']], counts: [2, 3, 4, 7], times: [30000, 70000, 110000, 155000] },
+      { id: 'fairground-overcast', title: '14 · 阴天也灿烂', subtitle: '天空不再掉落阳光，日光伙伴负责所有补给', modeLabel: '阴天挑战', ruleSummary: '没有天空阳光 · 善用日光伙伴和能量豆', skySun: false,
+        cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star', 'burst'], activeRows: [1, 2, 3], startSun: 150,
+        pools: [['walker'], ['walker', 'helmet'], ['walker', 'runner'], ['helmet', 'walker']], counts: [2, 3, 4, 7], times: [35000, 85000, 140000, 195000] },
+      { id: 'fairground-artillery', title: '15 · 空投派对', subtitle: '玉米和重炮从传送带登场，留好焰火应急', mode: 'conveyor', modeLabel: '重炮传送带', ruleSummary: '免费空投卡片 · 重炮和玉米越过前排投射',
+        cards: ['shooter', 'corn', 'cannon', 'wall', 'bomb'], startSun: 0, conveyorInterval: 5500, conveyorInitial: ['shooter', 'corn', 'cannon'], conveyorPool: ['shooter', 'shooter', 'corn', 'corn', 'cannon', 'cannon', 'wall', 'bomb'],
+        pools: [['walker'], ['walker', 'helmet'], ['helmet', 'brute', 'walker'], ['helmet', 'brute', 'walker']], counts: [3, 5, 6, 9], times: [35000, 85000, 140000, 195000] },
+      { id: 'fairground-small-garden', title: '16 · 十五席花园', subtitle: '最多同时种下15名伙伴，每个位置都要精打细算', modeLabel: '限额布阵', ruleSummary: '全场最多15名伙伴 · 铲除后可以重新种植', plantLimit: 15,
+        cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'burst', 'tallwall', 'torch', 'cannon', 'lightning'], startSun: 200,
+        pools: [['walker'], ['walker', 'helmet'], ['walker', 'runner'], ['helmet', 'runner', 'walker']], counts: [3, 4, 5, 8], times: [35000, 90000, 145000, 205000] },
+      { id: 'fairground-rush', title: '17 · 冰火快车', subtitle: '补给更快，来客更多，冰冻与火焰轮番上阵', mode: 'conveyor', modeLabel: '疾速传送带', ruleSummary: '每4.5秒一张卡片 · 密集来客与冰火组合',
+        cards: ['shooter', 'burst', 'ice', 'torch', 'wall', 'bomb'], startSun: 0, conveyorInterval: 4500, conveyorInitial: ['shooter', 'burst', 'ice'], conveyorPool: ['shooter', 'burst', 'burst', 'ice', 'ice', 'torch', 'wall', 'bomb'],
+        pools: [['walker'], ['helmet', 'walker', 'runner'], ['helmet', 'runner', 'walker'], ['brute', 'helmet', 'walker']], counts: [3, 6, 8, 12], times: [35000, 85000, 135000, 185000] },
+      { id: 'fairground-finale', title: '18 · 花园庆典', subtitle: '带上最合拍的八名伙伴，迎接庆典的最后一波', modeLabel: '庆典终章', ruleSummary: '自由选择最多8名伙伴 · 每局1颗能量豆',
+        cards: PLANTS.map(plant => plant.id), startSun: 150,
+        pools: [['walker', 'helmet'], ['runner', 'helmet'], ['brute', 'runner', 'walker'], ['brute', 'helmet', 'runner', 'walker']], counts: [4, 6, 8, 12], times: [35000, 95000, 160000, 225000] },
+    ].map(stage => {
+      const { pools, counts, times, ...details } = stage;
+      return { ...details, chapter: 'fairground', activeRows: stage.activeRows || [0, 1, 2, 3, 4], shovel: true, reward: null,
+        skySun: stage.mode === 'conveyor' ? false : stage.skySun !== false, duration: times[3] + 60000,
+        waves: pools.map((pool, wave) => ({ at: times[wave], count: counts[wave], spacing: wave === 3 ? 1700 : 6500, pool, flag: wave === 3 })) };
+    }),
+  ].map((level, index) => Object.freeze({ ...level, chapter: level.chapter || 'courtyard', campaignOrder: level.practice ? null : index < 3 ? index + 1 : index, conveyorInitial: Object.freeze(level.conveyorInitial || []), conveyorPool: Object.freeze(level.conveyorPool || []), cards: Object.freeze(level.cards), activeRows: Object.freeze(level.activeRows), tutorialGate: level.tutorialGate ? Object.freeze(level.tutorialGate) : null, waves: Object.freeze(level.waves.map(wave => Object.freeze({ ...wave, pool: Object.freeze(wave.pool) }))) }));
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const STAR_DIRECTIONS = Object.freeze([[-1, 0], [0, -1], [0, 1], [Math.SQRT1_2, -Math.SQRT1_2], [Math.SQRT1_2, Math.SQRT1_2]].map(Object.freeze));
 
@@ -121,7 +147,7 @@
     reset(levelIndex = 0) {
       this.levelIndex = Number.isInteger(levelIndex) ? clamp(levelIndex, 0, LEVELS.length - 1) : 0;
       this.level = LEVELS[this.levelIndex];
-      this.deck = [...this.level.cards];
+      this.deck = this.level.mode === 'conveyor' ? [...this.level.cards] : this.level.cards.slice(0, MAX_DECK_SIZE);
       this.status = 'ready'; this.sun = this.level.startSun; this.kills = 0; this.plantFood = 1;
       this.elapsed = 0; this.wave = 0; this.totalWaves = this.level.waves.length;
       this.spawnElapsed = 0; this.tutorialReady = !this.level.tutorialGate;
@@ -129,7 +155,9 @@
       this.plants = []; this.enemies = []; this.projectiles = []; this.suns = []; this.effects = [];
       this.mowers = Array.from({ length: ROWS }, (_, row) => ({ row, enabled: this.level.activeRows.includes(row), active: false, used: false, x: -.5 }));
       this.cooldowns = Object.fromEntries(PLANTS.map(plant => [plant.id, plant.initialCooldown || 0]));
-      this._nextId = 1; this._accumulator = 0; this._skyCount = 0; this._skyTimer = this._skyInterval(); this._spawnIndex = 0;
+      this._nextId = 1; this.conveyor = []; this.conveyorNextIn = this.level.mode === 'conveyor' ? this.level.conveyorInterval : null; this._conveyorBag = [];
+      for (const type of this.level.conveyorInitial) this.conveyor.push({ id: this._id('packet'), type, age: 0 });
+      this._accumulator = 0; this._skyCount = 0; this._skyTimer = this._skyInterval(); this._spawnIndex = 0;
       this._spawnSchedule = [];
       this.level.waves.forEach((wave, waveIndex) => {
         for (let i = 0; i < wave.count; i++) {
@@ -151,7 +179,7 @@
         status: this.status, levelIndex: this.levelIndex, level: this.level, deck: [...this.deck],
         activeRows: this.level.activeRows, tutorialReady: this.tutorialReady,
         tutorialHint: this.tutorialReady ? '' : this.level.tutorialGate.hint,
-        spawnElapsed: this.spawnElapsed,
+        spawnElapsed: this.spawnElapsed, conveyor: this.conveyor.map(packet => ({ ...packet })), conveyorNextIn: this.conveyorNextIn,
         nextWaveIn: this.tutorialReady && this._spawnIndex < this._spawnSchedule.length ? Math.max(0, this._spawnSchedule[this._spawnIndex].at - this.spawnElapsed) : null,
         sun: this.sun, plantFood: this.plantFood, kills: this.kills, elapsed: this.elapsed,
         wave: this.wave, totalWaves: this.totalWaves, spawned: this._spawnIndex,
@@ -163,11 +191,13 @@
     }
 
     setDeck(ids) {
-      if (this.status !== 'ready' || !Array.isArray(ids) || !ids.length || new Set(ids).size !== ids.length) return false;
+      if (this.status !== 'ready') return false;
+      if (this.level.mode === 'conveyor') { this.deck = [...this.level.cards]; this._notify(); return true; }
+      if (!Array.isArray(ids) || !ids.length || ids.length > MAX_DECK_SIZE || new Set(ids).size !== ids.length) return false;
       for (const id of ids) if (!this.level.cards.includes(id)) return false;
       if (this.level.tutorialGate && !ids.includes(this.level.tutorialGate.type)) return false;
       if (this.level.cards.includes('sun') && !ids.includes('sun')) return false;
-      if (!ids.some(id => ['shooter', 'ice', 'burst', 'star', 'corn', 'cannon', 'lightning'].includes(id))) return false;
+      if (!ids.some(id => ATTACKERS.includes(id))) return false;
       this.deck = [...ids]; this._notify(); return true;
     }
 
@@ -185,14 +215,33 @@
 
     plant(type, row, col) {
       const config = PLANT_BY_ID[type];
-      if (!this.tutorialReady && type !== this.level.tutorialGate.type) return false;
-      if (this.status !== 'running' || !config || !this.deck.includes(type) || !this._validCell(row, col) || this.cooldowns[type] > 0 || this.sun < config.cost || this._plantAt(row, col)) return false;
+      if (this.level.mode === 'conveyor' || !this.tutorialReady && type !== this.level.tutorialGate.type) return false;
+      if (this.status !== 'running' || !config || !this.deck.includes(type) || !this._canPlant(row, col) || this.cooldowns[type] > 0 || this.sun < config.cost) return false;
+      this.sun -= config.cost; this.cooldowns[type] = config.cooldown;
+      this._placePlant(type, row, col); return true;
+    }
+
+    plantFromConveyor(packetId, row, col) {
+      if (this.status !== 'running' || this.level.mode !== 'conveyor' || !this._canPlant(row, col)) return false;
+      const index = this.conveyor.findIndex(packet => packet.id === packetId);
+      if (index < 0) return false;
+      const [packet] = this.conveyor.splice(index, 1);
+      this._placePlant(packet.type, row, col); return true;
+    }
+
+    _canPlant(row, col) {
+      return this._validCell(row, col) && !this._plantAt(row, col) &&
+        (!this.level.plantLimit || this.plants.filter(plant => plant.hp > 0).length < this.level.plantLimit);
+    }
+
+    _placePlant(type, row, col) {
+      const config = PLANT_BY_ID[type];
       const plant = {
         id: this._id('plant'), type, row, col, hp: config.hp, maxHp: config.hp, attackPulse: 0, hurtPulse: 0,
         attackTimer: 200, burstTimer: 0, pendingShot: false, sunTimer: 7000, fuse: config.fuse || 0,
         powerTime: 0, powerShots: 0, powerTimer: 0, shieldHp: 0, shieldTime: 0,
       };
-      this.sun -= config.cost; this.cooldowns[type] = config.cooldown; this.plants.push(plant);
+      this.plants.push(plant);
       this._plantedCounts[type]++;
       const gate = this.level.tutorialGate;
       if (!this.tutorialReady && gate && this._plantedCounts[gate.type] >= gate.count) {
@@ -295,11 +344,14 @@
         } else sun.life -= dt;
       });
       this.suns = this.suns.filter(sun => sun.life > 0);
-      this._skyTimer -= dt;
-      if (this._skyTimer <= 0) {
-        this._skyCount++; this._skyTimer += this._skyInterval();
-        const rows = this.level.activeRows, row = rows[Math.floor(this._random() * rows.length)];
-        this._sun(.7 + this._random() * 7.6, row + .6, 'sky');
+      if (this.level.mode === 'conveyor') this._stepConveyor(dt);
+      if (this.level.skySun !== false) {
+        this._skyTimer -= dt;
+        if (this._skyTimer <= 0) {
+          this._skyCount++; this._skyTimer += this._skyInterval();
+          const rows = this.level.activeRows, row = rows[Math.floor(this._random() * rows.length)];
+          this._sun(.7 + this._random() * 7.6, row + .6, 'sky');
+        }
       }
       while (this.tutorialReady && this._spawnIndex < this._spawnSchedule.length && this._spawnSchedule[this._spawnIndex].at <= this.spawnElapsed + 1e-7) {
         const entry = this._spawnSchedule[this._spawnIndex++];
@@ -322,6 +374,24 @@
       if (this.status === 'running' && this._spawnIndex === this._spawnSchedule.length && !this.enemies.length) {
         this.status = 'won'; this._emit('win', { levelIndex: this.levelIndex, kills: this.kills });
       }
+    }
+
+    _stepConveyor(dt) {
+      for (const packet of this.conveyor) packet.age += dt;
+      // A full belt waits without discarding cards or banking a burst of arrivals.
+      if (this.conveyor.length >= MAX_CONVEYOR_PACKETS) return;
+      this.conveyorNextIn = Math.max(0, this.conveyorNextIn - dt);
+      if (this.conveyorNextIn > 1e-7) return;
+      if (!this._conveyorBag.length) {
+        this._conveyorBag = [...this.level.conveyorPool];
+        for (let i = this._conveyorBag.length - 1; i > 0; i--) {
+          const j = Math.floor(this._random() * (i + 1));
+          [this._conveyorBag[i], this._conveyorBag[j]] = [this._conveyorBag[j], this._conveyorBag[i]];
+        }
+      }
+      const packet = { id: this._id('packet'), type: this._conveyorBag.pop(), age: 0 };
+      this.conveyor.push(packet); this.conveyorNextIn = this.level.conveyorInterval;
+      this._emit('conveyor', { packet });
     }
 
     _stepPlant(plant, dt) {
@@ -566,7 +636,7 @@
         this._emit('headless', { enemy });
       }
       this._effect('hit', enemy.row, enemy.x, 220, { value: amount, source });
-      this._emit('hit', { enemy, damage: amount, source, killed: enemy.hp <= 0 });
+      this._emit('hit', { enemy, damage: amount, source, armorDamage, armorImpact: hadArmor, killed: enemy.hp <= 0 });
       if (enemy.hp <= 0) {
         this.kills++;
         this._effect('defeat', enemy.row, enemy.x, 700, { enemyType: enemy.type, source,
@@ -608,7 +678,7 @@
     _notify() { this.onChange(this.getState()); }
   }
 
-  GardenGame.ROWS = ROWS; GardenGame.COLS = COLS;
+  GardenGame.ROWS = ROWS; GardenGame.COLS = COLS; GardenGame.MAX_DECK_SIZE = MAX_DECK_SIZE; GardenGame.MAX_CONVEYOR_PACKETS = MAX_CONVEYOR_PACKETS;
   GardenGame.PLANTS = Object.freeze(PLANTS); GardenGame.LEVELS = Object.freeze(LEVELS);
   GardenGame.ENEMIES = ENEMIES;
   root.GardenGame = GardenGame;
