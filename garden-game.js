@@ -2,8 +2,12 @@
   'use strict';
 
   const ROWS = 5, COLS = 9, STEP_MS = 1000 / 60, MAX_DECK_SIZE = 8, MAX_CONVEYOR_PACKETS = 8;
-  const ATTACKERS = Object.freeze(['shooter', 'ice', 'burst', 'star', 'corn', 'cannon', 'lightning']);
+  const ATTACKERS = Object.freeze(['shooter', 'ice', 'burst', 'star', 'corn', 'cannon', 'lightning', 'tide', 'cactus']);
   const ULTIMATES = {
+    lily: ['浮叶守护', '空莲叶获得2000点护盾，持续10秒，可再种植伙伴'],
+    kelp: ['深水漩涡', '吞没两条水路内最近的三名来客'],
+    tide: ['碧波连发', '连续释放16枚强化水弹'],
+    cactus: ['针雨风暴', '发射12枚可穿透整行的强化尖刺'],
     sun: ['灿烂日光', '喷出8颗阳光，共200点，记得点击收集'],
     shooter: ['飞叶风暴', '连续发射20发强化飞叶'],
     wall: ['坚不可摧', '回满生命，并获得10秒护盾'],
@@ -30,6 +34,10 @@
     { id: 'torch', name: '火炬伙伴', cost: 175, cooldown: 7500, color: '#e7803e', description: '穿过的普通飞叶伤害翻倍，并灼烧前方近处敌人', hp: 500, damage: 25, attackInterval: 1200 },
     { id: 'cannon', name: '重炮投手', cost: 325, cooldown: 15000, color: '#b78c61', description: '每4.5秒投出90伤害炮弹，波及邻近行', hp: 300, damage: 90, attackInterval: 4500 },
     { id: 'lightning', name: '闪电伙伴', cost: 200, cooldown: 7500, color: '#a68cdb', description: '每2.2秒释放35伤害闪电，最多连锁3名相邻来客', hp: 300, damage: 35, attackInterval: 2200 },
+    { id: 'lily', name: '莲叶伙伴', cost: 25, cooldown: 7500, color: '#65aa69', description: '只种在水上，承载一名陆生伙伴', hp: 300, aquatic: true, support: true },
+    { id: 'kelp', name: '缠绕海草', cost: 25, cooldown: 20000, color: '#478d74', description: '只种在水上，一次性拖走靠近的来客', hp: 300, aquatic: true },
+    { id: 'tide', name: '碧波射手', cost: 125, cooldown: 7500, color: '#4daac1', description: '水生射手，每1.4秒发射20伤害水弹', hp: 300, aquatic: true, damage: 20, attackInterval: 1425 },
+    { id: 'cactus', name: '荒原仙人掌', cost: 175, cooldown: 7500, color: '#729d48', description: '每1.6秒发射尖刺，穿透两名同排来客', hp: 300, damage: 20, attackInterval: 1600 },
   ].map(plant => Object.freeze({ ...plant, ultimateName: ULTIMATES[plant.id][0], ultimateDescription: ULTIMATES[plant.id][1] }));
   const PLANT_BY_ID = Object.fromEntries(PLANTS.map(plant => [plant.id, plant]));
   const ENEMIES = Object.freeze({
@@ -39,82 +47,97 @@
     brute: Object.freeze({ name: '铁桶来客', hp: 1370, armor: 1100, speed: .2, bite: 100 }),
     flag: Object.freeze({ name: '旗帜来客', hp: 270, armor: 0, speed: .27, bite: 100 }),
   });
-  const LEVELS = [
-    { id: 'morning', title: '01 · 第一束阳光', subtitle: '一行草坪，从收集阳光和种植射手开始', cards: ['shooter'], activeRows: [2], shovel: false, reward: 'sun', startSun: 150, duration: 75000,
-      tutorialGate: { type: 'shooter', count: 2, hint: '先收集阳光，在中间草坪种下2名飞叶射手' }, waves: [
-      { at: 3000, count: 1, spacing: 0, pool: ['walker'] },
-      { at: 15000, count: 1, spacing: 0, pool: ['walker'] },
-      { at: 27000, count: 1, spacing: 0, pool: ['walker'] },
-      { at: 39000, count: 2, spacing: 1800, pool: ['walker'] },
-    ] },
-    { id: 'breeze', title: '02 · 日光伙伴', subtitle: '三行草坪，先发展阳光再布防', cards: ['shooter', 'sun'], activeRows: [1, 2, 3], shovel: false, reward: 'bomb', startSun: 50, duration: 145000,
-      tutorialGate: { type: 'sun', count: 3, hint: '先种下3名日光伙伴；每次点击阳光收集25点' }, waves: [
-      { at: 10000, count: 1, spacing: 0, pool: ['walker'] },
-      { at: 25000, count: 1, spacing: 0, pool: ['walker'] },
-      { at: 40000, count: 2, spacing: 4000, pool: ['walker'] },
-      { at: 60000, count: 2, spacing: 3500, pool: ['walker'] },
-      { at: 80000, count: 3, spacing: 2500, pool: ['walker'] },
-      { at: 104000, count: 5, spacing: 900, pool: ['walker'], flag: true },
-    ] },
-    { id: 'sunset', title: '03 · 路障来客', subtitle: '护甲需要更多火力，焰火可以解围', cards: ['shooter', 'sun', 'bomb'], activeRows: [1, 2, 3], shovel: false, reward: 'wall', startSun: 50, duration: 160000, waves: [
-      { at: 20000, count: 1, spacing: 0, pool: ['walker'] },
-      { at: 37000, count: 1, spacing: 0, pool: ['walker'] },
-      { at: 55000, count: 2, spacing: 5000, pool: ['walker'] },
-      { at: 76000, count: 2, spacing: 4500, pool: ['helmet', 'walker'] },
-      { at: 100000, count: 3, spacing: 3000, pool: ['walker', 'helmet'] },
-      { at: 126000, count: 6, spacing: 1000, pool: ['helmet', 'walker'], flag: true },
-    ] },
-    { id: 'practice', title: '自由演练', subtitle: '十二名伙伴自由搭配，练习能量豆与组合布阵', practice: true, cards: PLANTS.map(plant => plant.id), activeRows: [0, 1, 2, 3, 4], shovel: true, reward: null, startSun: 50, duration: 300000, waves: [
-      { at: 25000, count: 2, spacing: 20000, pool: ['walker'] },
-      { at: 65000, count: 3, spacing: 15000, pool: ['walker'] },
-      { at: 115000, count: 3, spacing: 12000, pool: ['walker', 'helmet'] },
-      { at: 160000, count: 4, spacing: 9000, pool: ['walker', 'helmet', 'runner'] },
-      { at: 215000, count: 4, spacing: 8000, pool: ['helmet', 'runner', 'brute', 'walker'] },
-      { at: 275000, count: 8, spacing: 1000, pool: ['helmet', 'walker', 'brute'], flag: true },
-    ] },
-    ...[
-      { id: 'courtyard-gate', title: '04 · 花园的大门', subtitle: '撑杆来客首次现身，前后两层防线更安全', chapter: 'courtyard', reward: 'ice', cards: ['sun', 'shooter', 'wall', 'bomb'], activeRows: [1, 2, 3], startSun: 75, pools: [['walker'], ['walker', 'helmet'], ['walker', 'runner'], ['helmet', 'runner', 'walker']], counts: [2, 3, 4, 7] },
-      { id: 'dunes-frost', title: '05 · 沙丘里的寒流', subtitle: '五行战场开放，用寒冰减缓来客推进', chapter: 'dunes', reward: 'corn', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice'], pools: [['walker'], ['walker', 'helmet'], ['runner', 'walker'], ['helmet', 'runner', 'walker']], counts: [3, 4, 5, 8] },
-      { id: 'dunes-butter', title: '06 · 黄油时刻', subtitle: '投射物越过人群，黄油留下最危险的目标', chapter: 'dunes', reward: 'star', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn'], pools: [['walker'], ['helmet', 'walker'], ['brute', 'walker'], ['helmet', 'brute', 'walker']], counts: [3, 4, 5, 8] },
-      { id: 'dunes-stars', title: '07 · 沙海星阵', subtitle: '把星星放在中央，让斜向弹幕照顾多行', chapter: 'dunes', reward: 'tallwall', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star'], pools: [['walker'], ['runner', 'walker'], ['helmet', 'runner'], ['brute', 'runner', 'walker']], counts: [3, 5, 6, 9] },
-      { id: 'dunes-wall', title: '08 · 不可逾越', subtitle: '撑杆来客成队出现，高坚果守住跳跃路线', chapter: 'dunes', reward: 'torch', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star', 'tallwall'], pools: [['walker', 'runner'], ['runner', 'walker'], ['helmet', 'runner'], ['runner', 'brute', 'walker']], counts: [3, 5, 6, 10] },
-      { id: 'harbor-fire', title: '09 · 港口的灯火', subtitle: '射手后排、火炬前排，尝试火焰飞叶组合', chapter: 'harbor', reward: 'cannon', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star', 'tallwall', 'torch'], pools: [['walker'], ['helmet', 'walker'], ['brute', 'helmet'], ['brute', 'runner', 'walker']], counts: [4, 5, 7, 10] },
-      { id: 'harbor-cannon', title: '10 · 重炮迎潮', subtitle: '来客越来越密集，范围炮击可以同时打穿护甲', chapter: 'harbor', reward: 'lightning', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star', 'tallwall', 'torch', 'cannon'], pools: [['walker', 'helmet'], ['helmet', 'walker'], ['brute', 'helmet'], ['brute', 'helmet', 'walker']], counts: [4, 6, 8, 11] },
-      { id: 'harbor-storm', title: '11 · 雷云集结', subtitle: '相邻敌人可以传导闪电，留住密集人群再出手', chapter: 'harbor', reward: 'burst', cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star', 'tallwall', 'torch', 'cannon', 'lightning'], pools: [['walker'], ['runner', 'helmet'], ['helmet', 'walker', 'runner'], ['brute', 'helmet', 'runner', 'walker']], counts: [4, 7, 8, 12] },
-      { id: 'harbor-finale', title: '12 · 守住最后一波', subtitle: '十二名伙伴集结，把每局唯一的能量豆留给关键时刻', chapter: 'harbor', reward: null, cards: PLANTS.map(plant => plant.id), pools: [['walker', 'helmet'], ['runner', 'helmet'], ['brute', 'runner', 'walker'], ['brute', 'helmet', 'runner']], counts: [4, 7, 9, 14] },
-    ].map((stage, index) => {
-      const { pools, counts, ...details } = stage;
-      return { ...details, activeRows: stage.activeRows || [0, 1, 2, 3, 4], shovel: true, startSun: stage.startSun || 100,
-        duration: 245000 + index * 5000,
-        waves: pools.map((pool, wave) => ({ at: [25000, 85000, 140000, 205000][wave] + index * 2000,
-          count: counts[wave], spacing: wave === 3 ? 1400 : Math.max(4500, 10000 - index * 400), pool, flag: wave === 3 })) };
-    }),
-    ...[
-      { id: 'fairground-belt', title: '13 · 传送带开张', subtitle: '卡片自动送来，不需要阳光；先守好三行草坪', mode: 'conveyor', modeLabel: '传送带', ruleSummary: '免费种植传送带卡片 · 最多保留8张',
-        cards: ['shooter', 'wall', 'ice', 'bomb'], activeRows: [1, 2, 3], startSun: 0, conveyorInterval: 6500, conveyorInitial: ['shooter', 'shooter', 'wall'], conveyorPool: ['shooter', 'shooter', 'shooter', 'ice', 'ice', 'wall', 'bomb'],
-        pools: [['walker'], ['walker', 'helmet'], ['walker', 'helmet'], ['helmet', 'walker']], counts: [2, 3, 4, 7], times: [30000, 70000, 110000, 155000] },
-      { id: 'fairground-overcast', title: '14 · 阴天也灿烂', subtitle: '天空不再掉落阳光，日光伙伴负责所有补给', modeLabel: '阴天挑战', ruleSummary: '没有天空阳光 · 善用日光伙伴和能量豆', skySun: false,
-        cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'corn', 'star', 'burst'], activeRows: [1, 2, 3], startSun: 150,
-        pools: [['walker'], ['walker', 'helmet'], ['walker', 'runner'], ['helmet', 'walker']], counts: [2, 3, 4, 7], times: [35000, 85000, 140000, 195000] },
-      { id: 'fairground-artillery', title: '15 · 空投派对', subtitle: '玉米和重炮从传送带登场，留好焰火应急', mode: 'conveyor', modeLabel: '重炮传送带', ruleSummary: '免费空投卡片 · 重炮和玉米越过前排投射',
-        cards: ['shooter', 'corn', 'cannon', 'wall', 'bomb'], startSun: 0, conveyorInterval: 5500, conveyorInitial: ['shooter', 'corn', 'cannon'], conveyorPool: ['shooter', 'shooter', 'corn', 'corn', 'cannon', 'cannon', 'wall', 'bomb'],
-        pools: [['walker'], ['walker', 'helmet'], ['helmet', 'brute', 'walker'], ['helmet', 'brute', 'walker']], counts: [3, 5, 6, 9], times: [35000, 85000, 140000, 195000] },
-      { id: 'fairground-small-garden', title: '16 · 十五席花园', subtitle: '最多同时种下15名伙伴，每个位置都要精打细算', modeLabel: '限额布阵', ruleSummary: '全场最多15名伙伴 · 铲除后可以重新种植', plantLimit: 15,
-        cards: ['sun', 'shooter', 'wall', 'bomb', 'ice', 'burst', 'tallwall', 'torch', 'cannon', 'lightning'], startSun: 200,
-        pools: [['walker'], ['walker', 'helmet'], ['walker', 'runner'], ['helmet', 'runner', 'walker']], counts: [3, 4, 5, 8], times: [35000, 90000, 145000, 205000] },
-      { id: 'fairground-rush', title: '17 · 冰火快车', subtitle: '补给更快，来客更多，冰冻与火焰轮番上阵', mode: 'conveyor', modeLabel: '疾速传送带', ruleSummary: '每4.5秒一张卡片 · 密集来客与冰火组合',
-        cards: ['shooter', 'burst', 'ice', 'torch', 'wall', 'bomb'], startSun: 0, conveyorInterval: 4500, conveyorInitial: ['shooter', 'burst', 'ice'], conveyorPool: ['shooter', 'burst', 'burst', 'ice', 'ice', 'torch', 'wall', 'bomb'],
-        pools: [['walker'], ['helmet', 'walker', 'runner'], ['helmet', 'runner', 'walker'], ['brute', 'helmet', 'walker']], counts: [3, 6, 8, 12], times: [35000, 85000, 135000, 185000] },
-      { id: 'fairground-finale', title: '18 · 花园庆典', subtitle: '带上最合拍的八名伙伴，迎接庆典的最后一波', modeLabel: '庆典终章', ruleSummary: '自由选择最多8名伙伴 · 每局1颗能量豆',
-        cards: PLANTS.map(plant => plant.id), startSun: 150,
-        pools: [['walker', 'helmet'], ['runner', 'helmet'], ['brute', 'runner', 'walker'], ['brute', 'helmet', 'runner', 'walker']], counts: [4, 6, 8, 12], times: [35000, 95000, 160000, 225000] },
-    ].map(stage => {
-      const { pools, counts, times, ...details } = stage;
-      return { ...details, chapter: 'fairground', activeRows: stage.activeRows || [0, 1, 2, 3, 4], shovel: true, reward: null,
-        skySun: stage.mode === 'conveyor' ? false : stage.skySun !== false, duration: times[3] + 60000,
-        waves: pools.map((pool, wave) => ({ at: times[wave], count: counts[wave], spacing: wave === 3 ? 1700 : 6500, pool, flag: wave === 3 })) };
-    }),
-  ].map((level, index) => Object.freeze({ ...level, chapter: level.chapter || 'courtyard', campaignOrder: level.practice ? null : index < 3 ? index + 1 : index, conveyorInitial: Object.freeze(level.conveyorInitial || []), conveyorPool: Object.freeze(level.conveyorPool || []), cards: Object.freeze(level.cards), activeRows: Object.freeze(level.activeRows), tutorialGate: level.tutorialGate ? Object.freeze(level.tutorialGate) : null, waves: Object.freeze(level.waves.map(wave => Object.freeze({ ...wave, pool: Object.freeze(wave.pool) }))) }));
+  // A journey has stable teaching milestones and seed-selected interludes.
+  // Reopening the saved journey preserves its map; a new seed changes the fun slots.
+  const DEFAULT_CAMPAIGN_SEED = 20261024;
+  const WORLD_NAMES = { garden: '花园', pool: '泳池', western: '沙漠西部' };
+  function campaignRandom(seed) {
+    let value = Number(seed) >>> 0;
+    if (!Number.isFinite(Number(seed))) value = DEFAULT_CAMPAIGN_SEED;
+    return () => { value = (Math.imul(value, 1664525) + 1013904223) >>> 0; return value / 4294967296; };
+  }
+  function freezeLevel(level) {
+    return Object.freeze({ ...level,
+      cards: Object.freeze(level.cards), recommendedDeck: Object.freeze(level.recommendedDeck),
+      activeRows: Object.freeze(level.activeRows), waterRows: Object.freeze(level.waterRows),
+      tracks: Object.freeze(level.tracks.map(track => Object.freeze({ ...track, rows: Object.freeze(track.rows) }))),
+      conveyorInitial: Object.freeze(level.conveyorInitial || []), conveyorPool: Object.freeze(level.conveyorPool || []),
+      tutorialGate: level.tutorialGate ? Object.freeze(level.tutorialGate) : null,
+      waves: Object.freeze(level.waves.map(wave => Object.freeze({ ...wave, pool: Object.freeze(wave.pool) }))),
+    });
+  }
+  function createCampaign(seed = DEFAULT_CAMPAIGN_SEED) {
+    const random = campaignRandom(seed), levels = [], unlocked = ['shooter'];
+    const rewards = ['sun', 'wall', 'bomb', 'ice', 'star', 'corn', 'burst', 'tallwall', null, 'lily',
+      'kelp', 'tide', 'torch', 'cannon', 'lightning', null, null, null, null, 'cactus',
+      null, null, null, null, null, null, null, null, null, null];
+    const titles = {
+      garden: ['第一束阳光', '日光伙伴', '稳稳的防线', '焰火迎客', '冰凉的午后', '星光花坛', '黄油时刻', '双发的默契', '高墙之后', '花园告别礼'],
+      pool: ['池畔初见', '水下的拥抱', '碧波初鸣', '池畔灯火', '重炮迎潮', '水面雷光', '两岸守望', '涟漪派对', '浪花快车', '夏日终曲'],
+      western: ['第一辆矿车', '荒原针阵', '轨道换防', '驿站来信', '落日哨所', '仙人掌峡谷', '铁轨交响', '沙丘快车', '荒原夜话', '西部大巡游'],
+    };
+    for (const [worldIndex, chapter] of ['garden', 'pool', 'western'].entries()) {
+      const candidates = [4, 6, 8, 9];
+      for (let i = candidates.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [candidates[i], candidates[j]] = [candidates[j], candidates[i]]; }
+      const beltStage = candidates[0], challengeStage = candidates[1], challenge = random() < .5 ? 'limited' : 'overcast';
+      for (let stage = 1; stage <= 10; stage++) {
+        const index = worldIndex * 10 + stage - 1, rows = chapter === 'pool' ? 6 : 5;
+        const activeRows = chapter === 'garden' && stage === 1 ? [2] : chapter === 'garden' && stage < 5 ? [1, 2, 3] : Array.from({ length: rows }, (_, row) => row);
+        const waterRows = chapter === 'pool' ? [2, 3] : [];
+        const mode = stage === beltStage ? 'conveyor' : stage === challengeStage ? challenge : 'normal';
+        const westernLayouts = {
+          4: [{ col: 2, rows: [0, 1, 2], initialRow: 1 }, { col: 5, rows: [2, 3, 4], initialRow: 3 }],
+          5: [{ col: 2, rows: [1, 2, 3], initialRow: 2 }, { col: 7, rows: [0, 1, 2, 3, 4], initialRow: 4 }],
+          6: [{ col: 2, rows: [2, 3, 4], initialRow: 3 }, { col: 6, rows: [0, 1, 2], initialRow: 1 }],
+          7: [{ col: 2, rows: [0, 1, 2, 3, 4], initialRow: 0 }, { col: 5, rows: [1, 2, 3], initialRow: 2 }, { col: 7, rows: [2, 3, 4], initialRow: 4 }],
+          8: [{ col: 3, rows: [0, 1, 2, 3, 4], initialRow: 2 }, { col: 5, rows: [0, 1, 2, 3, 4], initialRow: 4 }],
+          9: [{ col: 1, rows: [0, 1, 2], initialRow: 1 }, { col: 2, rows: [2, 3, 4], initialRow: 3 }, { col: 5, rows: [0, 1, 2, 3, 4], initialRow: 2 }],
+        };
+        const tracks = chapter === 'western' ? westernLayouts[stage] || [{ col: 2, rows: [0, 1, 2, 3, 4], initialRow: 2 }, ...(stage >= 3 ? [{ col: 5, rows: [0, 1, 2, 3, 4], initialRow: 1 }] : [])] : [];
+        let cards = unlocked.filter(id => chapter === 'pool' || !PLANT_BY_ID[id].aquatic);
+        // Pool companions stay unlocked in the collection, but are unavailable on dry maps.
+        const preferred = chapter === 'pool' ? ['sun', 'lily', 'tide', 'shooter', 'ice', 'kelp', 'bomb', 'tallwall', 'wall', 'star'] :
+          chapter === 'western' ? ['sun', 'cactus', 'shooter', 'ice', 'bomb', 'tallwall', 'torch', 'cannon', 'wall'] : ['sun', 'shooter', 'wall', 'bomb', 'ice', 'star', 'corn', 'burst', 'tallwall'];
+        let recommendedDeck = preferred.filter(id => cards.includes(id)).slice(0, MAX_DECK_SIZE);
+        if (stage === 1 && chapter === 'garden') recommendedDeck = ['shooter'];
+        const featureIntro = chapter === 'garden' && stage === 4 ? '铲子已解锁：移走伙伴，重新安排阵型。' : chapter === 'garden' && stage === 5 ? '能量豆已解锁：每局一颗，点击伙伴释放大招。' :
+          chapter === 'pool' && stage === 1 ? '水路需要莲叶承载陆生伙伴；莲叶上还能再种一名伙伴。' : chapter === 'pool' && stage === 2 ? '海草可直接种在水里，一次拖走一名靠近的来客。' : chapter === 'pool' && stage === 3 ? '碧波射手可直接在水上射击。' :
+          chapter === 'western' && stage === 1 ? '先把伙伴种在矿车上；选择矿车，再点同一轨道的目标行换防。' : chapter === 'western' && stage === 3 ? '第二条轨道开放，矿车可以带着伙伴一起换行。' : chapter === 'western' ? ({
+            4: '上下两段短轨道在中路交接，分别照顾两侧来客。',
+            5: '中路短轨道配合前方长轨道，前线矿车要及时避开啃咬。',
+            6: '上方前线、下方后排，两辆矿车的行驶范围不同。',
+            7: '三辆矿车分工：后排全线支援，中排换防，前线救急。',
+            8: '主攻击列变成轨道，集中火力后及时把矿车送到下一行。',
+            9: '后方补给空间被短轨道分开，移动射手保护两片日光花坛。',
+          }[stage] || '') : '';
+        let level = { id: `${chapter}-${stage}`, title: `${worldIndex + 1}-${stage} · ${titles[chapter][stage - 1]}`, chapter, worldStage: stage, campaignOrder: index + 1,
+          rows, activeRows, waterRows, tracks, mode, cards, recommendedDeck, reward: rewards[index], featureIntro,
+          shovel: index >= 3, plantFoodEnabled: index >= 4, startSun: chapter === 'garden' ? (stage < 4 ? (stage === 1 ? 150 : 50) : 100) : chapter === 'pool' ? 175 : 150,
+          skySun: true, duration: 285000, subtitle: featureIntro || `${WORLD_NAMES[chapter]}第${stage}关 · 建立补给，守住每条路线`,
+          waves: [0, 1, 2, 3].map(wave => ({ at: [35000, 90000, 150000, 215000][wave],
+            count: [2, 3, 4, 6][wave] + worldIndex + Math.floor(stage / 4), spacing: wave === 3 ? 1700 : 6500,
+            pool: wave < 1 ? ['walker'] : wave < 2 ? ['walker', 'helmet'] : stage < 4 && chapter === 'garden' ? ['walker', 'helmet'] : wave < 3 ? ['walker', 'helmet', 'runner'] : stage < 7 && chapter === 'garden' ? ['walker', 'helmet', 'runner'] : ['walker', 'helmet', 'brute', 'runner'], flag: wave === 3 })),
+        };
+        if (chapter === 'garden' && stage === 1) Object.assign(level, { duration: 75000, tutorialGate: { type: 'shooter', count: 2, hint: '先收集阳光，在中间草坪种下2名飞叶射手' },
+          waves: [3000, 15000, 27000, 39000].map((at, wave) => ({ at, count: wave === 3 ? 2 : 1, spacing: 1800, pool: ['walker'] })) });
+        if (chapter === 'garden' && stage === 2) Object.assign(level, { duration: 145000, tutorialGate: { type: 'sun', count: 3, hint: '先种下3名日光伙伴；每次点击阳光收集25点' },
+          waves: [10000, 25000, 40000, 60000, 80000, 104000].map((at, wave) => ({ at, count: [1, 1, 2, 2, 3, 5][wave], spacing: wave === 5 ? 900 : 3500, pool: ['walker'], flag: wave === 5 })) });
+        if (mode === 'conveyor') {
+          cards = cards.filter(id => id !== 'sun');
+          const core = ['shooter', 'shooter', 'shooter', 'wall', 'ice', 'star', 'burst', 'bomb', 'cactus'].filter(id => cards.includes(id));
+          const waterSupply = chapter === 'pool' ? ['tide', 'tide', 'lily', 'lily', 'kelp'] : [];
+          level = { ...level, cards, recommendedDeck: [], startSun: 0, skySun: false, conveyorInterval: chapter === 'garden' ? 6500 : 5000,
+            conveyorInitial: chapter === 'pool' ? ['shooter', 'shooter', 'tide', 'tide', 'lily', 'lily'] : ['shooter', 'shooter', 'wall'],
+            conveyorPool: [...core, ...waterSupply], modeLabel: '传送带', ruleSummary: '自动送卡 · 免费种植 · 最多保留8张', subtitle: '这一站是随机插入的传送带挑战，跟着补给调整阵型。' };
+        } else if (mode === 'overcast') Object.assign(level, { skySun: false, startSun: chapter === 'pool' ? 250 : 175, waves: level.waves.map(wave => ({ ...wave, at: wave.at + 15000, count: Math.max(1, Math.ceil(wave.count * .8)) })), modeLabel: '阴天挑战', ruleSummary: '没有天空阳光 · 建立日光补给', subtitle: '云朵遮住天空，日光伙伴负责全部阳光。' });
+        else if (mode === 'limited') Object.assign(level, { plantLimit: chapter === 'pool' ? 24 : 18, startSun: 200, modeLabel: '限额布阵', ruleSummary: chapter === 'pool' ? '最多24名伙伴 · 莲叶不占名额' : '最多18名伙伴 · 铲除后可补种', subtitle: '用有限的伙伴，守住每一条路线。' });
+        levels.push(freezeLevel(level));
+        if (level.reward && !unlocked.includes(level.reward)) unlocked.push(level.reward);
+      }
+    }
+    return Object.freeze(levels);
+  }
+  const LEVELS = createCampaign();
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const STAR_DIRECTIONS = Object.freeze([[-1, 0], [0, -1], [0, 1], [Math.SQRT1_2, -Math.SQRT1_2], [Math.SQRT1_2, Math.SQRT1_2]].map(Object.freeze));
 
@@ -138,6 +161,7 @@
 
   class GardenGame {
     constructor(options = {}) {
+      this.levels = createCampaign(options.campaignSeed ?? DEFAULT_CAMPAIGN_SEED);
       this.random = typeof options.random === 'function' ? options.random : Math.random;
       this.onEvent = typeof options.onEvent === 'function' ? options.onEvent : () => {};
       this.onChange = typeof options.onChange === 'function' ? options.onChange : () => {};
@@ -145,16 +169,17 @@
     }
 
     reset(levelIndex = 0) {
-      this.levelIndex = Number.isInteger(levelIndex) ? clamp(levelIndex, 0, LEVELS.length - 1) : 0;
-      this.level = LEVELS[this.levelIndex];
-      this.deck = this.level.mode === 'conveyor' ? [...this.level.cards] : this.level.cards.slice(0, MAX_DECK_SIZE);
-      this.status = 'ready'; this.sun = this.level.startSun; this.kills = 0; this.plantFood = 1;
+      this.levelIndex = Number.isInteger(levelIndex) ? clamp(levelIndex, 0, this.levels.length - 1) : 0;
+      this.level = this.levels[this.levelIndex]; this.rows = this.level.rows; this.waterRows = this.level.waterRows;
+      this.deck = this.level.mode === 'conveyor' ? [...this.level.cards] : [...this.level.recommendedDeck];
+      this.status = 'ready'; this.sun = this.level.startSun; this.kills = 0; this.plantFood = this.level.plantFoodEnabled ? 1 : 0;
       this.elapsed = 0; this.wave = 0; this.totalWaves = this.level.waves.length;
       this.spawnElapsed = 0; this.tutorialReady = !this.level.tutorialGate;
       this._plantedCounts = Object.fromEntries(PLANTS.map(plant => [plant.id, 0]));
       this.plants = []; this.enemies = []; this.projectiles = []; this.suns = []; this.effects = [];
-      this.mowers = Array.from({ length: ROWS }, (_, row) => ({ row, enabled: this.level.activeRows.includes(row), active: false, used: false, x: -.5 }));
+      this.mowers = Array.from({ length: this.rows }, (_, row) => ({ row, enabled: this.level.activeRows.includes(row), aquatic: this.waterRows.includes(row), active: false, used: false, x: -.5 }));
       this.cooldowns = Object.fromEntries(PLANTS.map(plant => [plant.id, plant.initialCooldown || 0]));
+      this.carts = this.level.tracks.map((track, index) => ({ id: `cart-${index}`, col: track.col, row: track.initialRow, fromRow: track.initialRow, moveTime: 0 }));
       this._nextId = 1; this.conveyor = []; this.conveyorNextIn = this.level.mode === 'conveyor' ? this.level.conveyorInterval : null; this._conveyorBag = [];
       for (const type of this.level.conveyorInitial) this.conveyor.push({ id: this._id('packet'), type, age: 0 });
       this._accumulator = 0; this._skyCount = 0; this._skyTimer = this._skyInterval(); this._spawnIndex = 0;
@@ -163,7 +188,7 @@
         for (let i = 0; i < wave.count; i++) {
           // The first visitor previews the middle lane; later arrivals vary by run.
           const rows = this.level.activeRows;
-          const row = waveIndex === 0 && i === 0 ? 2 : rows[Math.floor(this._random() * rows.length)];
+          const row = waveIndex === 0 && i === 0 ? rows[Math.floor(rows.length / 2)] : rows[Math.floor(this._random() * rows.length)];
           const type = wave.flag && i === 0 ? 'flag' : wave.pool[Math.floor(this._random() * wave.pool.length)];
           this._spawnSchedule.push({ at: wave.at + i * wave.spacing, row, type, wave: waveIndex + 1, flag: Boolean(wave.flag) });
         }
@@ -177,7 +202,8 @@
     getState() {
       return {
         status: this.status, levelIndex: this.levelIndex, level: this.level, deck: [...this.deck],
-        activeRows: this.level.activeRows, tutorialReady: this.tutorialReady,
+        rows: this.rows, waterRows: this.waterRows, tracks: this.level.tracks, carts: this.carts,
+        plantFoodEnabled: this.level.plantFoodEnabled, activeRows: this.level.activeRows, tutorialReady: this.tutorialReady,
         tutorialHint: this.tutorialReady ? '' : this.level.tutorialGate.hint,
         spawnElapsed: this.spawnElapsed, conveyor: this.conveyor.map(packet => ({ ...packet })), conveyorNextIn: this.conveyorNextIn,
         nextWaveIn: this.tutorialReady && this._spawnIndex < this._spawnSchedule.length ? Math.max(0, this._spawnSchedule[this._spawnIndex].at - this.spawnElapsed) : null,
@@ -198,6 +224,7 @@
       if (this.level.tutorialGate && !ids.includes(this.level.tutorialGate.type)) return false;
       if (this.level.cards.includes('sun') && !ids.includes('sun')) return false;
       if (!ids.some(id => ATTACKERS.includes(id))) return false;
+      if (this.waterRows.length && !ids.includes('lily')) return false;
       this.deck = [...ids]; this._notify(); return true;
     }
 
@@ -216,22 +243,48 @@
     plant(type, row, col) {
       const config = PLANT_BY_ID[type];
       if (this.level.mode === 'conveyor' || !this.tutorialReady && type !== this.level.tutorialGate.type) return false;
-      if (this.status !== 'running' || !config || !this.deck.includes(type) || !this._canPlant(row, col) || this.cooldowns[type] > 0 || this.sun < config.cost) return false;
+      if (this.status !== 'running' || !config || !this.deck.includes(type) || !this._canPlant(type, row, col) || this.cooldowns[type] > 0 || this.sun < config.cost) return false;
       this.sun -= config.cost; this.cooldowns[type] = config.cooldown;
       this._placePlant(type, row, col); return true;
     }
 
     plantFromConveyor(packetId, row, col) {
-      if (this.status !== 'running' || this.level.mode !== 'conveyor' || !this._canPlant(row, col)) return false;
+      if (this.status !== 'running' || this.level.mode !== 'conveyor') return false;
       const index = this.conveyor.findIndex(packet => packet.id === packetId);
-      if (index < 0) return false;
+      if (index < 0 || !this._canPlant(this.conveyor[index].type, row, col)) return false;
       const [packet] = this.conveyor.splice(index, 1);
       this._placePlant(packet.type, row, col); return true;
     }
 
-    _canPlant(row, col) {
-      return this._validCell(row, col) && !this._plantAt(row, col) &&
-        (!this.level.plantLimit || this.plants.filter(plant => plant.hp > 0).length < this.level.plantLimit);
+    canPlant(type, row, col) { return Boolean(PLANT_BY_ID[type] && this._canPlant(type, row, col)); }
+
+    _canPlant(type, row, col) {
+      const config = PLANT_BY_ID[type];
+      if (!config || !this._validCell(row, col)) return false;
+      const water = this.waterRows.includes(row), living = this.plants.filter(plant => plant.hp > 0 && plant.row === row && plant.col === col);
+      if (config.aquatic && !water) return false;
+      if (type === 'lily') { if (living.length) return false; }
+      else {
+        if (living.some(plant => plant.type !== 'lily')) return false;
+        if (water && !config.aquatic && !living.some(plant => plant.type === 'lily')) return false;
+        if (config.aquatic && living.length) return false;
+      }
+      const track = this.level.tracks.find(item => item.col === col && item.rows.includes(row));
+      if (track && !this.carts.some(cart => cart.col === col && cart.row === row)) return false;
+      return config.support || !this.level.plantLimit || this.plants.filter(plant => plant.hp > 0 && plant.type !== 'lily').length < this.level.plantLimit;
+    }
+
+    moveCart(cartId, targetRow) {
+      if (this.status !== 'running' || !Number.isInteger(targetRow)) return false;
+      const cart = this.carts.find(item => item.id === cartId);
+      if (!cart || cart.row === targetRow || cart.moveTime > 1e-7) return false;
+      const track = this.level.tracks.find(item => item.col === cart.col);
+      if (!track || !track.rows.includes(targetRow) || this._plantAt(targetRow, cart.col) || this.carts.some(item => item !== cart && item.col === cart.col && item.row === targetRow)) return false;
+      const fromRow = cart.row;
+      for (const plant of this.plants) if (plant.hp > 0 && plant.row === fromRow && plant.col === cart.col) plant.row = targetRow;
+      cart.fromRow = fromRow; cart.row = targetRow; cart.moveTime = 250;
+      this._effect('cartMove', targetRow, cart.col + .5, 350, { col: cart.col, fromRow, toRow: targetRow });
+      this._emit('cartMove', { cart, fromRow, toRow: targetRow }); this._notify(); return true;
     }
 
     _placePlant(type, row, col) {
@@ -270,13 +323,21 @@
     }
 
     usePlantFood(row, col) {
-      if (this.status !== 'running' || this.plantFood < 1 || !this._validCell(row, col)) return false;
+      if (this.status !== 'running' || !this.level.plantFoodEnabled || this.plantFood < 1 || !this._validCell(row, col)) return false;
       const plant = this._plantAt(row, col);
       if (!plant) return false;
       this.plantFood--; plant.powerTime = 2800; plant.attackPulse = 600;
       const x = plant.col + .5, y = plant.row + .44;
       this._effect('power', row, x, 2800, { plantType: plant.type, y });
       switch (plant.type) {
+        case 'lily':
+          for (const occupant of this.plants) if (occupant.hp > 0 && occupant.row === row && occupant.col === col) { occupant.shieldHp = 2000; occupant.shieldTime = 10000; occupant.powerTime = 10000; }
+          this._effect('lilyPower', row, x, 1000); break;
+        case 'kelp': {
+          const targets = this.enemies.filter(enemy => enemy.hp > 0 && this.waterRows.includes(enemy.row)).sort((a, b) => Math.hypot(a.x - x, a.row - row) - Math.hypot(b.x - x, b.row - row)).slice(0, 3);
+          for (const enemy of targets) { this._effect('kelp', enemy.row, enemy.x, 1000, { power: true }); this._damage(enemy, enemy.hp, 'kelp'); }
+          plant.hp = 0; break;
+        }
         case 'sun':
           for (let i = 0; i < 8; i++) this._sun(x, y, 'power', { offsetX: (i % 4 - 1.5) * .45, offsetY: .2 + Math.floor(i / 4) * .45 });
           break;
@@ -306,8 +367,8 @@
           break;
         }
         default:
-          plant.powerShots = { shooter: 20, burst: 30, corn: 8, cannon: 3 }[plant.type] || 0;
-          plant.powerShotInterval = { shooter: 95, burst: 70, corn: 200, cannon: 550 }[plant.type] || 100;
+          plant.powerShots = { shooter: 20, burst: 30, corn: 8, cannon: 3, tide: 16, cactus: 12 }[plant.type] || 0;
+          plant.powerShotInterval = { shooter: 95, burst: 70, corn: 200, cannon: 550, tide: 110, cactus: 160 }[plant.type] || 100;
       }
       plant.powerTimer = 0;
       this._emit('plantFood', { plant, plantType: plant.type }); this._notify(); return true;
@@ -326,6 +387,7 @@
 
     _step(dt) {
       this.elapsed += dt;
+      for (const cart of this.carts) cart.moveTime = Math.max(0, cart.moveTime - dt);
       if (this.tutorialReady) this.spawnElapsed += dt;
       for (const type of Object.keys(this.cooldowns)) {
         const remaining = this.cooldowns[type] - dt;
@@ -363,7 +425,7 @@
       for (const plant of this.plants.slice()) this._stepPlant(plant, dt);
       for (const projectile of this.projectiles) this._stepProjectile(projectile, dt);
       this.projectiles = this.projectiles.filter(projectile => !projectile.dead && projectile.x <= COLS + 1 &&
-        (projectile.type !== 'star' || (projectile.x >= -1 && projectile.y >= -1 && projectile.y <= ROWS + 1)));
+        (projectile.type !== 'star' || (projectile.x >= -1 && projectile.y >= -1 && projectile.y <= this.rows + 1)));
       for (const mower of this.mowers) this._stepMower(mower, dt);
       for (const enemy of this.enemies) {
         if (enemy.hp <= 0 || this.status !== 'running') continue;
@@ -410,7 +472,10 @@
           this._emit('shot', { plant, row: plant.row, x: plant.col + .5, count: plant.type === 'star' ? 12 : 1, power: true });
         }
       }
-      if (plant.type === 'sun') {
+      if (plant.type === 'kelp') {
+        const target = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.headless && enemy.row === plant.row && Math.abs(enemy.x - (plant.col + .5)) < .9).sort((a, b) => a.x - b.x)[0];
+        if (target) { plant.hp = 0; this._effect('kelp', plant.row, target.x, 1000); this._damage(target, target.hp, 'kelp'); this._emit('kelp', { row: plant.row, x: target.x }); }
+      } else if (plant.type === 'sun') {
         plant.sunTimer -= dt;
         if (plant.sunTimer <= 1e-7) {
           plant.sunTimer += config.production; plant.attackPulse = 450;
@@ -487,7 +552,7 @@
         return;
       }
       this.projectiles.push({ id: this._id('shot'), type: plant.type, row: plant.row, x: plant.col + .78, y,
-        damage: power ? (plant.type === 'ice' ? 30 : 35) : config.damage, speed: power ? 6.4 : 5.1, power });
+        damage: power ? (plant.type === 'ice' ? 30 : 35) : config.damage, pierce: plant.type === 'cactus' ? (power ? 99 : 2) : 1, hitIds: [], speed: power ? 6.4 : 5.1, power });
     }
 
     _stepProjectile(projectile, dt) {
@@ -525,14 +590,21 @@
         return;
       }
       const from = projectile.x, to = from + projectile.speed * dt / 1000;
-      const hit = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.vaulting && enemy.row === projectile.row && enemy.x + .24 >= from && enemy.x - .24 <= to).sort((a, b) => a.x - b.x)[0];
+      const hits = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.vaulting && !(projectile.hitIds || []).includes(enemy.id) && enemy.row === projectile.row && enemy.x + .24 >= from && enemy.x - .24 <= to).sort((a, b) => a.x - b.x);
+      const hit = hits[0];
       // Convert a pea once, and only if the torch was crossed before contact.
       const travelEnd = hit ? Math.min(to, hit.x - .24) : to;
       if (projectile.type === 'shooter' || projectile.type === 'burst') {
         const torch = this.plants.find(plant => plant.hp > 0 && plant.type === 'torch' && plant.row === projectile.row && plant.col + .5 >= from && plant.col + .5 <= travelEnd);
         if (torch) { projectile.type = 'fire'; projectile.damage *= 2; this._effect('flame', torch.row, torch.col + .5, 200, { radius: .25 }); }
       }
-      if (hit) {
+      if (projectile.type === 'cactus') {
+        for (const target of hits) {
+          projectile.hitIds.push(target.id); this._damage(target, projectile.damage, 'cactus'); projectile.pierce--;
+          if (projectile.pierce <= 0) { projectile.dead = true; projectile.x = target.x; break; }
+        }
+        if (!projectile.dead) projectile.x = to;
+      } else if (hit) {
         projectile.x = hit.x; projectile.dead = true;
         this._damage(hit, projectile.damage, projectile.type);
         if (projectile.type === 'ice' && hit.hp > 0) {
@@ -576,7 +648,7 @@
         return;
       }
       const nextX = enemy.x - enemy.speed * slow * dt / 1000;
-      const target = this.plants.filter(plant => plant.hp > 0 && plant.row === enemy.row && plant.col + .86 >= nextX && plant.col + .2 <= enemy.x).sort((a, b) => b.col - a.col)[0];
+      const target = this.plants.filter(plant => plant.hp > 0 && plant.row === enemy.row && plant.col + .86 >= nextX && plant.col + .2 <= enemy.x).sort((a, b) => b.col - a.col || Number(a.type === 'lily') - Number(b.type === 'lily'))[0];
       enemy.eating = Boolean(target);
       if (target && enemy.hasPole && target.type === 'tallwall') {
         enemy.hasPole = false; enemy.speed = enemy.walkSpeed;
@@ -649,10 +721,11 @@
       const config = ENEMIES[type];
       if (!config || !this.level.activeRows.includes(row)) return null;
       const walkSpeed = 1 / (4 + this._random() * 3);
-      const speed = config.vault || type === 'flag' ? config.speed : walkSpeed;
-      const enemy = { id: this._id('enemy'), type, row, x: COLS + .35, hp: config.hp, maxHp: config.hp,
+      const aquatic = this.waterRows.includes(row);
+      const speed = (!aquatic && config.vault) || type === 'flag' ? config.speed : walkSpeed;
+      const enemy = { id: this._id('enemy'), type, row, aquatic, x: COLS + .35, hp: config.hp, maxHp: config.hp,
         armorHp: config.armor, maxArmorHp: config.armor, bodyHp: config.hp - config.armor,
-        speed, walkSpeed, hasPole: Boolean(config.vault), vaulting: false, vaultProgress: 0,
+        speed, walkSpeed, hasPole: Boolean(config.vault && !aquatic), vaulting: false, vaultProgress: 0,
         armLost: false, headless: false, dyingTime: 0, slowTime: 0, stunTime: 0, freezeTime: 0, burnTime: 0, burnDamage: 0, hitPulse: 0, eating: false };
       this.enemies.push(enemy); return enemy;
     }
@@ -660,7 +733,7 @@
     _sun(x, y, source, options = {}) {
       const sky = source === 'sky', pop = source === 'plant' || source === 'power';
       const targetX = clamp(x + (pop ? options.offsetX ?? (.35 + this._random() * .3) * (this._random() < .5 ? -1 : 1) : 0), .25, COLS - .25);
-      const targetY = clamp(y + (pop ? options.offsetY ?? .55 : 0), .25, ROWS - .25);
+      const targetY = clamp(y + (pop ? options.offsetY ?? .55 : 0), .25, this.rows - .25);
       const startY = sky ? -.35 : y;
       const flightDuration = sky ? Math.max(500, (targetY - startY) / .65 * 1000) : pop ? 900 : 0;
       const sun = { id: this._id('sun'), x, y: startY, startX: x, startY, targetX, targetY, age: 0, flightDuration,
@@ -669,7 +742,8 @@
     }
 
     _effect(type, row, x, life, extra = {}) { this.effects.push({ type, row, x, life, maxLife: life, ...extra }); }
-    _plantAt(row, col) { return this.plants.find(plant => plant.row === row && plant.col === col && plant.hp > 0); }
+    plantAt(row, col) { return this._plantAt(row, col); }
+    _plantAt(row, col) { return this.plants.filter(plant => plant.row === row && plant.col === col && plant.hp > 0).sort((a, b) => Number(a.type === 'lily') - Number(b.type === 'lily'))[0]; }
     _validCell(row, col) { return Number.isInteger(row) && Number.isInteger(col) && this.level.activeRows.includes(row) && col >= 0 && col < COLS; }
     _skyInterval() { return Math.min(4250 + this._skyCount * 100, 9500) + this._random() * 2750; }
     _id(prefix) { return `${prefix}-${this._nextId++}`; }
@@ -680,7 +754,7 @@
 
   GardenGame.ROWS = ROWS; GardenGame.COLS = COLS; GardenGame.MAX_DECK_SIZE = MAX_DECK_SIZE; GardenGame.MAX_CONVEYOR_PACKETS = MAX_CONVEYOR_PACKETS;
   GardenGame.PLANTS = Object.freeze(PLANTS); GardenGame.LEVELS = Object.freeze(LEVELS);
-  GardenGame.ENEMIES = ENEMIES;
+  GardenGame.ENEMIES = ENEMIES; GardenGame.createCampaign = createCampaign; GardenGame.DEFAULT_CAMPAIGN_SEED = DEFAULT_CAMPAIGN_SEED;
   root.GardenGame = GardenGame;
   if (typeof module === 'object' && module.exports) module.exports = GardenGame;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

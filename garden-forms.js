@@ -197,6 +197,70 @@
     ],
     "imageHash": "e066ee620e9d26d0d546e3ef7a6d2e522b833f37472a5636501664d3b7b6c80e",
     "sourceImage": "Weixin Image_20261022144001_80.jpg"
+  },
+  "lily": {
+    "image": "assets/garden/lily-float.png",
+    "frame": [
+      63,
+      118,
+      1376,
+      833
+    ],
+    "imageSize": [
+      1536,
+      1024
+    ],
+    "imageHash": "fa735d8256027ef86badd862eee1f1ce9c2a1f3031fd95bdf0e8677e62ab63ed",
+    "sourceImage": "codex-clipboard-189f1560-31ba-4b41-b7d9-db84c23d8f93.jpg",
+    "subject": "躺卧灰袖蓝衣人物，保留蓝色手机与棕鞋"
+  },
+  "kelp": {
+    "image": "assets/garden/kelp-sleeper.png",
+    "frame": [
+      45,
+      11,
+      1020,
+      1437
+    ],
+    "imageSize": [
+      1086,
+      1448
+    ],
+    "imageHash": "40387da84f82ac8790614bee704f8912c891d1593a6786ea5af3a42dba4eac3d",
+    "sourceImage": "codex-clipboard-35449e72-e318-4b6b-b587-8cefa270ba7d.jpg",
+    "subject": "蜷卧蓝衣人物，保留本人黑鞋"
+  },
+  "cactus": {
+    "image": "assets/garden/cactus-turn.png",
+    "frame": [
+      325,
+      59,
+      667,
+      1285
+    ],
+    "imageSize": [
+      1152,
+      1366
+    ],
+    "imageHash": "35809985654cfd43a16a715e734c2a71451d9bc2dbfd1365f9964066c0e32db2",
+    "sourceImage": "codex-clipboard-4d03771b-16ae-4bfb-a9d5-0b683723a7db.jpg",
+    "subject": "灰衣转身人物，上身至短裤"
+  },
+  "tide": {
+    "image": "assets/garden/tide-reader.png",
+    "frame": [
+      218,
+      49,
+      1262,
+      964
+    ],
+    "imageSize": [
+      1536,
+      1024
+    ],
+    "imageHash": "baa4539ab7eabc7a59770bffeeff34a435bce6044d4faa07f77bdceba1d1b8e0",
+    "sourceImage": "codex-clipboard-0f12a780-5c24-455c-bd00-6819d9e2eedf.jpg",
+    "subject": "蓝衣平板人物，上身与手持平板"
   }
 };
   for (const form of Object.values(forms)) { Object.freeze(form.frame); Object.freeze(form.imageSize); Object.freeze(form); }

@@ -318,3 +318,34 @@
 @media (prefers-reduced-motion: reduce) { .garden-tray-slot[data-filled="true"],.garden-conveyor { animation: none; } }
 .garden-conveyor[data-moving="false"] { animation-play-state: paused; }
 @supports (overflow: clip) { .garden-deck { overflow: clip; }.garden-prep-tray { position: sticky; top: 0; } }
+
+/* Three connected worlds, with a compact ten-stop journey in each. */
+.garden-map { border-radius: 16px 16px 28px 20px; }
+.garden-map-intro { padding-bottom: 8px; }
+.garden-map-intro h2 { font-size: clamp(30px,4vw,43px); }
+.garden-journey-progress { display: inline-flex; align-items: center; gap: 14px; margin-top: 17px; padding: 7px 12px; border: 1px solid #6b8d5855; background: #ffffe185; border-radius: 5px; font-size: 11px; }
+.garden-journey-progress b { font: 700 14px var(--font-mono); }
+.garden-chapters { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; margin: 20px 32px 0; }
+.garden-chapters .garden-world-tab { position: relative; min-height: 104px; padding: 14px 14px 14px 69px; overflow: hidden; text-align: left; border: 2px solid #6b7a43; border-radius: 10px 13px 9px 8px; background: #ecedc0; color: #355d3c; box-shadow: 0 4px #57713c50,inset 0 2px #fff9df; }
+.garden-world-tab > span { position: absolute; left: 15px; top: 21px; font: 42px/1 Georgia,serif; }
+.garden-world-tab > b { display: block; font-size: 19px; margin: 8px 0; }.garden-world-tab > small { display: block; font-size: 10px; opacity: .8; }
+.garden-chapters .garden-world-tab[data-world="pool"] { background: #c6e6db; color: #245a61; border-color: #597f73; }
+.garden-chapters .garden-world-tab[data-world="western"] { background: #f4d69d; color: #845335; border-color: #a27b46; }
+.garden-chapters .garden-world-tab[aria-pressed="true"] { border-color: #314b34; box-shadow: inset 0 0 0 3px #fff3c5,0 4px #3c5e35; }
+.garden-chapters .garden-world-tab[data-locked="true"]::after { content: '待解锁'; position: absolute; right: 7px; top: 6px; font-size: 8px; font-weight: 400; opacity: .65; }
+.garden-chapter-detail { font-size: 13px; margin: 24px 34px 0; }.garden-world-note { position: relative; margin: 8px 34px 0; max-width: 680px; font-size: 11px; color: #4e6d43; line-height: 1.7; }
+.garden-map .garden-levels { grid-template-columns: repeat(5,minmax(0,1fr)); margin: 22px 32px 25px; gap: 14px; }.garden-map .garden-levels::before { display: none; }
+.garden-map .garden-levels .garden-level-stop { min-height: 150px; padding: 13px 11px; border-width: 2px; border-radius: 8px 11px 8px 10px; box-shadow: 0 4px #71633560,inset 0 2px #fffce5; }
+.garden-level-stop b { font-size: 14px; }.garden-level-stop small { font-size: 9px; line-height: 1.6; }.garden-level-stop em { font-size: 9px; line-height: 1.6; }
+.garden-levels .garden-level-stop:disabled { opacity: 1; color: #817c61; background: #e3dfb9c9; border-color: #a9a281; box-shadow: 0 3px #71633530; cursor: default; }
+.garden-levels .garden-level-stop:disabled:hover { transform: none; }.garden-level-stop:disabled .garden-level-number { background: #a9ac80; border-color: #888f68; color: #eeefd4; box-shadow: none; }.garden-level-stop:disabled em { color: #938969; }
+.garden-map[data-chapter="pool"] { background: linear-gradient(#bbe4e8 0%,#e4edd0 44%,#84c8b8 100%); border-color: #537f76; }.garden-map[data-chapter="pool"] .garden-hill { background: #8dc5b1; box-shadow: inset 0 8px #b4e0ca; }.garden-map[data-chapter="pool"] .hill-two { background: #61aaa8; }
+.garden-map[data-chapter="western"] { background: linear-gradient(#f1dfbb,#f4d496 46%,#d1a165); border-color: #957148; }.garden-map[data-chapter="western"] .garden-hill { background: #d5a36a; box-shadow: inset 0 8px #e8bd80; }.garden-map[data-chapter="western"] .hill-two { background: #ba885c; }.garden-map[data-chapter="western"] .garden-world-note { color: #796047; }
+.garden-layout[data-chapter="pool"] .garden-field-head { background: #3e7a77; }.garden-layout[data-chapter="western"] .garden-field-head { background: #8b6743; }
+.garden-controls { flex-wrap: wrap; }#garden-cart { border-color: #98723f; background: #e2cc9e; color: #654626; }
+@media (max-width: 699px) {
+ .garden-map-intro { padding: 21px 18px 0; }.garden-map-intro h2 { font-size: 29px; }.garden-map-intro p { font-size: 10px; }.garden-welcome-friends { opacity: .65; right: 5px; top: 137px; }
+ .garden-chapters { margin: 22px 12px 0; gap: 7px; }.garden-chapters .garden-world-tab { min-height: 105px; padding: 10px 3px; text-align: center; border-radius: 8px; }.garden-world-tab > span { position: static; display: block; font-size: 28px; }.garden-world-tab > b { font-size: 13px; margin: 8px 0 5px; }.garden-world-tab > small { font-size: 8px; }.garden-chapters .garden-world-tab[data-locked="true"]::after { font-size: 7px; right: 5px; top: 4px; }
+ .garden-chapter-detail { margin: 19px 16px 0; font-size: 11px; }.garden-world-note { margin: 6px 16px 0; font-size: 10px; }.garden-map .garden-levels { grid-template-columns: repeat(2,minmax(0,1fr)); margin: 16px 13px 22px; gap: 11px; }.garden-map .garden-levels .garden-level-stop { min-height: 138px; }.garden-level-stop b { font-size: 14px; }.garden-level-stop em { font-size: 9px; }
+ .garden-controls { width: 100%; }.garden-controls button { flex: 1; min-width: 50px; }.garden-bottom { flex-wrap: wrap; }.garden-layout[data-chapter="pool"] #garden-canvas { aspect-ratio: .95; }
+}

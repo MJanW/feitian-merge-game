@@ -4,24 +4,36 @@
     const $ = id => document.getElementById(id), canvas = $('garden-canvas');
     if (!canvas) return null;
     let game = null, renderer = null, prepRenderer = null, audio = null, state = null, active = false, manualPaused = false;
-    let selected = 'shooter', shovel = false, plantFoodSelected = false, mapChapter = 'courtyard', hover = null, pointer = null, pendingLevel = null, pendingDestination = 'deck';
-    let phase = 'map', introElapsed = 0, previewElapsed = 0, endingElapsed = -1, deckSelection = new Set(), selectedPacket = null, traySignature = '';
+    let selected = 'shooter', shovel = false, plantFoodSelected = false, mapChapter = 'garden', hover = null, pointer = null, pendingLevel = null, pendingDestination = 'deck';
+    let phase = 'map', introElapsed = 0, previewElapsed = 0, endingElapsed = -1, deckSelection = new Set(), selectedPacket = null, traySignature = '', selectedCart = null, cartMode = false;
     const traySlots = [], packetSlots = [];
     const INTRO_MS = 2400;
-    const SHORTCUTS = ['1','2','3','4','5','6','7','8','9','0','q','e'];
+    const SHORTCUTS = ['1','2','3','4','5','6','7','8'];
     const CHAPTERS = [
-      { id: 'courtyard', name: '晴日庭院', detail: '01—04 · 从第一束阳光，建立你的防线' },
-      { id: 'dunes', name: '风沙遗迹', detail: '05—08 · 冰霜、黄油与星阵，迎接沙海来客' },
-      { id: 'harbor', name: '潮汐码头', detail: '09—12 · 火焰与雷电组合，守住最后的港湾' },
-      { id: 'fairground', name: '花园游乐场', detail: '13—18 · 传送带、限量布阵与日光挑战' },
-      { id: 'practice', name: '自由演练', detail: '全部 12 位伙伴 · 自由尝试阵容与大招' },
+      { id: 'garden', name: '花园', symbol: '✿', detail: '01 / 花园 · 10 关，从第一束阳光学会布防' },
+      { id: 'pool', name: '泳池', symbol: '≈', detail: '02 / 泳池 · 10 关，莲叶托起水上防线' },
+      { id: 'western', name: '沙漠西部', symbol: '♧', detail: '03 / 沙漠西部 · 10 关，矿车沿铁轨调动火力' },
     ];
+    const PROGRESS_KEY = 'feitian-garden-world-completed-v1', SEED_KEY = 'feitian-garden-world-seed-v1';
+    let campaignSeed = Number(read(SEED_KEY, '0'));
+    if (!Number.isSafeInteger(campaignSeed) || campaignSeed <= 0 || campaignSeed > 4294967295) {
+      campaignSeed = Math.floor(Math.random() * 4294967294) + 1; write(SEED_KEY, campaignSeed);
+    }
     const chapterButtons = new Map(), sunFlights = new Set();
     let frame = null, lastFrame = null, destroyed = false, notice = '', noticeUntil = 0;
     const cards = new Map(), deckCards = new Map(), levelButtons = [], listeners = [], completed = new Set();
     const reducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
     let soundEnabled = typeof window.GameSoundEnabled === 'boolean' ? window.GameSoundEnabled : read('photo-merge-sound', 'on') !== 'off';
-    try { const saved = JSON.parse(read('feitian-garden-classic-completed-v1', '[]')); if (Array.isArray(saved)) saved.filter(n => Number.isInteger(n) && n >= 0 && n < (window.GardenGame?.LEVELS.length || 4)).forEach(n => completed.add(n)); } catch (_) {}
+    try {
+      const saved = JSON.parse(read(PROGRESS_KEY, 'null'));
+      if (Array.isArray(saved)) saved.filter(id => /^(garden|pool|western)-(10|[1-9])$/.test(id)).forEach(id => completed.add(id));
+      else {
+        // Only the original three tutorials have direct equivalents in the new journey.
+        const old = JSON.parse(read('feitian-garden-classic-completed-v1', '[]'));
+        if (Array.isArray(old)) for (let i = 0; i < 3 && old.includes(i); i++) completed.add('garden-' + (i + 1));
+        write(PROGRESS_KEY, JSON.stringify([...completed]));
+      }
+    } catch (_) {}
     function read(key, fallback) { try { return window.localStorage.getItem(key) ?? fallback; } catch (_) { return fallback; } }
     function write(key, value) { try { window.localStorage.setItem(key, value); } catch (_) {} }
     function listen(target, type, fn, opts) { target?.addEventListener(type, fn, opts); listeners.push([target, type, fn, opts]); }
@@ -33,18 +45,29 @@
     function now() { return window.performance?.now?.() || Date.now(); }
     function showNotice(message) { notice = message; noticeUntil = now() + 2700; refresh(); }
     function soundUI() { text('garden-sound', soundEnabled ? '音效开' : '音效关'); attr($('garden-sound'), 'aria-pressed', soundEnabled); }
-    function campaignNumber(config = level()) { return config.campaignOrder || (config.practice ? null : window.GardenGame.LEVELS.indexOf(config) + 1); }
-    function nextCampaignIndex() {
-      if (level().practice) return state.levelIndex;
-      const next = window.GardenGame.LEVELS.findIndex(item => item.campaignOrder === campaignNumber() + 1);
-      return next >= 0 ? next : window.GardenGame.LEVELS.findIndex(item => item.practice);
+    function campaignLevels() { return game?.levels || window.GardenGame.LEVELS; }
+    function campaignNumber(config = level()) { return config.campaignOrder; }
+    function nextCampaignIndex() { const next = state.levelIndex + 1; return next < campaignLevels().length ? next : -1; }
+    function isUnlocked(index) { return index === 0 || index > 0 && index < campaignLevels().length && completed.has(campaignLevels()[index - 1].id); }
+    function rewardText(config) {
+      const rewards = Array.isArray(config.reward) ? config.reward : config.reward ? [config.reward] : [];
+      return rewards.map(id => window.GardenGame.PLANTS.find(p => p.id === id)?.name || ({ shovel: '铲除工具', plantFood: '能量豆' }[id] || id)).join('、');
     }
     function refreshMap() {
-      const chapter = CHAPTERS.find(item => item.id === mapChapter) || CHAPTERS[0];
+      const chapter = CHAPTERS.find(item => item.id === mapChapter) || CHAPTERS[0], levels = campaignLevels();
       attr($('garden-map'), 'data-chapter', chapter.id);
-      text('garden-chapter-detail', chapter.detail);
-      for (const [id, button] of chapterButtons) attr(button, 'aria-pressed', id === chapter.id);
-      levelButtons.forEach((button, index) => { const config = window.GardenGame.LEVELS[index]; button.hidden = (config.practice ? 'practice' : config.chapter || 'courtyard') !== chapter.id; });
+      const finished = levels.filter(item => item.chapter === chapter.id && completed.has(item.id)).length;
+      text('garden-chapter-detail', `${chapter.detail} · 已完成 ${finished}/10`);
+      text('garden-world-progress', `${levels.filter(item => completed.has(item.id)).length} / 30`);
+      text('garden-world-note', chapter.id === 'pool' ? '中间两行是水路。先放莲叶，再种陆生植物；水生伙伴可以直接下水。' : chapter.id === 'western' ? '矿车能带着植物沿轨道换行。先点“调动矿车”，再点矿车与目标轨道格。' : '每过一关，下一道防线就会打开。新植物和工具会随着旅程逐步加入。');
+      for (const [id, button] of chapterButtons) { attr(button, 'aria-pressed', id === chapter.id); const first = levels.findIndex(l => l.chapter === id); attr(button, 'data-locked', !isUnlocked(first)); }
+      levelButtons.forEach((button, index) => {
+        const config = levels[index], unlocked = isUnlocked(index);
+        button.hidden = config.chapter !== chapter.id; button.disabled = !unlocked;
+        attr(button, 'data-locked', !unlocked); attr(button, 'data-complete', completed.has(config.id));
+        const reward = rewardText(config), action = button.children[3];
+        if (action) action.textContent = !unlocked ? '完成前一关解锁' : completed.has(config.id) ? '已完成 · 再玩一次 ↗' : reward ? `通关解锁 ${reward}` : config.mode === 'conveyor' ? '传送带挑战 →' : '准备出发 →';
+      });
     }
     function clearSunFlights() { for (const item of sunFlights) { item.animation.cancel(); item.node.remove(); } sunFlights.clear(); }
     function flyCollectedSun(event) {
@@ -65,7 +88,7 @@
       const item = { node, animation }; sunFlights.add(item);
       animation.onfinish = () => { node.remove(); sunFlights.delete(item); };
     }
-    function level() { return window.GardenGame.LEVELS[state?.levelIndex || 0]; }
+    function level() { return state?.level || game?.level || campaignLevels()[0]; }
     function available(type) { const config = level(); return (state?.deck || config.cards).includes(type) && (state?.tutorialReady !== false || type === config.tutorialGate?.type); }
     function portraitFor(plant) {
       const portrait = document.createElement('span'); portrait.className = 'garden-portrait';
@@ -81,7 +104,7 @@
       }
       return portrait;
     }
-    function recommendedDeck(config = level()) { return config.cards.slice(0, window.GardenGame.MAX_DECK_SIZE || 8); }
+    function recommendedDeck(config = level()) { return (config.recommendedDeck || config.cards).slice(0, window.GardenGame.MAX_DECK_SIZE || 8); }
     function isConveyor() { return level().mode === 'conveyor'; }
     function toggleDeck(id) {
       if (destroyed || !active || phase !== 'deck' || isConveyor() || !level().cards.includes(id) || blocked()) return;
@@ -94,7 +117,7 @@
       audioCall('play', { type: 'select' }); refreshDeck();
     }
     function refreshTray() {
-      const ids = isConveyor() ? level().cards.slice(0, 8) : [...deckSelection];
+      const ids = isConveyor() ? [...new Set([...level().conveyorInitial, ...level().conveyorPool])].slice(0, 8) : [...deckSelection];
       const signature = `${state.levelIndex}:${isConveyor()}:${ids.join(',')}`;
       if (signature === traySignature) return; traySignature = signature;
       traySlots.forEach((slot, index) => {
@@ -112,7 +135,8 @@
       if (deckSelection.size > (window.GardenGame.MAX_DECK_SIZE || 8)) return '最多携带 8 位植物。';
       if (!deckSelection.size) return '种子盒还是空的，先选几位伙伴。';
       if (config.cards.includes('sun') && !deckSelection.has('sun')) return '记得带上日光伙伴，保持阳光供给。';
-      if (![...deckSelection].some(id => ['shooter', 'ice', 'burst', 'star', 'corn', 'cannon', 'lightning'].includes(id))) return '至少带上一位能持续射击的伙伴。';
+      if (![...deckSelection].some(id => ['shooter', 'ice', 'burst', 'star', 'corn', 'cannon', 'lightning', 'tide', 'cactus'].includes(id))) return '至少带上一位能持续射击的伙伴。';
+      if (config.waterRows?.length && !deckSelection.has('lily')) return '泳池需要莲叶，让陆生植物也能守住水路。';
       if (config.tutorialGate && !deckSelection.has(config.tutorialGate.type)) return '带上本关教学需要的伙伴。';
       return '';
     }
@@ -120,13 +144,15 @@
       const config = level(), belt = isConveyor(), error = deckError();
       attr($('garden-deck'), 'data-conveyor', belt);
       text('garden-deck-level', config.title); text('garden-deck-title', belt ? '传送带，准备开动' : '挑选你的植物');
-      text('garden-deck-goal', `${config.activeRows.length} 行草地 · ${config.ruleSummary || config.subtitle}`);
+      text('garden-feature-intro', config.featureIntro || ''); $('garden-feature-intro').hidden = !config.featureIntro;
+      text('garden-deck-goal', `${config.waterRows?.length ? '六行战场 · 两行水路' : config.tracks?.length ? '西部矿车战场' : config.activeRows.length + ' 行草坪'} · ${config.ruleSummary || (config.featureIntro ? '先观察来客，再选择阵容' : config.subtitle)}`);
       text('garden-deck-count', belt ? '供应植物' : `${deckSelection.size} / 8`);
-      text('garden-deck-message', error || (belt ? '种子自动送来，每张免费种植一次。' : '阵容已就绪 · 每局还有一颗能量豆。'));
+      text('garden-deck-message', error || (belt ? '种子自动送来，每张免费种植一次。' : (config.plantFoodEnabled === false ? '阵容已就绪 · 能量豆将在花园旅程中解锁。' : '阵容已就绪 · 每局还有一颗能量豆。')));
       attr($('garden-deck-message'), 'data-error', Boolean(error)); $('garden-deck-start').disabled = Boolean(error);
       text('garden-deck-start', belt ? '开启传送带 →' : '开始种植 →');
       $('garden-deck-recommended').hidden = belt; $('garden-deck-cards').hidden = belt;
       $('garden-conveyor-brief').hidden = !belt; $('garden-card-detail').hidden = belt;
+      text('garden-belt-supply', belt ? '本关供应：' + [...new Set([...config.conveyorInitial, ...config.conveyorPool])].map(id => cards.get(id)?.plant.name).join('、') : '');
       text('garden-catalog-title', belt ? '玩法说明' : '植物图鉴');
       text('garden-catalog-hint', belt ? '卡片只能使用一次' : '点卡片装入 · 点顶栏取回');
       for (const [id, item] of deckCards) {
@@ -140,10 +166,10 @@
       refreshTray();
     }
     function showPhase(next, focus = false) {
-      phase = next; pointer = null; hover = null; plantFoodSelected = false; clearSunFlights(); if (next === 'map') refreshMap();
+      phase = next; pointer = null; hover = null; selectedCart = null; cartMode = false; plantFoodSelected = false; clearSunFlights(); if (next === 'map') refreshMap();
       $('garden-map').hidden = next !== 'map'; $('garden-deck').hidden = next !== 'deck';
       $('garden-play').hidden = !['intro', 'battle'].includes(next); $('garden-map-button').hidden = next === 'map';
-      stopFrame(); attr($('garden-layout'), 'data-phase', next); attr($('garden-layout'), 'data-chapter', level().chapter || 'courtyard'); refresh(); resize();
+      stopFrame(); attr($('garden-layout'), 'data-phase', next); attr($('garden-layout'), 'data-chapter', level().chapter || 'garden'); refresh(); resize();
       if (next !== 'battle') window.scrollTo?.({ top: 0, behavior: 'instant' });
       schedule();
       if (focus) (next === 'deck' ? $('garden-deck-title') : next === 'map' ? levelButtons[state.levelIndex] : canvas)?.focus({ preventScroll: true });
@@ -153,7 +179,7 @@
       if (event.type === 'collect') flyCollectedSun(event);
       if (event.type === 'win') {
         const index = game?.levelIndex ?? state?.levelIndex ?? 0;
-        completed.add(index); write('feitian-garden-classic-completed-v1', JSON.stringify([...completed]));
+        completed.add(campaignLevels()[index].id); write(PROGRESS_KEY, JSON.stringify([...completed]));
       }
       if (event.type === 'win' || event.type === 'lose') endingElapsed = 0;
       if (event.type === 'wave' && game) showNotice('新一波入侵者来了，检查每条小路的防线。');
@@ -163,13 +189,13 @@
         const button = document.createElement('button'); button.type = 'button'; button.className = 'garden-seed';
         attr(button, 'aria-pressed', false); attr(button, 'title', `${plant.name} · ${plant.cost}阳光 · ${plant.description}`);
         attr(button, 'aria-label', `${plant.name}，${plant.cost}阳光，${plant.description}`);
-        const key = document.createElement('span'); key.className = 'garden-seed-key'; key.textContent = SHORTCUTS[i].toUpperCase();
+        const key = document.createElement('span'); key.className = 'garden-seed-key'; key.textContent = '';
         const portrait = portraitFor(plant);
         const name = document.createElement('strong'); name.textContent = plant.name;
         const footer = document.createElement('small'), cost = document.createElement('span'), status = document.createElement('span');
         cost.textContent = `☀ ${plant.cost}`; status.className = 'garden-seed-status'; footer.append(cost, status);
         button.append(key, portrait, name, footer); $('garden-seeds').appendChild(button);
-        cards.set(plant.id, { button, status, plant }); listen(button, 'click', () => choose(plant.id));
+        cards.set(plant.id, { button, status, plant, key }); listen(button, 'click', () => choose(plant.id));
         const choice = document.createElement('button'); choice.type = 'button'; choice.className = 'garden-deck-card';
         attr(choice, 'aria-label', `${plant.name}，${plant.cost}阳光，${plant.description}。大招：${plant.ultimateName}，${plant.ultimateDescription}`); attr(choice, 'aria-pressed', false);
         choice.style.setProperty('--plant-color', plant.color);
@@ -193,36 +219,38 @@
         listen(packet, 'click', () => choosePacket(state?.conveyor?.[index]?.id));
       }
       for (const chapter of CHAPTERS) {
-        const button = document.createElement('button'); button.type = 'button'; button.textContent = chapter.name;
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'garden-world-tab'; attr(button, 'data-world', chapter.id); const icon = document.createElement('span'); icon.textContent = chapter.symbol; attr(icon, 'aria-hidden', true); const label = document.createElement('b'); label.textContent = chapter.name; const count = document.createElement('small'); count.textContent = '10 道防线'; button.append(icon, label, count);
         attr(button, 'aria-pressed', chapter.id === mapChapter); chapterButtons.set(chapter.id, button);
         $('garden-chapters').appendChild(button);
         listen(button, 'click', () => { if (active && phase === 'map') { mapChapter = chapter.id; refreshMap(); } });
       }
-      for (const [index, config] of window.GardenGame.LEVELS.entries()) {
+      for (const [index, config] of campaignLevels().entries()) {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'garden-level-stop';
-        const number = document.createElement('span'); number.className = 'garden-level-number'; number.textContent = config.practice ? '★' : String(campaignNumber(config)).padStart(2, '0');
+        const number = document.createElement('span'); number.className = 'garden-level-number'; number.textContent = String(config.worldStage).padStart(2, '0');
         button.style.order = config.practice ? 99 : campaignNumber(config);
-        const title = document.createElement('b'); title.textContent = config.title.replace(/^\d+\s*·\s*/, '');
-        const info = document.createElement('small'); info.textContent = config.practice ? '5 行草地 · 自选阵容' : `${config.activeRows.length} 行草地 · ${config.modeLabel || (config.cards.length + ' 位伙伴')}`;
+        const title = document.createElement('b'); title.textContent = config.title.replace(/^[\d-]+\s*·\s*/, '');
+        const info = document.createElement('small'); info.textContent = config.practice ? '5 行草地 · 自选阵容' : `${config.modeLabel || '冒险关卡'} · ${config.waterRows?.length ? '水陆协作' : config.tracks?.length ? '矿车布防' : config.activeRows.length + ' 行草坪'}`;
         const arrow = document.createElement('em'); arrow.textContent = config.mode === 'conveyor' ? '传送带 →' : '选植物 →';
-        button.append(number, title, info, arrow); attr(button, 'aria-label', config.practice ? config.title : `第${campaignNumber(config)}关 ${config.title.replace(/^\d+\s*·\s*/, '')}`);
+        button.append(number, title, info, arrow); attr(button, 'aria-label', config.practice ? config.title : `第${campaignNumber(config)}关 ${config.title.replace(/^[\d-]+\s*·\s*/, '')}`);
         $('garden-levels').appendChild(button); levelButtons.push(button); listen(button, 'click', () => requestReset(index));
       }
     }
     function ensure() {
       if (game) return true;
       if (!window.GardenGame || !window.GardenRenderer) { text('garden-status', '花园加载失败，请刷新页面重试。'); return false; }
-      game = new window.GardenGame({ onEvent }); state = game.getState();
+      game = new window.GardenGame({ onEvent, campaignSeed }); state = game.getState();
       renderer = new window.GardenRenderer(canvas, { levels: window.GameLevels?.levels || [], forms: window.GardenForms, reducedMotion, onReady: () => { if (active) draw(); } });
       prepRenderer = new window.GardenRenderer($('garden-prep-canvas'), { levels: window.GameLevels?.levels || [], forms: window.GardenForms, reducedMotion, onReady: () => { if (active && phase === 'deck') draw(); } });
       try { if (window.GardenAudio) audio = new window.GardenAudio({ enabled: soundEnabled }); } catch (_) {}
+      const resume = campaignLevels().findIndex((l, i) => isUnlocked(i) && !completed.has(l.id));
+      game.reset(resume < 0 ? 29 : resume); state = game.getState(); mapChapter = game.level.chapter;
       makeDeck(); deckSelection = new Set(recommendedDeck(game.level)); showPhase('map'); return true;
     }
     function draw() {
       if (!active || !state || !renderer) return;
       if (phase === 'deck') { prepRenderer?.render(state, { preparation: true, time: previewElapsed }); return; }
       const visual = endingElapsed >= 0 ? { ...state, elapsed: state.elapsed + endingElapsed, effects: state.effects.map(effect => ({ ...effect, life: effect.life - endingElapsed })).filter(effect => effect.life > 0) } : state;
-      renderer.render(visual, { selected: phase === 'battle' && !plantFoodSelected ? selected : null, shovel, plantFoodSelected, hover, time: visual.elapsed, ...(phase === 'intro' ? { introProgress: introElapsed / INTRO_MS, introTime: introElapsed } : {}) });
+      renderer.render(visual, { selected: phase === 'battle' && !plantFoodSelected ? selected : null, shovel, plantFoodSelected, selectedCart, cartMode, placementValid: hover && selected && !shovel && !plantFoodSelected && !cartMode ? game.canPlant(selected, hover.row, hover.col) : null, hover, time: visual.elapsed, ...(phase === 'intro' ? { introProgress: introElapsed / INTRO_MS, introTime: introElapsed } : {}) });
     }
     function resize() {
       if (!active || !renderer) return;
@@ -233,7 +261,7 @@
     }
     function refresh() {
       if (!game) return;
-      state = game.getState(); const config = level(), running = state.status === 'running';
+      state = game.getState(); renderer?.setRows?.(state.rows || 5); prepRenderer?.setRows?.(state.rows || 5); const config = level(), running = state.status === 'running';
       if (phase === 'deck') refreshDeck();
       const belt = config.mode === 'conveyor';
       attr($('garden-workbench'), 'data-conveyor', belt);
@@ -250,34 +278,37 @@
       text('garden-sun', state.sun); text('garden-level-name', config.title);
       text('garden-level-goal', config.subtitle || '守住五条小路');
       text('garden-wave', state.status === 'ready' ? '准备种植' : state.tutorialReady === false ? '教学布阵' : !state.wave ? `布阵时间 · ${Math.max(0, Math.ceil((state.nextWaveIn ?? ((config.waves?.[0]?.at || 20000) - state.elapsed)) / 1000))}s` : `第 ${state.wave}/${state.totalWaves || 3} 波 · 击退 ${state.kills}`);
-      for (const [id, { button, status, plant }] of cards) {
+      for (const [id, { button, status, plant, key }] of cards) {
         const cd = state.cooldowns?.[id] || 0, allowed = available(id);
         button.hidden = belt || !(state.deck || config.cards).includes(id);
-        button.style.order = (state.deck || config.cards).indexOf(id);
+        const slot = (state.deck || config.cards).indexOf(id); button.style.order = slot; key.textContent = slot >= 0 && slot < 8 ? String(slot + 1) : '';
         button.disabled = !allowed; attr(button, 'aria-pressed', selected === id && !shovel && !plantFoodSelected);
         attr(button, 'data-unaffordable', state.sun < plant.cost);
         button.style.setProperty('--cooldown', `${Math.min(100, cd / plant.cooldown * 100)}%`);
         const label = !allowed ? config.cards.includes(id) ? '先完成教学' : '后续关卡' : cd > 0 ? `${Math.ceil(cd / 1000)}s` : state.sun < plant.cost ? '缺阳光' : '就绪';
         if (status.textContent !== label) status.textContent = label;
       }
-      levelButtons.forEach((button, i) => { attr(button, 'aria-current', state.levelIndex === i); attr(button, 'data-complete', completed.has(i)); });
+      levelButtons.forEach((button, i) => { attr(button, 'aria-current', state.levelIndex === i); attr(button, 'data-complete', completed.has(campaignLevels()[i].id)); });
       $('garden-pause').disabled = phase !== 'battle' || !['running', 'paused'].includes(state.status);
       $('garden-shovel').disabled = phase !== 'battle' || config.shovel === false;
-      attr($('garden-shovel'), 'title', config.shovel === false ? '自由演练中可使用铲除工具' : '移除一位同伴，不返还阳光');
+      attr($('garden-shovel'), 'title', config.shovel === false ? '通过花园教学后解锁铲除工具' : '移除一位同伴，不返还阳光');
       text('garden-pause', state.status === 'paused' ? '继续' : '暂停'); attr($('garden-pause'), 'aria-pressed', state.status === 'paused');
       attr($('garden-shovel'), 'aria-pressed', shovel);
+      $('garden-power').hidden = config.plantFoodEnabled === false; $('garden-food').hidden = config.plantFoodEnabled === false; $('garden-food-note').hidden = config.plantFoodEnabled === false;
+      $('garden-cart').hidden = !config.tracks?.length; attr($('garden-cart'), 'aria-pressed', cartMode);
+      attr(canvas, 'aria-label', `${state.rows || 5}行九列战场。选择卡片后点击格子种植。${config.waterRows?.length ? '中间两行水路需先种莲叶。' : ''}${config.tracks?.length ? '点击调动矿车，再点矿车和目标轨道格移动。' : ''}方向键选格，回车行动，1到8选卡，C收阳光，F能量豆，P暂停。`);
       $('garden-food').disabled = phase !== 'battle' || !running || state.plantFood < 1;
       text('garden-food-count', state.plantFood); attr($('garden-food'), 'aria-pressed', plantFoodSelected);
       attr($('garden-food'), 'aria-label', state.plantFood ? '能量豆，剩余1颗。点击后再点植物释放大招' : '能量豆，本局已用完');
       text('garden-food-hint', state.plantFood ? plantFoodSelected ? '再点植物 · 点此取消' : '每局 1 颗 · 点此使用' : '本局已用完');
       const plant = cards.get(selected)?.plant;
-      text('garden-selected-name', plantFoodSelected ? '能量豆 · 选择一位植物' : shovel ? '铲除工具' : plant ? `${plant.name} · ${belt ? '免费种植' : plant.cost + ' 阳光'}` : belt ? '传送带 · 等待或选择种子' : '选择一位同伴');
-      text('garden-status', plantFoodSelected ? '点击场上的植物释放专属大招；空地不会消耗。按 F 或再次点豆子取消。' : noticeUntil > now() ? notice : state.tutorialReady === false && state.status === 'running' ? state.tutorialHint : shovel ? '点击已种植的角色铲除。铲除不返还阳光。' : plant?.description || (belt ? '点传送带卡片，再点空格。一张种一次；满带后暂缓送卡。' : '选择角色，再点击空格种植。'));
+      text('garden-selected-name', cartMode ? '调动矿车 · ' + (selectedCart ? '选择目标轨道格' : '选择一辆矿车') : plantFoodSelected ? '能量豆 · 选择一位植物' : shovel ? '铲除工具' : plant ? `${plant.name} · ${belt ? '免费种植' : plant.cost + ' 阳光'}` : belt ? '传送带 · 等待或选择种子' : '选择一位同伴');
+      text('garden-status', cartMode ? (noticeUntil > now() ? notice : '点一辆矿车，再点同一轨道的目标格；车上的植物会一起移动。') : plantFoodSelected ? '点击场上的植物释放专属大招；空地不会消耗。按 F 或再次点豆子取消。' : noticeUntil > now() ? notice : state.tutorialReady === false && state.status === 'running' ? state.tutorialHint : shovel ? '点击已种植的角色铲除。铲除不返还阳光。' : plant?.description || (belt ? '点传送带卡片，再点空格。一张种一次；满带后暂缓送卡。' : '选择角色，再点击空格种植。'));
       $('garden-overlay').hidden = phase !== 'battle' || running || endingElapsed >= 0 && endingElapsed < 650;
       const secondary = $('garden-overlay-secondary'); secondary.hidden = !['won', 'lost'].includes(state.status);
       text('garden-overlay-secondary', state.status === 'lost' ? '重新布阵' : '再玩本关');
       if (state.status === 'ready') {
-        text('garden-overlay-kicker', config.practice ? `自由演练 / ${config.cards.length} 位同伴全部开放` : `第 ${campaignNumber()} 关 / ${config.title.replace(/^\d+\s*·\s*/, '')}`);
+        text('garden-overlay-kicker', config.practice ? `自由演练 / ${config.cards.length} 位同伴全部开放` : `第 ${campaignNumber()} 关 / ${config.title.replace(/^[\d-]+\s*·\s*/, '')}`);
         text('garden-overlay-title', '今天，守住花园。');
         text('garden-overlay-copy', config.subtitle || '先种采光员收集阳光，再在每条小路安排射手。'); text('garden-start', '开始种植 ↗');
       } else if (state.status === 'paused') {
@@ -285,9 +316,9 @@
         text('garden-overlay-copy', '同伴和入侵者都会等你回来。'); text('garden-start', '继续守护 ↗');
       } else if (state.status === 'won') {
         text('garden-overlay-kicker', `${config.practice ? '自由演练' : '第 ' + campaignNumber() + ' 关'}完成 · 击退 ${state.kills}`); text('garden-overlay-title', '这一片晴天，守住了。');
-        const next = config.practice ? null : window.GardenGame.LEVELS[nextCampaignIndex()];
-        text('garden-overlay-copy', next ? next.practice ? '18关冒险全部完成！自由演练可以继续尝试全部12位伙伴的搭配。' : `下一关：${next.title}。${next.subtitle}` : '所有同伴都已登场。可以重试演练，或回到前面的关卡。');
-        text('garden-start', next ? next.practice ? '进入自由演练 ↗' : '进入下一关 ↗' : '再守一轮 ↗');
+        const next = campaignLevels()[nextCampaignIndex()], reward = rewardText(config);
+        text('garden-overlay-copy', `${reward ? '新伙伴 / 功能已解锁：' + reward + '。' : ''}${next ? '下一关：' + next.title + '。' + next.subtitle : '花园、泳池、沙漠西部，30关旅程全部完成！回到世界地图，可以重玩喜欢的关卡。'}`);
+        text('garden-start', next ? '进入下一关 ↗' : '返回世界地图 ↗');
       } else if (state.status === 'lost') {
         text('garden-overlay-kicker', `击退 ${state.kills} 位入侵者`); text('garden-overlay-title', '花园需要你再试一次。');
         text('garden-overlay-copy', '先建立阳光供给，给每条小路配上射手，盾卫放在前面。'); text('garden-start', '再试一次 ↗');
@@ -312,13 +343,13 @@
       refresh(); draw(); schedule();
     }
     function syncPause() {
-      stopFrame(); if (blocked()) { clearSunFlights(); plantFoodSelected = false; } if (!game) return;
+      stopFrame(); if (blocked()) { clearSunFlights(); plantFoodSelected = false; selectedCart = null; cartMode = false; } if (!game) return;
       game.pause(blocked()); if (blocked()) audioCall('pause');
       refresh(); draw(); schedule();
     }
     function choose(id) {
       if (isConveyor() || !active || phase !== 'battle' || !game || !available(id) || document.querySelector('dialog[open]')) return;
-      unlock(); audioCall('play', { type: 'select' }); selectedPacket = null; selected = selected === id && !shovel && !plantFoodSelected ? null : id; shovel = false; plantFoodSelected = false; refresh(); draw();
+      unlock(); audioCall('play', { type: 'select' }); selectedCart = null; cartMode = false; selectedPacket = null; selected = selected === id && !shovel && !plantFoodSelected ? null : id; shovel = false; plantFoodSelected = false; refresh(); draw();
     }
     function refreshConveyor() {
       const packets = state.conveyor || [];
@@ -343,15 +374,15 @@
       const packet = state.conveyor.find(item => item.id === id); if (!packet) return;
       unlock(); audioCall('play', { type: 'select' });
       selectedPacket = selectedPacket === id && !shovel && !plantFoodSelected ? null : id;
-      selected = selectedPacket ? packet.type : null; shovel = false; plantFoodSelected = false; refresh(); draw();
+      selectedCart = null; cartMode = false; selected = selectedPacket ? packet.type : null; shovel = false; plantFoodSelected = false; refresh(); draw();
     }
     function reset(index) {
       stopFrame(); audioCall('pause'); manualPaused = false; pointer = null; hover = null; shovel = false; notice = ''; noticeUntil = 0;
-      introElapsed = 0; previewElapsed = 0; endingElapsed = -1; selectedPacket = null; traySignature = ''; plantFoodSelected = false; clearSunFlights();
-      game.reset(index); mapChapter = game.level.practice ? 'practice' : game.level.chapter || 'courtyard'; deckSelection = new Set(recommendedDeck(game.level)); selected = game.level.cards.includes('sun') ? 'sun' : 'shooter'; showPhase('deck', true);
+      introElapsed = 0; previewElapsed = 0; endingElapsed = -1; selectedPacket = null; traySignature = ''; selectedCart = null; cartMode = false; plantFoodSelected = false; clearSunFlights();
+      game.reset(index); state = game.getState(); mapChapter = game.level.practice ? 'practice' : game.level.chapter || 'garden'; deckSelection = new Set(recommendedDeck(game.level)); selected = game.level.cards.includes('sun') ? 'sun' : 'shooter'; showPhase('deck', true);
     }
     function requestReset(index, destination = 'deck') {
-      if (!active || !game || document.querySelector('dialog[open]')) return;
+      if (!active || !game || document.querySelector('dialog[open]') || !isUnlocked(index)) return;
       if (['running', 'paused'].includes(state.status)) {
         pendingLevel = index; pendingDestination = destination;
         text('garden-confirm-title', destination === 'map' ? '返回庭院地图？' : '重新布置花园？');
@@ -374,7 +405,7 @@
     function start() {
       if (!active || !ensure() || document.querySelector('dialog[open]')) return;
       unlock();
-      if (state.status === 'won') { reset(nextCampaignIndex()); return; }
+      if (state.status === 'won') { const next = nextCampaignIndex(); if (next >= 0) reset(next); else showPhase('map', true); return; }
       if (state.status === 'lost') { reset(state.levelIndex); return; }
       if (state.status === 'ready') { showPhase('deck', true); return; }
       manualPaused = false;
@@ -386,13 +417,18 @@
     }
     function togglePlantFood() {
       if (!active || phase !== 'battle' || blocked() || state?.status !== 'running' || state.plantFood < 1) return;
-      unlock(); plantFoodSelected = !plantFoodSelected; shovel = false; refresh(); draw();
+      unlock(); cartMode = false; selectedCart = null; plantFoodSelected = !plantFoodSelected; shovel = false; refresh(); draw();
     }
     function act(cell) {
       if (!cell || blocked() || state?.status !== 'running') return;
       if (level().activeRows && !level().activeRows.includes(cell.row)) { showNotice('这条草地尚未开放，请种在亮色草坪上。'); return; }
-      if (plantFoodSelected) {
-        const target = state.plants.find(plant => plant.row === cell.row && plant.col === cell.col && plant.hp > 0);
+      if (cartMode) {
+        const cart = state.carts?.find(c => c.row === cell.row && c.col === cell.col);
+        if (selectedCart && state.carts.find(c => c.id === selectedCart)?.col === cell.col && game.moveCart(selectedCart, cell.row)) { selectedCart = null; showNotice('矿车和植物已换行，火力继续。'); }
+        else if (cart) { selectedCart = cart.id; showNotice('已选中矿车，再点同一铁轨的目标格。'); }
+        else showNotice('先选矿车，再点同一条铁轨上的空格。');
+      } else if (plantFoodSelected) {
+        const target = state.plants.filter(plant => plant.row === cell.row && plant.col === cell.col && plant.hp > 0).sort((a,b) => (a.type === 'lily') - (b.type === 'lily'))[0];
         if (game.usePlantFood(cell.row, cell.col)) {
           plantFoodSelected = false;
           showNotice(cards.get(target?.type)?.plant.ultimateName + '！本局能量豆已使用。');
@@ -409,9 +445,15 @@
         if (state.cooldowns[selected] > 0) showNotice(`${plant.name}还需冷却 ${Math.ceil(state.cooldowns[selected] / 1000)} 秒。`);
         else if (state.sun < plant.cost) showNotice(`还差 ${plant.cost - state.sun} 阳光，先收集金色太阳。`);
         else if (game.plant(selected, cell.row, cell.col)) { selected = null; showNotice('种植成功。继续收集阳光，照顾其他小路。'); }
-        else showNotice(level().plantLimit && state.plants.length >= level().plantLimit ? `本关最多 ${level().plantLimit} 位植物，先铲除一位再种植。` : '这个位置已经有同伴了，换个空格试试。');
+        else showNotice(level().plantLimit && state.plants.filter(p => p.hp > 0 && p.type !== 'lily').length >= level().plantLimit ? `本关最多 ${level().plantLimit} 位植物，先铲除一位再种植。` : placementHint(cell));
       } else showNotice('先点击上方的角色卡，再选择草地。');
       refresh(); draw();
+    }
+    function placementHint(cell) {
+      if (level().waterRows?.includes(cell.row)) return '水路先放莲叶，再种陆生植物；水生伙伴直接下水。一格只能有一位伙伴和一片莲叶。';
+      if (level().tracks?.some(track => track.col === cell.col)) return '铁轨上只有矿车所在的格子可以种植。用“调动矿车”换行。';
+      if (['lily','kelp','tide'].includes(selected)) return '这位伙伴只能种在水路。';
+      return '这个位置已经有同伴了，换个空格试试。';
     }
     listen(canvas, 'pointerdown', event => {
       if (pointer || event.isPrimary === false || event.button != null && event.button !== 0 || !active || blocked() || state?.status !== 'running') return;
@@ -439,7 +481,8 @@
     listen($('garden-pause'), 'click', togglePause);
     listen($('garden-food'), 'click', togglePlantFood);
     listen($('garden-restart'), 'click', () => requestReset(state.levelIndex));
-    listen($('garden-shovel'), 'click', () => { if (!active || phase !== 'battle' || level().shovel === false || document.querySelector('dialog[open]')) return; shovel = !shovel; selected = null; plantFoodSelected = false; refresh(); draw(); });
+    listen($('garden-cart'), 'click', () => { if (!active || phase !== 'battle' || blocked() || state?.status !== 'running' || !level().tracks?.length) return; cartMode = !cartMode; selectedCart = null; selected = null; selectedPacket = null; shovel = false; plantFoodSelected = false; noticeUntil = 0; refresh(); draw(); });
+    listen($('garden-shovel'), 'click', () => { if (!active || phase !== 'battle' || level().shovel === false || document.querySelector('dialog[open]')) return; cartMode = false; selectedCart = null; shovel = !shovel; selected = null; plantFoodSelected = false; refresh(); draw(); });
     listen($('garden-confirm-cancel'), 'click', () => { pendingLevel = null; $('garden-confirm').close(); });
     listen($('garden-confirm-ok'), 'click', () => { const index = pendingLevel, destination = pendingDestination; pendingLevel = null; $('garden-confirm').close(); if (index != null) { reset(index); if (destination === 'map') showPhase('map', true); } });
     listen($('garden-confirm'), 'close', () => { pendingLevel = null; syncPause(); });
@@ -452,10 +495,10 @@
       if (key === 'r') { event.preventDefault(); if (!event.repeat) requestReset(state.levelIndex); return; }
       if (blocked() || state.status !== 'running') return;
       unlock();
-      if (SHORTCUTS.includes(key)) { event.preventDefault(); if (!event.repeat) { const index = SHORTCUTS.indexOf(key); if (isConveyor()) choosePacket(state.conveyor[index]?.id); else choose(window.GardenGame.PLANTS[index].id); } }
+      if (SHORTCUTS.includes(key)) { event.preventDefault(); if (!event.repeat) { const index = SHORTCUTS.indexOf(key); if (isConveyor()) choosePacket(state.conveyor[index]?.id); else choose(state.deck[index]); } }
       else if (key === 'f') { event.preventDefault(); if (!event.repeat) togglePlantFood(); }
       else if (key === 'c') { event.preventDefault(); for (const sun of [...state.suns]) game.collectSun(sun.id); refresh(); draw(); }
-      else if (key.startsWith('arrow')) { event.preventDefault(); const cell = hover || { row: 2, col: 0 }; hover = { row: Math.max(0, Math.min(4, cell.row + (key === 'arrowdown' ? 1 : key === 'arrowup' ? -1 : 0))), col: Math.max(0, Math.min(8, cell.col + (key === 'arrowright' ? 1 : key === 'arrowleft' ? -1 : 0))) }; draw(); }
+      else if (key.startsWith('arrow')) { event.preventDefault(); const cell = hover || { row: 2, col: 0 }; hover = { row: Math.max(0, Math.min((state.rows || 5) - 1, cell.row + (key === 'arrowdown' ? 1 : key === 'arrowup' ? -1 : 0))), col: Math.max(0, Math.min(8, cell.col + (key === 'arrowright' ? 1 : key === 'arrowleft' ? -1 : 0))) }; draw(); }
       else if (key === 'enter' || key === ' ') { event.preventDefault(); if (!event.repeat) act(hover || { row: 2, col: 0 }); }
     });
     listen(window, 'feitian-modechange', event => {
