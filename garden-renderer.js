@@ -125,7 +125,7 @@
   }
 
   function visitorBite(enemy, time, reducedMotion) {
-    const active=!enemy.headless&&!enemy.vaulting&&finite(enemy.freezeTime)<=0&&finite(enemy.stunTime)<=0&&
+    const active=!enemy.kelpCapture&&!enemy.headless&&!enemy.vaulting&&finite(enemy.freezeTime)<=0&&finite(enemy.stunTime)<=0&&
       !!(enemy.eating||enemy.attacking||enemy.state==='attacking');
     if(!active)return {active:false,lean:0,reach:0,jaw:0};
     if(reducedMotion)return {active:true,lean:.3,reach:.6,jaw:0};
@@ -1039,7 +1039,7 @@
       const vaulting=hasPole&&!!enemy.vaulting,progress=clamp(finite(enemy.vaultProgress),0,1);
       const jump=vaulting?Math.sin(progress*Math.PI)*49:0;
       const fast=hasPole||enemy.type==='flag',cold=finite(enemy.slowTime)>0;
-      const immobilized=finite(enemy.freezeTime)>0||finite(enemy.stunTime)>0;
+      const immobilized=!!enemy.kelpCapture||finite(enemy.freezeTime)>0||finite(enemy.stunTime)>0;
       const seed=typeof enemy.id==='number'?enemy.id:Array.from(String(enemy.id||enemy.row))
         .reduce((value,character)=>value+character.charCodeAt(0),0);
       const phase=this.reducedMotion||immobilized?0:time*(fast?12:5)*(cold?.5:1)+seed*1.7;
@@ -1099,6 +1099,7 @@
     }
 
     _enemy(ctx, enemy, time) {
+      if(enemy.kelpCapture) { this._kelpCapture(ctx,enemy,time); return; }
       if(!enemy.aquatic) { this._enemyBody(ctx,enemy,time); return; }
       const g=this.geometry,p=this._world(enemy.x,enemy.row+.72);
       const scale=Math.min(g.cellWidth/69,g.cellHeight/80)*clamp(finite(enemy.displayScale,1),.5,2.4);
@@ -1116,6 +1117,94 @@
       ctx.restore();
     }
 
+    _kelpCapture(ctx, enemy, time) {
+      const capture=enemy.kelpCapture,g=this.geometry,p=this._world(enemy.x,enemy.row+.72);
+      const scale=Math.min(g.cellWidth/69,g.cellHeight/80)*clamp(finite(enemy.displayScale,1),.5,2.4);
+      const progress=clamp(finite(capture.elapsed)/Math.max(1,finite(capture.duration,1600)),0,1);
+      const ease=value=>{const t=clamp(value,0,1);return t*t*(3-2*t);};
+      const reach=ease(progress/.25),wrap=ease((progress-.2)/.35);
+      // Keep the face above water while the coils close, then pull the actual body
+      // through a stationary waterline. A fade would make the visitor pop away.
+      const sink=112*Math.pow(clamp((progress-.55)/.45,0,1),2.6);
+      const source=this._world(finite(capture.sourceX,enemy.x),finite(capture.sourceRow,enemy.row)+.72);
+      const sx=(source.x-p.x)/scale,sy=(source.y-p.y)/scale-15;
+      const direction=sx<0?-1:1;
+      const struggle=this.reducedMotion?0:Math.sin(progress*Math.PI*9)*wrap*(1-clamp(sink/64,0,1));
+      const lean=direction*wrap*.065+struggle*.022;
+      const dark=capture.power?'#367e63':'#2e8068',green=capture.power?'#a3d975':'#79bd8c';
+      const waterline=p.y-15*scale;
+
+      ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);
+      // Stems first cross the water from the planted square, including the second
+      // pool lane for plant food. Their tips stop at the body, not above its head.
+      if(reach>0)for(const side of [-1,1]) {
+        const endX=sx+(side*17-sx)*reach,endY=sy+(-35-sy)*reach+Math.min(sink*.32,19);
+        const drawStem=(color,width)=>{
+          ctx.beginPath();ctx.moveTo(sx+side*5,sy+3);
+          ctx.quadraticCurveTo(sx+(endX-sx)*.48,sy-13*reach,endX,endY);
+          ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.stroke();
+        };
+        drawStem(dark,5);drawStem(green,2.3);
+        if(progress<.42)leaf(ctx,endX,endY,.32,side,green);
+      }
+      ellipse(ctx,0,-15,28+wrap*5,8+wrap*2,'#347e7330','#bce8d9',1.2);
+      ctx.restore();
+
+      ctx.save();poly(ctx,[[p.x-100*scale,p.y-170*scale],[p.x+100*scale,p.y-170*scale],
+        [p.x+100*scale,waterline],[p.x-100*scale,waterline]]);ctx.clip();
+      ctx.translate(0,sink*scale);
+      ctx.translate(p.x,p.y-15*scale);ctx.rotate(lean);ctx.translate(-p.x,-p.y+15*scale);
+      // Back half of each coil sits behind the portrait. The matching front half
+      // crosses its torso after it is drawn, so the plant visibly encloses it.
+      const coils=front=>{
+        ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);
+        for(let i=0;i<3;i++) {
+          const grown=ease((progress-.19-i*.065)/.22);if(grown<=0)continue;
+          const y=-24-i*11,radius=22-i*1.6;
+          const x=-radius+(radius*2)*grown;
+          ctx.beginPath();ctx.moveTo(-radius,y);
+          ctx.quadraticCurveTo(-radius+radius*grown,y+(front?7:-7)*grown,x,y-2*grown);
+          ctx.strokeStyle=dark;ctx.lineWidth=5;ctx.lineCap='round';ctx.stroke();
+          ctx.beginPath();ctx.moveTo(-radius,y-1);
+          ctx.quadraticCurveTo(-radius+radius*grown,y-1+(front?7:-7)*grown,x,y-1-2*grown);
+          ctx.strokeStyle=green;ctx.lineWidth=2.1;ctx.stroke();
+          if(front&&grown>.5)leaf(ctx,x,y-2*grown,.3,i%2?-1:1,green);
+        }
+        ctx.restore();
+      };
+      coils(false);
+      this._enemyBody(ctx,{...enemy,hasPole:false,vaulting:false,hitPulse:0,eating:false,attacking:false,state:'captured'},time);
+      ctx.restore();
+      // The floating ring starts fully visible, as it was before the grab. Its
+      // own surface mask is one rim lower than the swimmer's submerged legs.
+      ctx.save();poly(ctx,[[p.x-100*scale,p.y-170*scale],[p.x+100*scale,p.y-170*scale],
+        [p.x+100*scale,waterline+10*scale],[p.x-100*scale,waterline+10*scale]]);ctx.clip();
+      ctx.translate(0,sink*scale);
+      ctx.translate(p.x,p.y-15*scale);ctx.rotate(lean);ctx.translate(-p.x,-p.y+15*scale);
+      ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);
+      // The flotation ring is dragged under with the swimmer, rather than left
+      // floating in front of a disappearing body.
+      ellipse(ctx,0,-15,24,10,'#ecac62','#956e43',1.6);
+      ellipse(ctx,0,-19,16,5.5,'#456e6980','#ffe4a4',1.4);
+      for(const x of [-18,18])line(ctx,x,-20,x,-11,'#fff2c9',5);
+      ctx.restore();coils(true);ctx.restore();
+
+      ctx.save();ctx.translate(p.x,p.y);ctx.scale(scale,scale);
+      // Surface foam hides the clipping edge. Every phase comes from capture
+      // time, so a paused snapshot cannot continue splashing or struggling.
+      const disturbance=wrap*(.3+clamp(sink/60,0,1)*.7);
+      ellipse(ctx,0,-14,27+disturbance*9,5+disturbance*4,null,'#d9fff0',1.8);
+      for(const side of [-1,1]) {
+        line(ctx,side*(22+disturbance*7),-12,side*(31+disturbance*9),-11,'#c6f8e9',1.3);
+        for(let i=0;i<3;i++) {
+          const phase=(progress*(2+i*.2)+i*.28)%1;
+          const rise=this.reducedMotion?3:Math.sin(phase*Math.PI)*(5+disturbance*12);
+          ellipse(ctx,side*(17+i*6),-15-rise,1.3+disturbance,1.7+disturbance,null,'#ddfff3',1.1);
+        }
+      }
+      ctx.restore();
+    }
+
     _enemyBody(ctx, enemy, time) {
       if(this._photoEnemy(ctx,enemy,time))return;
       const g=this.geometry,p=this._world(enemy.x,enemy.row+.72);
@@ -1125,7 +1214,7 @@
       const armored=['helmet','armored','armor','bucket','cone','brute'].includes(enemy.type)
         && finite(enemy.armorHp,1)>0&&!enemy.headless;
       const isCold=finite(enemy.slowTime)>0,headless=!!enemy.headless;
-      const immobilized=finite(enemy.freezeTime)>0||finite(enemy.stunTime)>0;
+      const immobilized=!!enemy.kelpCapture||finite(enemy.freezeTime)>0||finite(enemy.stunTime)>0;
       const vaulting=!!enemy.vaulting&&!headless;
       const vaultProgress=clamp(finite(enemy.vaultProgress),0,1);
       const jump=vaulting?Math.sin(vaultProgress*Math.PI)*49:0;
@@ -1409,6 +1498,17 @@
             ctx.beginPath();ctx.moveTo(side*9,-9);ctx.quadraticCurveTo(side*15,-3,side*9,3);
             ctx.strokeStyle=effect.shielded?'#e9ffe5':'#fbf0c5';ctx.lineWidth=1.1;ctx.stroke();
           }
+        }
+      } else if(type==='kelpSink') {
+        // The enemy has already passed beneath the surface. Finish with water
+        // only; drawing another photo or a defeat body would resurrect it.
+        const spread=this.reducedMotion?.5:progress;
+        ellipse(ctx,0,0,27+spread*19,7+spread*5,null,'#d5fff0',1.9*(1-progress)+.5);
+        ellipse(ctx,0,1,18+spread*14,4+spread*3,null,'#96d7c8',1.2);
+        for(let i=0;i<6;i++) {
+          const side=i%2?1:-1,x=side*(8+(i%3)*8+spread*7);
+          const rise=this.reducedMotion?4:Math.sin(progress*Math.PI)*(9+(i%3)*4);
+          ellipse(ctx,x,-rise,1.2+(1-progress)*2,1.5+(1-progress)*2,null,'#e3fff5',1.2);
         }
       } else if(type==='kelp') {
         const curl=this.reducedMotion?.8:Math.sin(progress*Math.PI);

@@ -339,8 +339,8 @@
           for (const occupant of this.plants) if (occupant.hp > 0 && occupant.row === row && occupant.col === col) { occupant.shieldHp = 2000; occupant.shieldTime = 10000; occupant.powerTime = 10000; }
           this._effect('lilyPower', row, x, 1000); break;
         case 'kelp': {
-          const targets = this.enemies.filter(enemy => enemy.hp > 0 && this.waterRows.includes(enemy.row)).sort((a, b) => Math.hypot(a.x - x, a.row - row) - Math.hypot(b.x - x, b.row - row)).slice(0, 3);
-          for (const enemy of targets) { this._effect('kelp', enemy.row, enemy.x, 1000, { power: true }); this._damage(enemy, enemy.hp, 'kelp'); }
+          const targets = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.headless && !enemy.kelpCapture && this.waterRows.includes(enemy.row)).sort((a, b) => Math.hypot(a.x - x, a.row - row) - Math.hypot(b.x - x, b.row - row)).slice(0, 3);
+          for (const enemy of targets) this._captureWithKelp(enemy, plant, true);
           plant.hp = 0; break;
         }
         case 'sun':
@@ -351,7 +351,7 @@
           plant.shieldTime = plant.powerTime = 10000;
           break;
         case 'ice':
-          for (const enemy of this.enemies) if (enemy.hp > 0 && !enemy.headless) {
+          for (const enemy of this.enemies) if (enemy.hp > 0 && !enemy.headless && !enemy.kelpCapture) {
             enemy.freezeTime = 4000; enemy.slowTime = 10000;
             this._effect('ice', enemy.row, enemy.x, 700, { power: true });
           }
@@ -361,13 +361,13 @@
         case 'mine': plant.boosted = true; this._armMine(plant); break;
         case 'bomb': plant.boosted = true; plant.fuse = 100; break;
         case 'torch':
-          for (const enemy of this.enemies) if (enemy.hp > 0 && enemy.row === row) {
+          for (const enemy of this.enemies) if (enemy.hp > 0 && !enemy.kelpCapture && enemy.row === row) {
             this._damage(enemy, 700, 'fire'); if (enemy.hp > 0) { enemy.burnTime = 5000; enemy.burnDamage = 75; }
           }
           this._effect('flame', row, x, 1300, { y, radius: COLS, power: true });
           break;
         case 'lightning': {
-          const targets = this.enemies.filter(enemy => enemy.hp > 0);
+          const targets = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.kelpCapture);
           for (const enemy of targets) { this._damage(enemy, 250, 'lightning'); enemy.stunTime = 1500; }
           this._effect('lightning', row, x, 1100, { power: true, points: [{ x, y }, ...targets.map(enemy => ({ x: enemy.x, y: enemy.row + .44 }))] });
           break;
@@ -479,8 +479,8 @@
         }
       }
       if (plant.type === 'kelp') {
-        const target = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.headless && enemy.row === plant.row && Math.abs(enemy.x - (plant.col + .5)) < .9).sort((a, b) => a.x - b.x)[0];
-        if (target) { plant.hp = 0; this._effect('kelp', plant.row, target.x, 1000); this._damage(target, target.hp, 'kelp'); this._emit('kelp', { row: plant.row, x: target.x }); }
+        const target = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.headless && !enemy.kelpCapture && enemy.row === plant.row && Math.abs(enemy.x - (plant.col + .5)) < .9).sort((a, b) => a.x - b.x)[0];
+        if (target) { plant.hp = 0; this._captureWithKelp(target, plant); }
       } else if (plant.type === 'sun') {
         plant.sunTimer -= dt;
         if (plant.sunTimer <= 1e-7) {
@@ -493,11 +493,11 @@
           if (plant.armRemaining <= 1e-7) this._armMine(plant);
         }
         const x = plant.col + .5;
-        if (plant.armed && this.enemies.some(enemy => enemy.hp > 0 && !enemy.headless && !enemy.vaulting && !enemy.hasPole && enemy.row === plant.row && Math.abs(enemy.x - x) <= .5)) {
+        if (plant.armed && this.enemies.some(enemy => enemy.hp > 0 && !enemy.headless && !enemy.kelpCapture && !enemy.vaulting && !enemy.hasPole && enemy.row === plant.row && Math.abs(enemy.x - x) <= .5)) {
           const radius = plant.boosted ? 1.1 : .8, damage = plant.boosted ? 2400 : config.damage;
           // Remove the trigger before applying damage: a crowded lane spends only one mine.
           plant.hp = 0;
-          for (const enemy of this.enemies) if (enemy.hp > 0 && !enemy.vaulting && enemy.row === plant.row && Math.abs(enemy.x - x) <= radius) this._damage(enemy, damage, 'mine');
+          for (const enemy of this.enemies) if (enemy.hp > 0 && !enemy.kelpCapture && !enemy.vaulting && enemy.row === plant.row && Math.abs(enemy.x - x) <= radius) this._damage(enemy, damage, 'mine');
           this._effect('mineExplosion', plant.row, x, 900, { radius, power: plant.boosted });
           this._emit('mineExplosion', { row: plant.row, x, damage, radius, power: plant.boosted });
         }
@@ -505,7 +505,7 @@
         plant.fuse -= dt;
         if (plant.fuse <= 1e-7) {
           const x = plant.col + .5;
-          for (const enemy of this.enemies) if (enemy.hp > 0 && Math.abs(enemy.row - plant.row) <= (plant.boosted ? 2 : 1) && Math.abs(enemy.x - x) <= (plant.boosted ? 2.5 : 1.5)) this._damage(enemy, plant.boosted ? 3000 : config.damage, 'bomb');
+          for (const enemy of this.enemies) if (enemy.hp > 0 && !enemy.kelpCapture && Math.abs(enemy.row - plant.row) <= (plant.boosted ? 2 : 1) && Math.abs(enemy.x - x) <= (plant.boosted ? 2.5 : 1.5)) this._damage(enemy, plant.boosted ? 3000 : config.damage, 'bomb');
           plant.hp = 0; this._effect('explode', plant.row, x, 850, { radius: plant.boosted ? 2.5 : 1.5, power: Boolean(plant.boosted) });
           this._emit('explode', { row: plant.row, x });
         }
@@ -516,7 +516,7 @@
         }
         plant.attackTimer = Math.max(0, plant.attackTimer - dt);
         const target = this.enemies.some(enemy => {
-          if (enemy.hp <= 0 || enemy.headless || enemy.x > COLS + .5) return false;
+          if (enemy.hp <= 0 || enemy.headless || enemy.kelpCapture || enemy.x > COLS + .5) return false;
           if (plant.type !== 'star') return enemy.row === plant.row && enemy.x >= plant.col + .35 && (plant.type !== 'torch' || enemy.x <= plant.col + 1.95);
           if (enemy.vaulting || enemy.x < -.5) return false;
           const x = plant.col + .5, y = plant.row + .44;
@@ -530,6 +530,27 @@
           this._emit('shot', { plant, row: plant.row, x: plant.col + .5, count });
         }
       }
+    }
+
+    _captureWithKelp(enemy, plant, power = false) {
+      if (enemy.hp <= 0 || enemy.headless || enemy.kelpCapture) return false;
+      this._resetBite(enemy);
+      enemy.hitPulse = 0;
+      enemy.kelpCapture = { elapsed: 0, duration: 1600, sourceX: plant.col + .5, sourceRow: plant.row, power };
+      this._emit('kelp', { enemy, enemyId: enemy.id, row: enemy.row, x: enemy.x, ...enemy.kelpCapture });
+      return true;
+    }
+
+    _stepKelpCapture(enemy, dt) {
+      const capture = enemy.kelpCapture;
+      capture.elapsed = Math.min(capture.duration, capture.elapsed + dt);
+      if (capture.elapsed < capture.duration - 1e-7) return;
+      // The whole swimmer sinks with its armor: no detached limbs or land corpse.
+      enemy.hp = enemy.bodyHp = enemy.armorHp = 0;
+      this.kills++;
+      this._effect('kelpSink', enemy.row, enemy.x, 550, { power: capture.power });
+      this._emit('kelpSink', { enemy, enemyId: enemy.id, row: enemy.row, x: enemy.x, power: capture.power });
+      this._emit('defeat', { enemy, source: 'kelp' });
     }
 
     _armMine(plant) {
@@ -549,7 +570,7 @@
           x, y, vx: dx * 5.1, vy: dy * 5.1, damage: power ? 40 : config.damage, speed: 5.1, power });
         return;
       }
-      const targets = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.headless && enemy.row === plant.row && enemy.x >= plant.col + .35 && enemy.x <= COLS + .5).sort((a, b) => a.x - b.x);
+      const targets = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.headless && !enemy.kelpCapture && enemy.row === plant.row && enemy.x >= plant.col + .35 && enemy.x <= COLS + .5).sort((a, b) => a.x - b.x);
       if (plant.type === 'lightning') {
         if (!targets.length) return;
         const hit = new Set(), points = [{ x, y }]; let target = targets[0];
@@ -557,7 +578,7 @@
           hit.add(target); points.push({ x: target.x, y: target.row + .44 });
           this._damage(target, Math.round(config.damage * Math.pow(.8, hop)), 'lightning');
           const previous = target;
-          target = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.headless && !hit.has(enemy) && Math.hypot(enemy.x - previous.x, enemy.row - previous.row) <= 1.7)
+          target = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.headless && !enemy.kelpCapture && !hit.has(enemy) && Math.hypot(enemy.x - previous.x, enemy.row - previous.row) <= 1.7)
             .sort((a, b) => Math.hypot(a.x - previous.x, a.row - previous.row) - Math.hypot(b.x - previous.x, b.row - previous.row))[0];
         }
         this._effect('lightning', plant.row, x, 380, { points }); return;
@@ -592,7 +613,7 @@
         projectile.y = projectile.startY + (projectile.targetY - projectile.startY) * t - Math.sin(t * Math.PI) * projectile.arcHeight;
         if (t >= 1) {
           projectile.dead = true;
-          const targets = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.vaulting && Math.hypot(enemy.x - projectile.x, enemy.row - projectile.row) <= projectile.radius)
+          const targets = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.kelpCapture && !enemy.vaulting && Math.hypot(enemy.x - projectile.x, enemy.row - projectile.row) <= projectile.radius)
             .sort((a, b) => Math.hypot(a.x - projectile.x, a.row - projectile.row) - Math.hypot(b.x - projectile.x, b.row - projectile.row));
           for (const enemy of (projectile.type === 'corn' ? targets.slice(0, 1) : targets)) {
             this._damage(enemy, projectile.damage, projectile.type);
@@ -607,7 +628,7 @@
         const toX = projectile.x + projectile.vx * dt / 1000, toY = projectile.y + projectile.vy * dt / 1000;
         let hit = null, firstContact = Infinity;
         for (const enemy of this.enemies) {
-          if (enemy.hp <= 0 || enemy.vaulting) continue;
+          if (enemy.hp <= 0 || enemy.kelpCapture || enemy.vaulting) continue;
           const contact = starContact(projectile.x, projectile.y, toX, toY, enemy);
           if (contact !== null && contact < firstContact) { hit = enemy; firstContact = contact; }
         }
@@ -618,7 +639,7 @@
         return;
       }
       const from = projectile.x, to = from + projectile.speed * dt / 1000;
-      const hits = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.vaulting && !(projectile.hitIds || []).includes(enemy.id) && enemy.row === projectile.row && enemy.x + .24 >= from && enemy.x - .24 <= to).sort((a, b) => a.x - b.x);
+      const hits = this.enemies.filter(enemy => enemy.hp > 0 && !enemy.kelpCapture && !enemy.vaulting && !(projectile.hitIds || []).includes(enemy.id) && enemy.row === projectile.row && enemy.x + .24 >= from && enemy.x - .24 <= to).sort((a, b) => a.x - b.x);
       const hit = hits[0];
       // Convert a pea once, and only if the torch was crossed before contact.
       const travelEnd = hit ? Math.min(to, hit.x - .24) : to;
@@ -643,6 +664,7 @@
 
     _stepEnemy(enemy, dt) {
       if (enemy.hp <= 0) { this._resetBite(enemy); return; }
+      if (enemy.kelpCapture) { this._stepKelpCapture(enemy, dt); return; }
       enemy.hitPulse = Math.max(0, enemy.hitPulse - dt);
       const slow = enemy.slowTime > 0 ? .5 : 1;
       enemy.slowTime = Math.max(0, enemy.slowTime - dt);
@@ -733,12 +755,12 @@
       if (!mower.active) return;
       const from = mower.x;
       mower.x += 5.5 * dt / 1000;
-      for (const enemy of this.enemies) if (enemy.hp > 0 && enemy.row === mower.row && enemy.x >= from - .55 && enemy.x <= mower.x + .55) this._damage(enemy, enemy.hp, 'mower');
+      for (const enemy of this.enemies) if (enemy.hp > 0 && !enemy.kelpCapture && enemy.row === mower.row && enemy.x >= from - .55 && enemy.x <= mower.x + .55) this._damage(enemy, enemy.hp, 'mower');
       if (mower.x > COLS + 1) mower.active = false;
     }
 
     _damage(enemy, amount, source) {
-      if (enemy.hp <= 0 || !Number.isFinite(amount) || amount <= 0) return;
+      if (enemy.hp <= 0 || enemy.kelpCapture || !Number.isFinite(amount) || amount <= 0) return;
       const armorDamage = Math.min(enemy.armorHp, amount), hadArmor = enemy.armorHp > 0;
       enemy.armorHp = Math.max(0, enemy.armorHp - armorDamage);
       enemy.bodyHp = Math.max(0, enemy.bodyHp - (amount - armorDamage));

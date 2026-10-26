@@ -4,7 +4,7 @@
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const MAX_VOICES = 16;
-  const LIMITS = Object.freeze({ shot: .105, hit: .075, bite: .16, collect: .065, plant: .06, select: .045, packet: .14, armorBreak: .1, armLost: .13, headless: .13, explode: .15, mower: .25, plantFood: .3, cartMove: .15, kelp: .2, mineArm: .15, mineExplosion: .18 });
+  const LIMITS = Object.freeze({ shot: .105, hit: .075, bite: .16, collect: .065, plant: .06, select: .045, packet: .14, armorBreak: .1, armLost: .13, headless: .13, explode: .15, mower: .25, plantFood: .3, cartMove: .15, kelp: .2, kelpSink: .2, mineArm: .15, mineExplosion: .18 });
 
   // Original, short garden foley and melodic accents. All sources are made
   // locally; there are no music downloads, timers, or looping background nodes.
@@ -229,6 +229,11 @@
           return this._note(240, .018, .1, .023, 370) || base;
         }
         case 'kelp': { const base = this._noise(.22, .024, 490); return this._note(310, 0, .24, .021, 75) || base; }
+        case 'kelpSink': {
+          const water = this._noise(.24, .018, 360);
+          const bubble = this._note(260, 0, .14, .014, 85, 'sine');
+          return this._note(175, .09, .16, .009, 65, 'sine') || bubble || water;
+        }
         case 'cartMove': { const base = this._noise(.22, .02, 1300); return this._tones([175, 210, 175], .06, .06, .016) || base; }
         case 'select': return this._note(410, 0, .055, .018, 560, 'triangle');
         case 'packet': return this._note(275, 0, .045, .016, 190, 'triangle');
